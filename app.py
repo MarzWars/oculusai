@@ -789,13 +789,16 @@ def ask():
         try:
             # Build the prompt string from system + user messages
             full_messages = [{"role": "system", "content": system_str}] + messages
-            prompt = "\n".join([m["content"] for m in full_messages if "content" in m])
+            prompt = "\n".join([m.get("content", "") for m in full_messages])
 
-            # Call Hugging Face API instead of Ollama
+            # Call Hugging Face API
             result = query_hf(prompt)
 
-            # Hugging Face returns JSON; extract text
-            output_text = result[0]["generated_text"] if isinstance(result, list) else str(result)
+            # Hugging Face returns JSON; extract text safely
+            if isinstance(result, list) and len(result) > 0 and "generated_text" in result[0]:
+                output_text = result[0]["generated_text"]
+            else:
+                output_text = str(result)
 
             full_text = output_text
             yield output_text
@@ -811,6 +814,7 @@ def ask():
             save_json(CHAT_FILE, history)
 
     return Response(generate(), mimetype="text/plain")
+
 
 
 
