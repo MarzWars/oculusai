@@ -1,6 +1,6 @@
 """
 Oculus AI — Lex Digitals
-Rebuilt: llama3.2:3b · /api/chat · long-term memory · web search · history summarisation
+Rebuilt: Hugging Face Inference API · long-term memory · web search · history summarisation
 """
 
 from flask import Flask, request, Response
@@ -16,8 +16,8 @@ app = Flask(__name__)
 # ─────────────────────────────────────────
 # CONSTANTS
 # ─────────────────────────────────────────
-OLLAMA_URL   = "http://localhost:11434/api/chat"
-OLLAMA_MODEL = "smollm2:1.7b"
+HF_API_KEY   = os.environ.get("HF_API_KEY", "")
+HF_MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
 
 CHAT_FILE    = "chat_history.json"
 MEMORY_FILE  = "memory.json"
@@ -25,6 +25,30 @@ SUMMARY_FILE = "history_summary.json"
 
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
+
+
+# ─────────────────────────────────────────
+# HUGGING FACE API
+# ─────────────────────────────────────────
+def query_hf(prompt: str, max_tokens: int = 800) -> str:
+    """Call the Hugging Face Inference API and return the generated text."""
+    if not HF_API_KEY:
+        return "Error: HF_API_KEY environment variable is not set."
+    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
+    payload = {
+        "inputs": prompt,
+        "parameters": {
+            "max_new_tokens":   max_tokens,
+            "temperature":      0.7,
+            "return_full_text": False,
+        }
+    }
+    resp = requests.post(HF_MODEL_URL, headers=headers, json=payload, timeout=60)
+    resp.raise_for_status()
+    result = resp.json()
+    if isinstance(result, list) and result and "generated_text" in result[0]:
+        return result[0]["generated_text"].strip()
+    return str(result)
 
 
 # ─────────────────────────────────────────
@@ -454,17 +478,7 @@ def maybe_summarise_history(history: list):
         f"{chunk_text}\n\nSummary:"
     )
     try:
-        resp = requests.post(
-            OLLAMA_URL,
-            json={
-                "model":    OLLAMA_MODEL,
-                "messages": [{"role": "user", "content": summary_prompt}],
-                "stream":   False,
-                "options":  {"temperature": 0.6, "num_predict": 200}
-            },
-            timeout=30
-        )
-        new_summary = resp.json().get("message", {}).get("content", "").strip()
+        new_summary = query_hf(summary_prompt, max_tokens=200)
         if new_summary:
             existing = load_summary()
             combined = (existing + " " + new_summary).strip() if existing else new_summary
@@ -763,7 +777,7 @@ def clear():
 
 
 # ─────────────────────────────────────────
-# ASK (streaming) — FIXED
+# ASK (streaming)
 # ─────────────────────────────────────────
 @app.route("/ask", methods=["POST"])
 def ask():
@@ -787,23 +801,20 @@ def ask():
     def generate():
         full_text = ""
         try:
-            # Build the prompt string from system + user messages
-            full_messages = [{"role": "system", "content": system_str}] + messages
-            prompt = "\n".join([m.get("content", "") for m in full_messages])
+            # Build prompt: system context + conversation history
+            prompt_parts = [system_str, ""]
+            for msg in messages:
+                role    = "User" if msg["role"] == "user" else "Oculus"
+                content = msg.get("content", "").strip()
+                if content:
+                    prompt_parts.append(f"{role}: {content}")
+            prompt_parts.append("Oculus:")
+            prompt = "\n".join(prompt_parts)
 
-            # Call Hugging Face API
-            result = query_hf(prompt)
-
-            # Hugging Face returns JSON; extract text safely
-            if isinstance(result, list) and len(result) > 0 and "generated_text" in result[0]:
-                output_text = result[0]["generated_text"]
-            else:
-                output_text = str(result)
-
-            full_text = output_text
+            output_text = query_hf(prompt)
+            full_text   = output_text
             yield output_text
 
-            # Save to history
             history.append({"role": "ai", "text": full_text.strip()})
             save_json(CHAT_FILE, history)
 
@@ -814,8 +825,6 @@ def ask():
             save_json(CHAT_FILE, history)
 
     return Response(generate(), mimetype="text/plain")
-
-
 
 
 # ─────────────────────────────────────────
