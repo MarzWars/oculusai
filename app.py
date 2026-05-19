@@ -787,62 +787,23 @@ def ask():
     def generate():
         full_text = ""
         try:
+            # Build the prompt string from system + user messages
             full_messages = [{"role": "system", "content": system_str}] + messages
+            prompt = "\n".join([m["content"] for m in full_messages if "content" in m])
 
-            resp = requests.post(
-                OLLAMA_URL,
-                json={
-                    "model":    OLLAMA_MODEL,
-                    "messages": full_messages,
-                    "stream":   True,
-                    "options": {
-                        "temperature":    0.72,
-                        "top_p":          0.9,
-                        "top_k":          40,
-                        "repeat_penalty": 1.15,
-                        "num_predict":    4096,
-                    }
-                },
-                stream=True,
-                timeout=180
-            )
+            # Call Hugging Face API instead of Ollama
+            result = query_hf(prompt)
 
-            # Better error handling
-            if resp.status_code != 200:
-                error_msg = f"[Ollama Error {resp.status_code}]"
-                yield error_msg
-                full_text = error_msg
-                return
+            # Hugging Face returns JSON; extract text
+            output_text = result[0]["generated_text"] if isinstance(result, list) else str(result)
 
-            for line in resp.iter_lines():
-                if not line:
-                    continue
-                try:
-                    chunk_data = json.loads(line.decode("utf-8"))
-                    chunk = chunk_data.get("message", {}).get("content", "")
-                    if chunk:
-                        full_text += chunk
-                        yield chunk
-                    if chunk_data.get("done", False):
-                        break
-                except json.JSONDecodeError:
-                    continue
-                except Exception as e:
-                    print("Chunk error:", e)
-                    continue
+            full_text = output_text
+            yield output_text
 
-            # Final save
-            if full_text.strip():
-                history.append({"role": "ai", "text": full_text.strip()})
-            else:
-                history.append({"role": "ai", "text": "[No response from model - check Ollama]"})
+            # Save to history
+            history.append({"role": "ai", "text": full_text.strip()})
             save_json(CHAT_FILE, history)
 
-        except requests.exceptions.ConnectionError:
-            error = "[Oculus is offline — make sure Ollama is running]"
-            yield error
-            history.append({"role": "ai", "text": error})
-            save_json(CHAT_FILE, history)
         except Exception as e:
             error = f"[Error: {type(e).__name__}]"
             yield error
@@ -850,6 +811,7 @@ def ask():
             save_json(CHAT_FILE, history)
 
     return Response(generate(), mimetype="text/plain")
+
 
 
 # ─────────────────────────────────────────
