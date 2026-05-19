@@ -1,10 +1,11 @@
 """
 Oculus AI — Lex Digitals
-Rebuilt: Hugging Face Inference API · long-term memory · web search · history summarisation
+Backend: Xoltron (darkc0de/chat) via Gradio Client
+Features: long-term memory · web search · history summarisation
 """
 
 from flask import Flask, request, Response
-import requests
+from gradio_client import Client
 import json
 import os
 import re
@@ -16,8 +17,7 @@ app = Flask(__name__)
 # ─────────────────────────────────────────
 # CONSTANTS
 # ─────────────────────────────────────────
-HF_API_KEY   = os.environ.get("HF_API_KEY", "")
-HF_MODEL_URL = "https://api-inference.huggingface.co/models/mistralai/Mistral-7B-Instruct-v0.2"
+XOLTRON_SPACE = "darkc0de/chat"
 
 CHAT_FILE    = "chat_history.json"
 MEMORY_FILE  = "memory.json"
@@ -28,27 +28,24 @@ SUMMARISE_AFTER = 10
 
 
 # ─────────────────────────────────────────
-# HUGGING FACE API
+# XOLTRON API
 # ─────────────────────────────────────────
-def query_hf(prompt: str, max_tokens: int = 800) -> str:
-    """Call the Hugging Face Inference API and return the generated text."""
-    if not HF_API_KEY:
-        return "Error: HF_API_KEY environment variable is not set."
-    headers = {"Authorization": f"Bearer {HF_API_KEY}"}
-    payload = {
-        "inputs": prompt,
-        "parameters": {
-            "max_new_tokens":   max_tokens,
-            "temperature":      0.7,
-            "return_full_text": False,
-        }
-    }
-    resp = requests.post(HF_MODEL_URL, headers=headers, json=payload, timeout=60)
-    resp.raise_for_status()
-    result = resp.json()
-    if isinstance(result, list) and result and "generated_text" in result[0]:
-        return result[0]["generated_text"].strip()
-    return str(result)
+def query_xoltron(prompt: str) -> str:
+    """Send a prompt to Xoltron (darkc0de/chat) and return the response as a string."""
+    try:
+        client = Client(XOLTRON_SPACE)
+        result = client.predict(
+            message=prompt,
+            api_name="/respond"
+        )
+        # The API can return str | float | bool | list | dict — normalise to str
+        if isinstance(result, str):
+            return result.strip()
+        if isinstance(result, (list, dict)):
+            return json.dumps(result)
+        return str(result).strip()
+    except Exception as e:
+        raise RuntimeError(f"Xoltron API error: {type(e).__name__}: {e}")
 
 
 # ─────────────────────────────────────────
@@ -478,7 +475,7 @@ def maybe_summarise_history(history: list):
         f"{chunk_text}\n\nSummary:"
     )
     try:
-        new_summary = query_hf(summary_prompt, max_tokens=200)
+        new_summary = query_xoltron(summary_prompt)
         if new_summary:
             existing = load_summary()
             combined = (existing + " " + new_summary).strip() if existing else new_summary
@@ -575,9 +572,14 @@ def web_search(raw_query: str, max_results: int = 6) -> str:
 
 
 # ─────────────────────────────────────────
-# MESSAGE BUILDER
+# PROMPT BUILDER
 # ─────────────────────────────────────────
-def build_messages(user_message: str, mem: dict, history: list) -> tuple:
+def build_prompt(user_message: str, mem: dict, history: list) -> str:
+    """
+    Assembles the full prompt string sent to Xoltron.
+    Since the /respond endpoint only accepts a single message string,
+    we pack the system context + conversation history into it.
+    """
     mem_context = memory_to_context(mem)
     web_context = web_search(user_message) if should_search(user_message) else ""
 
@@ -587,15 +589,15 @@ def build_messages(user_message: str, mem: dict, history: list) -> tuple:
     ]
     is_rr = any(re.search(p, user_message, re.IGNORECASE) for p in rr_patterns)
 
-    now = datetime.now()
+    now     = datetime.now()
     live_dt = (
         f"{now.strftime('%A, %d %B %Y')}  |  "
         f"Time: {now.strftime('%H:%M')} SAST (UTC+2)"
     )
 
-    sys_lines = [SYSTEM_PROMPT, ""]
+    parts = [SYSTEM_PROMPT, ""]
 
-    sys_lines += [
+    parts += [
         "══════════ LIVE SYSTEM INFO ══════════",
         f"- Current date and time: {live_dt}",
         "  Use this as the authoritative date/time. Never guess the date.",
@@ -605,7 +607,7 @@ def build_messages(user_message: str, mem: dict, history: list) -> tuple:
     ]
 
     if web_context:
-        sys_lines += [
+        parts += [
             "",
             "══════════ LIVE WEB SEARCH RESULTS ══════════",
             "Use these to inform your answer. Weave naturally — do not paste them raw.",
@@ -613,7 +615,7 @@ def build_messages(user_message: str, mem: dict, history: list) -> tuple:
         ]
 
     if is_rr:
-        sys_lines += [
+        parts += [
             "",
             "══════════ RED ROOMS AD — MANDATORY CHECKLIST ══════════",
             "Before you write anything, confirm internally:",
@@ -627,31 +629,37 @@ def build_messages(user_message: str, mem: dict, history: list) -> tuple:
             "**Description:** [750–850 chars]",
         ]
 
-    sys_lines += [
+    parts += [
         "",
         "Follow formatting rules exactly. Blank lines between paragraphs. '- ' for bullets.",
         "Be concise unless depth is needed. Never start a response with the word 'I'.",
+        "",
+        "══════════ CONVERSATION HISTORY ══════════",
     ]
 
-    system_str = "\n".join(sys_lines)
-
-    prior = history[:-1]
+    # Inject stored summary if available
     stored_summary = load_summary()
-    messages: list = []
-
     if stored_summary:
-        messages.append({"role": "user",      "content": "[Summary of our earlier conversation]"})
-        messages.append({"role": "assistant",  "content": stored_summary})
+        parts.append(f"[Earlier summary]: {stored_summary}")
+        parts.append("")
 
+    # Recent verbatim turns (excluding the current user message)
+    prior = history[:-1]
     for msg in prior[-VERBATIM_TURNS:]:
-        role    = "user" if msg["role"] == "user" else "assistant"
+        role    = "User" if msg["role"] == "user" else "Oculus"
         content = msg.get("text", "").strip()
         if content:
-            messages.append({"role": role, "content": content})
+            parts.append(f"{role}: {content}")
 
-    messages.append({"role": "user", "content": user_message})
+    parts += [
+        "",
+        "══════════ CURRENT MESSAGE ══════════",
+        f"User: {user_message}",
+        "",
+        "Oculus:",
+    ]
 
-    return system_str, messages
+    return "\n".join(parts)
 
 
 # ─────────────────────────────────────────
@@ -777,7 +785,7 @@ def clear():
 
 
 # ─────────────────────────────────────────
-# ASK (streaming)
+# ASK
 # ─────────────────────────────────────────
 @app.route("/ask", methods=["POST"])
 def ask():
@@ -796,28 +804,14 @@ def ask():
     history.append({"role": "user", "text": user_message})
     maybe_summarise_history(history)
 
-    system_str, messages = build_messages(user_message, memory, history)
+    prompt = build_prompt(user_message, memory, history)
 
     def generate():
-        full_text = ""
         try:
-            # Build prompt: system context + conversation history
-            prompt_parts = [system_str, ""]
-            for msg in messages:
-                role    = "User" if msg["role"] == "user" else "Oculus"
-                content = msg.get("content", "").strip()
-                if content:
-                    prompt_parts.append(f"{role}: {content}")
-            prompt_parts.append("Oculus:")
-            prompt = "\n".join(prompt_parts)
-
-            output_text = query_hf(prompt)
-            full_text   = output_text
+            output_text = query_xoltron(prompt)
             yield output_text
-
-            history.append({"role": "ai", "text": full_text.strip()})
+            history.append({"role": "ai", "text": output_text.strip()})
             save_json(CHAT_FILE, history)
-
         except Exception as e:
             error = f"[Error: {type(e).__name__}]"
             yield error
