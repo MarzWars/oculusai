@@ -4,3 +4,4 @@ transformers
 torch
 duckduckgo-search
 gradio_client
+supabase
