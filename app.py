@@ -11,9 +11,44 @@ import os
 import re
 from datetime import datetime
 from duckduckgo_search import DDGS
+import os
+from supabase import create_client
 
 app = Flask(__name__)
 
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise Exception("Missing Supabase environment variables")
+
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# ─────────────────────────────────────────
+# SUPABASE MEMORY LAYER
+# ─────────────────────────────────────────
+
+MEMORY_TABLE = "oculus_memory"
+
+def supabase_load_memory():
+    try:
+        res = supabase.table(MEMORY_TABLE).select("*").eq("id", 1).execute()
+        if res.data and len(res.data) > 0:
+            return res.data[0]["memory"]
+    except Exception as e:
+        print("Supabase load error:", e)
+
+    return MEMORY_DEFAULT
+
+
+def supabase_save_memory(mem: dict):
+    try:
+        supabase.table(MEMORY_TABLE).upsert({
+            "id": 1,
+            "memory": mem
+        }).execute()
+    except Exception as e:
+        print("Supabase save error:", e)
 # ─────────────────────────────────────────
 # CONSTANTS
 # ─────────────────────────────────────────
@@ -228,21 +263,48 @@ MEMORY_DEFAULT = {
 }
 
 def load_memory() -> dict:
-    mem    = load_json(MEMORY_FILE, {})
+    try:
+        res = supabase.table("oculus_memory").select("*").eq("id", 1).execute()
+
+        if res.data and len(res.data) > 0:
+            mem = res.data[0].get("memory", {})
+        else:
+            mem = {}
+
+    except Exception as e:
+        print("Supabase load error:", e)
+        mem = {}
+
+    # merge with default structure (safe fallback)
     merged = json.loads(json.dumps(MEMORY_DEFAULT))
+
     for key, val in mem.items():
         if key in merged:
             if isinstance(val, dict) and isinstance(merged[key], dict):
                 merged[key].update(val)
             else:
                 merged[key] = val
+
     return merged
+
 
 def save_memory(mem: dict):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     mem["last_seen"] = now
+
     if not mem.get("first_seen"):
         mem["first_seen"] = now
+
+    try:
+        supabase.table("oculus_memory").upsert({
+            "id": 1,
+            "memory": mem
+        }).execute()
+
+    except Exception as e:
+        print("Supabase save error:", e)
+
+    # OPTIONAL fallback (kept for safety during migration)
     save_json(MEMORY_FILE, mem)
 
 def _add_unique(lst: list, item: str, max_len: int = 30) -> bool:
