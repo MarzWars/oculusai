@@ -220,341 +220,647 @@ Never use: "call now", "limited time", "don't miss out"
 
 
 # ─────────────────────────────────────────
-# JSON HELPERS
-# ─────────────────────────────────────────
-def load_json(file: str, default):
-    if os.path.exists(file):
-        try:
-            with open(file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return default
-
-def save_json(file: str, data):
-    with open(file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-# ─────────────────────────────────────────
 # LONG-TERM MEMORY
 # ─────────────────────────────────────────
 MEMORY_DEFAULT = {
     "profile": {
-        "name": "", "role": "", "company": "",
-        "location": "", "email": "", "phone": ""
+        "name": "",
+        "role": "",
+        "company": "",
+        "location": "",
+        "email": "",
+        "phone": ""
     },
-    "clients":            [],
-    "projects":           [],
-    "preferences":        [],
-    "important_facts":    [],
-    "topics_discussed":   [],
-    "deadlines":          [],
-    "first_seen":         "",
-    "last_seen":          "",
-    "conversation_count": 0
+
+    "clients": [],
+    "projects": [],
+    "preferences": [],
+    "important_facts": [],
+    "topics_discussed": [],
+    "deadlines": [],
+
+    "conversation_count": 0,
+
+    "first_seen": "",
+    "last_seen": ""
 }
 
-def load_memory() -> dict:
-    try:
-        res = supabase.table("oculus_memory").select("*").eq("id", 1).execute()
 
-        if res.data and len(res.data) > 0:
-            mem = res.data[0].get("memory", {})
+# ─────────────────────────────────────────
+# MEMORY UTILITIES
+# ─────────────────────────────────────────
+def deep_copy(obj):
+    return json.loads(json.dumps(obj))
+
+
+def deep_merge(default: dict, incoming: dict) -> dict:
+    """
+    Merge incoming memory into default structure safely.
+    Prevents broken/corrupt memory from crashing Oculus.
+    """
+
+    merged = deep_copy(default)
+
+    if not isinstance(incoming, dict):
+        return merged
+
+    for key, value in incoming.items():
+
+        if key not in merged:
+            merged[key] = value
+            continue
+
+        if isinstance(value, dict) and isinstance(merged[key], dict):
+            merged[key].update(value)
         else:
-            mem = {}
-
-    except Exception as e:
-        print("Supabase load error:", e)
-        mem = {}
-
-    # merge with default structure (safe fallback)
-    merged = json.loads(json.dumps(MEMORY_DEFAULT))
-
-    for key, val in mem.items():
-        if key in merged:
-            if isinstance(val, dict) and isinstance(merged[key], dict):
-                merged[key].update(val)
-            else:
-                merged[key] = val
+            merged[key] = value
 
     return merged
 
 
+def normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip())
+
+
+def safe_list(value):
+    return value if isinstance(value, list) else []
+
+
+def unique_clean_list(items: list, max_len: int = 30) -> list:
+    """
+    Removes duplicates, blanks, and garbage entries.
+    """
+
+    cleaned = []
+    seen = set()
+
+    garbage = {
+        "",
+        "?",
+        ".",
+        "my name",
+        "remember my name",
+        "remember that",
+        "to remember my name",
+        "the",
+        "name",
+        "user"
+    }
+
+    for item in items:
+
+        if not isinstance(item, str):
+            continue
+
+        item = normalize_text(item)
+
+        if not item:
+            continue
+
+        low = item.lower()
+
+        if low in garbage:
+            continue
+
+        if low in seen:
+            continue
+
+        seen.add(low)
+        cleaned.append(item)
+
+    return cleaned[-max_len:]
+
+
+def sanitize_memory(mem: dict) -> dict:
+    """
+    Clean and stabilize memory before saving/loading.
+    """
+
+    mem["clients"] = unique_clean_list(
+        safe_list(mem.get("clients", [])),
+        25
+    )
+
+    mem["preferences"] = unique_clean_list(
+        safe_list(mem.get("preferences", [])),
+        25
+    )
+
+    mem["important_facts"] = unique_clean_list(
+        safe_list(mem.get("important_facts", [])),
+        25
+    )
+
+    mem["topics_discussed"] = unique_clean_list(
+        safe_list(mem.get("topics_discussed", [])),
+        40
+    )
+
+    # Ensure profile always exists
+    if not isinstance(mem.get("profile"), dict):
+        mem["profile"] = deep_copy(MEMORY_DEFAULT["profile"])
+
+    for field in MEMORY_DEFAULT["profile"]:
+
+        value = mem["profile"].get(field, "")
+
+        if not isinstance(value, str):
+            value = str(value)
+
+        mem["profile"][field] = normalize_text(value)
+
+    # Ensure conversation count valid
+    try:
+        mem["conversation_count"] = int(
+            mem.get("conversation_count", 0)
+        )
+    except Exception:
+        mem["conversation_count"] = 0
+
+    return mem
+
+
+# ─────────────────────────────────────────
+# LOAD MEMORY
+# ─────────────────────────────────────────
+def load_memory() -> dict:
+
+    try:
+
+        response = (
+            supabase
+            .table("oculus_memory")
+            .select("*")
+            .eq("id", 1)
+            .execute()
+        )
+
+        if response.data and len(response.data) > 0:
+
+            raw_memory = response.data[0].get("memory", {})
+
+            # Safety: if somehow saved as JSON string
+            if isinstance(raw_memory, str):
+
+                try:
+                    raw_memory = json.loads(raw_memory)
+                except Exception:
+                    raw_memory = {}
+
+        else:
+            raw_memory = {}
+
+    except Exception as e:
+
+        print(f"[SUPABASE LOAD ERROR] {e}")
+
+        # fallback local memory
+        try:
+            raw_memory = load_json(MEMORY_FILE, {})
+            print("[MEMORY] Loaded local fallback")
+        except Exception:
+            raw_memory = {}
+
+    memory = deep_merge(MEMORY_DEFAULT, raw_memory)
+
+    memory = sanitize_memory(memory)
+
+    return memory
+
+
+# ─────────────────────────────────────────
+# SAVE MEMORY
+# ─────────────────────────────────────────
 def save_memory(mem: dict):
+
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
     mem["last_seen"] = now
 
     if not mem.get("first_seen"):
         mem["first_seen"] = now
 
+    mem = sanitize_memory(mem)
+
     try:
+
         supabase.table("oculus_memory").upsert({
             "id": 1,
             "memory": mem
         }).execute()
 
+        print("[MEMORY] Saved to Supabase")
+
     except Exception as e:
-        print("Supabase save error:", e)
 
-    # OPTIONAL fallback (kept for safety during migration)
-    save_json(MEMORY_FILE, mem)
+        print(f"[SUPABASE SAVE ERROR] {e}")
 
+        # emergency local backup
+        try:
+            save_json(MEMORY_FILE, mem)
+            print("[MEMORY] Saved locally as fallback")
+        except Exception as local_error:
+            print(f"[LOCAL MEMORY SAVE ERROR] {local_error}")
+
+
+# ─────────────────────────────────────────
+# LIST HELPER
+# ─────────────────────────────────────────
 def _add_unique(lst: list, item: str, max_len: int = 30) -> bool:
-    item = item.strip()
+
+    if not isinstance(item, str):
+        return False
+
+    item = normalize_text(item)
+
     if not item:
         return False
-    if any(e.lower() == item.lower() for e in lst):
+
+    existing = {
+        str(x).strip().lower()
+        for x in lst
+        if isinstance(x, str)
+    }
+
+    if item.lower() in existing:
         return False
+
     lst.append(item)
+
     if len(lst) > max_len:
         lst[:] = lst[-max_len:]
+
     return True
 
+
+# ─────────────────────────────────────────
+# MEMORY EXTRACTION
+# ─────────────────────────────────────────
 def extract_memory(text: str, mem: dict) -> bool:
+
     changed = False
-    t = text.strip()
 
-    # Name
-    for pat in [
-        r"(?:my name is|i(?:'m| am) called|call me|i go by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
-        r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+here[,.]",
-    ]:
-        m = re.search(pat, t, re.IGNORECASE)
-        if m:
-            candidate = m.group(1).strip()
-            if candidate.lower() not in {"the", "a", "an", "this", "that", "here"}:
-                mem["profile"]["name"] = candidate
+    t = normalize_text(text)
+
+    if not t:
+        return False
+
+
+    # ─────────────────────
+    # NAME
+    # ─────────────────────
+    name_patterns = [
+
+        r"(?:my name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+
+        r"(?:i(?:'m| am) called)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+
+        r"(?:call me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+
+        r"(?:i go by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
+
+        r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+here[,.]?"
+    ]
+
+    for pattern in name_patterns:
+
+        match = re.search(pattern, t, re.IGNORECASE)
+
+        if match:
+
+            name = normalize_text(match.group(1))
+
+            banned = {
+                "user",
+                "name",
+                "the",
+                "this",
+                "that",
+                "here"
+            }
+
+            if name.lower() not in banned:
+
+                mem["profile"]["name"] = name
+
                 changed = True
+
                 break
 
-    # Company
-    for pat in [
-        r"(?:i(?:'m| am) from|my company is|i work (?:at|for)|our company is|we(?:'re| are) called|the business is called)\s+(.+?)(?:\.|,|\band\b|$)",
-        r"(?:my agency is|our agency is)\s+(.+?)(?:\.|,|$)",
-    ]:
-        m = re.search(pat, t, re.IGNORECASE)
-        if m:
-            mem["profile"]["company"] = m.group(1).strip()
-            changed = True
-            break
 
-    # Role
-    for pat in [
-        r"(?:i(?:'m| am) (?:a|an|the))\s+([\w\s]+?)(?:\s+at|\s+for|\.|,|$)",
-        r"my (?:job|role|position|title) is\s+(.+?)(?:\.|,|$)",
-    ]:
-        m = re.search(pat, t, re.IGNORECASE)
-        if m:
-            role = m.group(1).strip()
+    # ─────────────────────
+    # COMPANY
+    # ─────────────────────
+    company_patterns = [
+
+        r"(?:my company is)\s+(.+?)(?:\.|,|$)",
+
+        r"(?:our company is)\s+(.+?)(?:\.|,|$)",
+
+        r"(?:my agency is)\s+(.+?)(?:\.|,|$)",
+
+        r"(?:the business is called)\s+(.+?)(?:\.|,|$)"
+    ]
+
+    for pattern in company_patterns:
+
+        match = re.search(pattern, t, re.IGNORECASE)
+
+        if match:
+
+            company = normalize_text(match.group(1))
+
+            if 2 <= len(company) <= 80:
+
+                mem["profile"]["company"] = company
+
+                changed = True
+
+                break
+
+
+    # ─────────────────────
+    # ROLE
+    # ─────────────────────
+    role_patterns = [
+
+        r"(?:i(?:'m| am) a)\s+(.+?)(?:\.|,|$)",
+
+        r"(?:my role is)\s+(.+?)(?:\.|,|$)",
+
+        r"(?:my job is)\s+(.+?)(?:\.|,|$)"
+    ]
+
+    for pattern in role_patterns:
+
+        match = re.search(pattern, t, re.IGNORECASE)
+
+        if match:
+
+            role = normalize_text(match.group(1))
+
             if len(role.split()) <= 6:
+
                 mem["profile"]["role"] = role
+
                 changed = True
+
                 break
 
-    # Location
-    m = re.search(
-        r"(?:i(?:'m| am) (?:based in|from|in)|we(?:'re| are) based in|located in)\s+(.+?)(?:\.|,|$)",
-        t, re.IGNORECASE
+
+    # ─────────────────────
+    # LOCATION
+    # ─────────────────────
+    location_match = re.search(
+        r"(?:i(?:'m| am) from|i(?:'m| am) based in|located in)\s+(.+?)(?:\.|,|$)",
+        t,
+        re.IGNORECASE
     )
-    if m:
-        mem["profile"]["location"] = m.group(1).strip()
+
+    if location_match:
+
+        mem["profile"]["location"] = normalize_text(
+            location_match.group(1)
+        )
+
         changed = True
 
-    # Email
-    m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", t)
-    if m:
-        mem["profile"]["email"] = m.group(0)
+
+    # ─────────────────────
+    # EMAIL
+    # ─────────────────────
+    email_match = re.search(
+        r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}",
+        t
+    )
+
+    if email_match:
+
+        mem["profile"]["email"] = email_match.group(0)
+
         changed = True
 
-    # SA Phone
-    m = re.search(r"(?:\+27|0)[6-8]\d[\s\-]?\d{3}[\s\-]?\d{4}", t)
-    if m:
-        mem["profile"]["phone"] = m.group(0)
+
+    # ─────────────────────
+    # SOUTH AFRICAN PHONE
+    # ─────────────────────
+    phone_match = re.search(
+        r"(?:\+27|0)[6-8]\d[\s\-]?\d{3}[\s\-]?\d{4}",
+        t
+    )
+
+    if phone_match:
+
+        mem["profile"]["phone"] = phone_match.group(0)
+
         changed = True
 
-    # Client names
-    for pat in [
-        r"(?:my client is|our client is|working (?:with|for) a? ?client called|the client(?:'s name)? is)\s+(.+?)(?:\.|,|$)",
-        r"(?:client:)\s*(.+?)(?:\.|,|$)",
-    ]:
-        m = re.search(pat, t, re.IGNORECASE)
-        if m:
-            if _add_unique(mem["clients"], m.group(1).strip(), max_len=20):
+
+    # ─────────────────────
+    # PREFERENCES
+    # ─────────────────────
+    preference_patterns = [
+
+        r"(?:i like)\s+(.+?)(?:\.|,|$)",
+
+        r"(?:i love)\s+(.+?)(?:\.|,|$)",
+
+        r"(?:i prefer)\s+(.+?)(?:\.|,|$)",
+
+        r"(?:i hate)\s+(.+?)(?:\.|,|$)"
+    ]
+
+    for pattern in preference_patterns:
+
+        match = re.search(pattern, t, re.IGNORECASE)
+
+        if match:
+
+            pref = normalize_text(match.group(0))
+
+            if _add_unique(
+                mem["preferences"],
+                pref,
+                25
+            ):
                 changed = True
 
-    # Projects
-    for pat in [
-        r"(?:project called|project named|project:)\s+(.+?)(?:\.|,|$)",
-        r"(?:working on|launching|building|creating|developing)\s+(?:a|an|the)?\s*(.+?)(?:\s+for|\s+next|\.|,|$)",
-    ]:
-        m = re.search(pat, t, re.IGNORECASE)
-        if m:
-            candidate = m.group(1).strip()
-            if 1 < len(candidate.split()) <= 8:
-                existing = [p.get("name", "").lower() for p in mem["projects"]]
-                if candidate.lower() not in existing:
-                    mem["projects"].append({
-                        "name":  candidate,
-                        "added": datetime.now().strftime("%Y-%m-%d")
-                    })
-                    if len(mem["projects"]) > 15:
-                        mem["projects"] = mem["projects"][-15:]
-                    changed = True
 
-    # Deadlines
-    m = re.search(
-        r"(?:deadline|due|needed by|launch(?:ing)? on|goes live)\s+(?:is|on|by)?\s+(.+?)(?:\.|,|$)",
-        t, re.IGNORECASE
+    # ─────────────────────
+    # IMPORTANT FACTS
+    # ─────────────────────
+    remember_match = re.search(
+        r"(?:remember that|please remember|don't forget that)\s+(.+?)(?:\.|$)",
+        t,
+        re.IGNORECASE
     )
-    if m:
-        dl = m.group(1).strip()
-        if len(dl) < 60:
-            mem["deadlines"].append({
-                "item":  t[:80],
-                "date":  dl,
-                "added": datetime.now().strftime("%Y-%m-%d")
-            })
-            if len(mem["deadlines"]) > 10:
-                mem["deadlines"] = mem["deadlines"][-10:]
-            changed = True
 
-    # Preferences
-    for pat in [
-        r"(?:i (?:prefer|like|love|hate|dislike|always want|never want))\s+(.+?)(?:\.|,|$)",
-        r"(?:always (?:use|write|format|include|avoid))\s+(.+?)(?:\.|,|$)",
-        r"(?:keep (?:it|responses|copy|ads|the tone))\s+(.+?)(?:\.|,|$)",
-    ]:
-        m = re.search(pat, t, re.IGNORECASE)
-        if m:
-            if _add_unique(mem["preferences"], m.group(0).strip(), max_len=15):
+    if remember_match:
+
+        fact = normalize_text(
+            remember_match.group(1)
+        )
+
+        if len(fact) > 5:
+
+            if _add_unique(
+                mem["important_facts"],
+                fact,
+                25
+            ):
                 changed = True
 
-    # Explicit remember notes
-    m = re.search(
-        r"(?:remember (?:that )?|please note(?: that)?|keep in mind (?:that )?|don't forget (?:that )?)(.+?)(?:\.|$)",
-        t, re.IGNORECASE
-    )
-    if m:
-        note = m.group(1).strip()
-        if len(note) > 5:
-            if _add_unique(mem["important_facts"], note, max_len=20):
-                changed = True
 
-    # Topic classification
+    # ─────────────────────
+    # TOPIC DETECTION
+    # ─────────────────────
     topic_map = {
-        "Facebook ads":          ["facebook", "fb ad", "facebook ad", "meta ad"],
-        "Instagram content":     ["instagram", "ig ", "reel", "story", "carousel"],
-        "Google Ads / PPC":      ["google ad", "adwords", "ppc", "sem", "search ad"],
-        "Red Rooms":             ["red rooms", "locanto", "phone entertainment", "operator ad"],
-        "Web design":            ["website", "web design", "landing page", "ux", "ui", "wireframe", "mockup"],
-        "CIPC / Business reg":   ["cipc", "register", "pty", "company registration", "pty ltd"],
-        "Email marketing":       ["email campaign", "newsletter", "mailchimp", "klaviyo"],
-        "Customer reply":        ["customer reply", "respond to", "client email", "complaint", "review reply"],
-        "Branding":              ["brand", "logo", "identity", "colour palette", "brand guide"],
-        "SEO":                   ["seo", "search engine", "ranking", "keyword", "organic"],
-        "Social media strategy": ["social media", "content calendar", "posting schedule", "content plan"],
-        "Copywriting":           ["copy", "headline", "tagline", "slogan", "body copy"],
-        "TikTok":                ["tiktok", "tik tok", "short video", "for you page"],
-        "WhatsApp marketing":    ["whatsapp", "whatsapp campaign", "broadcast"],
-        # Code topics
-        "Python":                ["python", ".py", "django", "flask", "fastapi", "pandas", "numpy"],
-        "JavaScript / Node":     ["javascript", "node.js", "nodejs", "npm", "express", "js"],
-        "React / Frontend":      ["react", "vue", "svelte", "next.js", "nextjs", "tailwind", "jsx", "tsx"],
-        "HTML / CSS":            ["html", "css", "stylesheet", "flexbox", "grid layout"],
-        "Databases / SQL":       ["sql", "mysql", "postgresql", "sqlite", "mongodb", "database query"],
-        "APIs & Backend":        ["api", "rest api", "endpoint", "flask route", "fastapi", "webhook"],
-        "DevOps / Deployment":   ["render", "docker", "deploy", "ci/cd", "github actions", "vps", "nginx"],
-        "Debugging":             ["error", "traceback", "bug", "fix my code", "not working", "exception"],
-        "Bash / CLI":            ["bash", "shell", "terminal", "command line", "linux", "chmod", "cron"],
-        "TypeScript":            ["typescript", ".ts", "interface", "type definition"],
-        "PHP":                   ["php", "laravel", "wordpress plugin"],
-        "Text":                  ["txt"],
+
+        "Python": [
+            "python",
+            ".py",
+            "flask",
+            "django",
+            "fastapi"
+        ],
+
+        "Web design": [
+            "website",
+            "web design",
+            "ui",
+            "ux",
+            "landing page"
+        ],
+
+        "SEO": [
+            "seo",
+            "ranking",
+            "keyword"
+        ],
+
+        "Red Rooms": [
+            "red rooms",
+            "locanto",
+            "operator ad"
+        ],
+
+        "DevOps / Deployment": [
+            "render",
+            "docker",
+            "deploy",
+            "github"
+        ],
+
+        "APIs & Backend": [
+            "api",
+            "backend",
+            "endpoint",
+            "supabase"
+        ],
+
+        "Copywriting": [
+            "headline",
+            "copywriting",
+            "tagline",
+            "body copy"
+        ]
     }
+
     tl = t.lower()
+
     for topic, keywords in topic_map.items():
-        if any(kw in tl for kw in keywords):
-            if _add_unique(mem["topics_discussed"], topic, max_len=30):
+
+        if any(keyword in tl for keyword in keywords):
+
+            if _add_unique(
+                mem["topics_discussed"],
+                topic,
+                40
+            ):
                 changed = True
+
 
     return changed
 
+
+# ─────────────────────────────────────────
+# MEMORY → PROMPT CONTEXT
+# ─────────────────────────────────────────
 def memory_to_context(mem: dict) -> str:
+
     lines = []
-    p = mem.get("profile", {})
-    if p.get("name"):     lines.append(f"- Name: {p['name']}")
-    if p.get("role"):     lines.append(f"- Role: {p['role']}")
-    if p.get("company"):  lines.append(f"- Company: {p['company']}")
-    if p.get("location"): lines.append(f"- Location: {p['location']}")
-    if p.get("email"):    lines.append(f"- Email: {p['email']}")
-    if p.get("phone"):    lines.append(f"- Phone: {p['phone']}")
+
+    profile = mem.get("profile", {})
+
+    if profile.get("name"):
+        lines.append(f"- User name: {profile['name']}")
+
+    if profile.get("role"):
+        lines.append(f"- Role: {profile['role']}")
+
+    if profile.get("company"):
+        lines.append(f"- Company: {profile['company']}")
+
+    if profile.get("location"):
+        lines.append(f"- Location: {profile['location']}")
+
+    if profile.get("email"):
+        lines.append(f"- Email: {profile['email']}")
+
+    if profile.get("phone"):
+        lines.append(f"- Phone: {profile['phone']}")
+
     if mem.get("clients"):
-        lines.append(f"- Known clients: {', '.join(mem['clients'][-8:])}")
+
+        lines.append(
+            f"- Clients: {', '.join(mem['clients'][-8:])}"
+        )
+
     if mem.get("projects"):
-        names = [proj.get("name", "") for proj in mem["projects"][-5:]]
-        lines.append(f"- Active/recent projects: {', '.join(names)}")
-    if mem.get("deadlines"):
-        parts = [f"{d.get('date','?')} ({d.get('item','')[:40]})" for d in mem["deadlines"][-3:]]
-        lines.append(f"- Deadlines: {' | '.join(parts)}")
+
+        names = [
+            proj.get("name", "")
+            for proj in mem["projects"][-5:]
+            if isinstance(proj, dict)
+        ]
+
+        if names:
+            lines.append(
+                f"- Recent projects: {', '.join(names)}"
+            )
+
     if mem.get("preferences"):
+
         lines.append("- User preferences:")
-        for pref in mem["preferences"][-8:]:
+
+        for pref in mem["preferences"][-10:]:
             lines.append(f"  • {pref}")
+
     if mem.get("important_facts"):
-        lines.append("- Important facts to remember:")
+
+        lines.append("- Important facts:")
+
         for fact in mem["important_facts"][-10:]:
             lines.append(f"  • {fact}")
+
     if mem.get("topics_discussed"):
-        lines.append(f"- Topics worked on previously: {', '.join(mem['topics_discussed'][-12:])}")
+
+        lines.append(
+            f"- Previous topics: {', '.join(mem['topics_discussed'][-15:])}"
+        )
+
     count = mem.get("conversation_count", 0)
+
     if count:
         lines.append(f"- Total conversations: {count}")
+
     if mem.get("first_seen") and mem.get("last_seen"):
-        lines.append(f"- First seen: {mem['first_seen']}  |  Last seen: {mem['last_seen']}")
-    return "\n".join(lines) if lines else "No user facts stored yet."
 
+        lines.append(
+            f"- First seen: {mem['first_seen']} | Last seen: {mem['last_seen']}"
+        )
 
-# ─────────────────────────────────────────
-# HISTORY — VERBATIM + SUMMARY
-# ─────────────────────────────────────────
-def load_history() -> list:
-    return load_json(CHAT_FILE, [])
-
-def load_summary() -> str:
-    return load_json(SUMMARY_FILE, "")
-
-def save_summary(s: str):
-    save_json(SUMMARY_FILE, s)
-
-def maybe_summarise_history(history: list):
-    if len(history) < SUMMARISE_AFTER:
-        return
-    half      = len(history) // 2
-    old_chunk = history[:half]
-    lines     = []
-    for msg in old_chunk:
-        role = "User" if msg["role"] == "user" else "Oculus"
-        lines.append(f"{role}: {msg['text'][:120]}")
-    chunk_text = "\n".join(lines)
-    summary_prompt = (
-        "Summarise the following conversation in 3-5 sentences. "
-        "Focus on: topics covered, decisions made, user facts revealed, ongoing work. "
-        "Be concise. Plain text only.\n\n"
-        f"{chunk_text}\n\nSummary:"
-    )
-    try:
-        new_summary = query_xoltron(summary_prompt)
-        if new_summary:
-            existing = load_summary()
-            combined = (existing + " " + new_summary).strip() if existing else new_summary
-            if len(combined) > 700:
-                combined = combined[-700:]
-            save_summary(combined)
-        history[:] = history[half:]
-        save_json(CHAT_FILE, history)
-    except Exception:
-        pass
-
+    return "\n".join(lines) if lines else "No memory stored yet."
 
 # ─────────────────────────────────────────
 # WEB SEARCH
