@@ -39,6 +39,7 @@ It remembers who you are. It searches the web when it needs to. It writes real, 
 | 📣 **Marketing Engine** | Ad copy, branding, SEO, social strategy, customer replies, CIPC basics |
 | 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns |
 | 🔍 **Syntax Highlighting** | Code blocks rendered with Highlight.js — copy button included |
+| 👁️ **AI Self-Reflection** | The pipeline becomes: Draft → Critique → Refine → Output. |
 
 ---
 
