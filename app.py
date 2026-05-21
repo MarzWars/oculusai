@@ -1,7 +1,7 @@
 """
 Oculus AI — Lex Digitals
 Backend: Xoltron (darkc0de/chat) via Gradio Client
-Features: long-term memory · web search · history summarisation · code output
+Features: long-term memory (Supabase) · web search · history summarisation · code output
 """
 
 from flask import Flask, request, Response
@@ -11,11 +11,13 @@ import os
 import re
 from datetime import datetime
 from duckduckgo_search import DDGS
-import os
 from supabase import create_client
 
 app = Flask(__name__)
 
+# ─────────────────────────────────────────
+# SUPABASE
+# ─────────────────────────────────────────
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
@@ -24,31 +26,7 @@ if not SUPABASE_URL or not SUPABASE_KEY:
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-# ─────────────────────────────────────────
-# SUPABASE MEMORY LAYER
-# ─────────────────────────────────────────
-
 MEMORY_TABLE = "oculus_memory"
-
-def supabase_load_memory():
-    try:
-        res = supabase.table(MEMORY_TABLE).select("*").eq("id", 1).execute()
-        if res.data and len(res.data) > 0:
-            return res.data[0]["memory"]
-    except Exception as e:
-        print("Supabase load error:", e)
-
-    return MEMORY_DEFAULT
-
-
-def supabase_save_memory(mem: dict):
-    try:
-        supabase.table(MEMORY_TABLE).upsert({
-            "id": 1,
-            "memory": mem
-        }).execute()
-    except Exception as e:
-        print("Supabase save error:", e)
 
 # ─────────────────────────────────────────
 # CONSTANTS
@@ -56,11 +34,23 @@ def supabase_save_memory(mem: dict):
 XOLTRON_SPACE = "darkc0de/chat"
 
 CHAT_FILE    = "chat_history.json"
-MEMORY_FILE  = "memory.json"
 SUMMARY_FILE = "history_summary.json"
 
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
+
+# Patterns that indicate operator/ad content — skip memory extraction if matched
+AD_CONTENT_PATTERNS = [
+    r"\bred rooms?\b", r"\blocanto\b", r"\bphone entertainment\b",
+    r"\boperator ad\b", r"\blooking for your dream\b",
+    r"\bcall me\b.*\bfun\b", r"\bno strings\b", r"\bdiscrete\b",
+    r"\bintimate\b", r"\bnaughty\b", r"\bsexy\b", r"\bescort\b",
+]
+
+def is_ad_content(text: str) -> bool:
+    """Return True if the message looks like operator ad content — skip memory extraction."""
+    tl = text.lower()
+    return any(re.search(p, tl) for p in AD_CONTENT_PATTERNS)
 
 
 # ─────────────────────────────────────────
@@ -220,7 +210,7 @@ Never use: "call now", "limited time", "don't miss out"
 
 
 # ─────────────────────────────────────────
-# JSON HELPERS
+# JSON HELPERS  (local files — chat + summary only)
 # ─────────────────────────────────────────
 def load_json(file: str, default):
     if os.path.exists(file):
@@ -237,7 +227,7 @@ def save_json(file: str, data):
 
 
 # ─────────────────────────────────────────
-# LONG-TERM MEMORY
+# LONG-TERM MEMORY  (Supabase only)
 # ─────────────────────────────────────────
 MEMORY_DEFAULT = {
     "profile": {
@@ -252,25 +242,23 @@ MEMORY_DEFAULT = {
     "deadlines":          [],
     "first_seen":         "",
     "last_seen":          "",
-    "conversation_count": 0
+    "session_count":      0,   # counts sessions (page loads), not individual messages
+    "message_count":      0    # counts total messages sent
 }
 
 def load_memory() -> dict:
     try:
-        res = supabase.table("oculus_memory").select("*").eq("id", 1).execute()
-
+        res = supabase.table(MEMORY_TABLE).select("*").eq("id", 1).execute()
         if res.data and len(res.data) > 0:
             mem = res.data[0].get("memory", {})
         else:
             mem = {}
-
     except Exception as e:
         print("Supabase load error:", e)
         mem = {}
 
-    # merge with default structure (safe fallback)
+    # Merge with defaults so new fields always exist
     merged = json.loads(json.dumps(MEMORY_DEFAULT))
-
     for key, val in mem.items():
         if key in merged:
             if isinstance(val, dict) and isinstance(merged[key], dict):
@@ -278,27 +266,31 @@ def load_memory() -> dict:
             else:
                 merged[key] = val
 
+    # Migrate old single conversation_count field if present
+    if "conversation_count" in mem and "message_count" not in mem:
+        merged["message_count"]  = mem["conversation_count"]
+        merged["session_count"]  = 0
+
     return merged
 
 
 def save_memory(mem: dict):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     mem["last_seen"] = now
-
     if not mem.get("first_seen"):
         mem["first_seen"] = now
 
+    # Remove legacy field if it somehow survived
+    mem.pop("conversation_count", None)
+
     try:
-        supabase.table("oculus_memory").upsert({
-            "id": 1,
+        supabase.table(MEMORY_TABLE).upsert({
+            "id":     1,
             "memory": mem
         }).execute()
-
     except Exception as e:
         print("Supabase save error:", e)
 
-    # OPTIONAL fallback (kept for safety during migration)
-    save_json(MEMORY_FILE, mem)
 
 def _add_unique(lst: list, item: str, max_len: int = 30) -> bool:
     item = item.strip()
@@ -311,11 +303,21 @@ def _add_unique(lst: list, item: str, max_len: int = 30) -> bool:
         lst[:] = lst[-max_len:]
     return True
 
+
 def extract_memory(text: str, mem: dict) -> bool:
+    """
+    Extract facts from a user message and store them in memory.
+    Returns True if anything changed.
+    Skips extraction entirely if the message looks like operator ad content.
+    """
+    # ── Guard: skip ad/operator content ──────────────────────────────────
+    if is_ad_content(text):
+        return False
+
     changed = False
     t = text.strip()
 
-    # Name
+    # ── Name ──────────────────────────────────────────────────────────────
     for pat in [
         r"(?:my name is|i(?:'m| am) called|call me|i go by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
         r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+here[,.]",
@@ -328,18 +330,18 @@ def extract_memory(text: str, mem: dict) -> bool:
                 changed = True
                 break
 
-    # Company
+    # ── Company ───────────────────────────────────────────────────────────
     for pat in [
         r"(?:i(?:'m| am) from|my company is|i work (?:at|for)|our company is|we(?:'re| are) called|the business is called)\s+(.+?)(?:\.|,|\band\b|$)",
         r"(?:my agency is|our agency is)\s+(.+?)(?:\.|,|$)",
     ]:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
-            mem["profile"]["company"] = m.group(1).strip()
+            mem["profile"]["company"] = m.group(1).strip()[:80]
             changed = True
             break
 
-    # Role
+    # ── Role ──────────────────────────────────────────────────────────────
     for pat in [
         r"(?:i(?:'m| am) (?:a|an|the))\s+([\w\s]+?)(?:\s+at|\s+for|\.|,|$)",
         r"my (?:job|role|position|title) is\s+(.+?)(?:\.|,|$)",
@@ -352,38 +354,39 @@ def extract_memory(text: str, mem: dict) -> bool:
                 changed = True
                 break
 
-    # Location
+    # ── Location ──────────────────────────────────────────────────────────
     m = re.search(
         r"(?:i(?:'m| am) (?:based in|from|in)|we(?:'re| are) based in|located in)\s+(.+?)(?:\.|,|$)",
         t, re.IGNORECASE
     )
     if m:
-        mem["profile"]["location"] = m.group(1).strip()
+        mem["profile"]["location"] = m.group(1).strip()[:60]
         changed = True
 
-    # Email
+    # ── Email ─────────────────────────────────────────────────────────────
     m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", t)
     if m:
         mem["profile"]["email"] = m.group(0)
         changed = True
 
-    # SA Phone
+    # ── SA Phone ──────────────────────────────────────────────────────────
     m = re.search(r"(?:\+27|0)[6-8]\d[\s\-]?\d{3}[\s\-]?\d{4}", t)
     if m:
         mem["profile"]["phone"] = m.group(0)
         changed = True
 
-    # Client names
+    # ── Client names ──────────────────────────────────────────────────────
     for pat in [
         r"(?:my client is|our client is|working (?:with|for) a? ?client called|the client(?:'s name)? is)\s+(.+?)(?:\.|,|$)",
         r"(?:client:)\s*(.+?)(?:\.|,|$)",
     ]:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
-            if _add_unique(mem["clients"], m.group(1).strip(), max_len=20):
+            candidate = m.group(1).strip()[:60]
+            if _add_unique(mem["clients"], candidate, max_len=20):
                 changed = True
 
-    # Projects
+    # ── Projects ──────────────────────────────────────────────────────────
     for pat in [
         r"(?:project called|project named|project:)\s+(.+?)(?:\.|,|$)",
         r"(?:working on|launching|building|creating|developing)\s+(?:a|an|the)?\s*(.+?)(?:\s+for|\s+next|\.|,|$)",
@@ -395,14 +398,14 @@ def extract_memory(text: str, mem: dict) -> bool:
                 existing = [p.get("name", "").lower() for p in mem["projects"]]
                 if candidate.lower() not in existing:
                     mem["projects"].append({
-                        "name":  candidate,
+                        "name":  candidate[:80],
                         "added": datetime.now().strftime("%Y-%m-%d")
                     })
                     if len(mem["projects"]) > 15:
                         mem["projects"] = mem["projects"][-15:]
                     changed = True
 
-    # Deadlines
+    # ── Deadlines ─────────────────────────────────────────────────────────
     m = re.search(
         r"(?:deadline|due|needed by|launch(?:ing)? on|goes live)\s+(?:is|on|by)?\s+(.+?)(?:\.|,|$)",
         t, re.IGNORECASE
@@ -419,29 +422,35 @@ def extract_memory(text: str, mem: dict) -> bool:
                 mem["deadlines"] = mem["deadlines"][-10:]
             changed = True
 
-    # Preferences
+    # ── Preferences ───────────────────────────────────────────────────────
+    # FIX: stop at sentence-ending punctuation including ! and ?
+    #      and enforce a max length of 100 chars to avoid storing long ad copy
     for pat in [
-        r"(?:i (?:prefer|like|love|hate|dislike|always want|never want))\s+(.+?)(?:\.|,|$)",
-        r"(?:always (?:use|write|format|include|avoid))\s+(.+?)(?:\.|,|$)",
-        r"(?:keep (?:it|responses|copy|ads|the tone))\s+(.+?)(?:\.|,|$)",
+        r"(?:i (?:prefer|like|love|hate|dislike|always want|never want))\s+(.+?)(?:[.!?,]|$)",
+        r"(?:always (?:use|write|format|include|avoid))\s+(.+?)(?:[.!?,]|$)",
+        r"(?:keep (?:it|responses|copy|ads|the tone))\s+(.+?)(?:[.!?,]|$)",
     ]:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
-            if _add_unique(mem["preferences"], m.group(0).strip(), max_len=15):
-                changed = True
+            pref = m.group(0).strip()
+            # Skip if too long (likely ad content or a long sentence, not a real preference)
+            if len(pref) <= 100:
+                if _add_unique(mem["preferences"], pref, max_len=15):
+                    changed = True
 
-    # Explicit remember notes
+    # ── Explicit remember notes ───────────────────────────────────────────
     m = re.search(
-        r"(?:remember (?:that )?|please note(?: that)?|keep in mind (?:that )?|don't forget (?:that )?)(.+?)(?:\.|$)",
+        r"(?:remember (?:that )?|please note(?: that)?|keep in mind (?:that )?|don't forget (?:that )?)(.+?)(?:[.!?]|$)",
         t, re.IGNORECASE
     )
     if m:
         note = m.group(1).strip()
-        if len(note) > 5:
+        # Enforce length: must be meaningful but not a wall of text
+        if 5 < len(note) <= 120:
             if _add_unique(mem["important_facts"], note, max_len=20):
                 changed = True
 
-    # Topic classification
+    # ── Topic classification ──────────────────────────────────────────────
     topic_map = {
         "Facebook ads":          ["facebook", "fb ad", "facebook ad", "meta ad"],
         "Instagram content":     ["instagram", "ig ", "reel", "story", "carousel"],
@@ -457,7 +466,6 @@ def extract_memory(text: str, mem: dict) -> bool:
         "Copywriting":           ["copy", "headline", "tagline", "slogan", "body copy"],
         "TikTok":                ["tiktok", "tik tok", "short video", "for you page"],
         "WhatsApp marketing":    ["whatsapp", "whatsapp campaign", "broadcast"],
-        # Code topics
         "Python":                ["python", ".py", "django", "flask", "fastapi", "pandas", "numpy"],
         "JavaScript / Node":     ["javascript", "node.js", "nodejs", "npm", "express", "js"],
         "React / Frontend":      ["react", "vue", "svelte", "next.js", "nextjs", "tailwind", "jsx", "tsx"],
@@ -469,7 +477,6 @@ def extract_memory(text: str, mem: dict) -> bool:
         "Bash / CLI":            ["bash", "shell", "terminal", "command line", "linux", "chmod", "cron"],
         "TypeScript":            ["typescript", ".ts", "interface", "type definition"],
         "PHP":                   ["php", "laravel", "wordpress plugin"],
-        "Text":                  ["txt"],
     }
     tl = t.lower()
     for topic, keywords in topic_map.items():
@@ -478,6 +485,7 @@ def extract_memory(text: str, mem: dict) -> bool:
                 changed = True
 
     return changed
+
 
 def memory_to_context(mem: dict) -> str:
     lines = []
@@ -506,16 +514,19 @@ def memory_to_context(mem: dict) -> str:
             lines.append(f"  • {fact}")
     if mem.get("topics_discussed"):
         lines.append(f"- Topics worked on previously: {', '.join(mem['topics_discussed'][-12:])}")
-    count = mem.get("conversation_count", 0)
-    if count:
-        lines.append(f"- Total conversations: {count}")
+    sessions  = mem.get("session_count", 0)
+    messages  = mem.get("message_count", 0)
+    if messages:
+        lines.append(f"- Sessions: {sessions}  |  Messages sent: {messages}")
     if mem.get("first_seen") and mem.get("last_seen"):
         lines.append(f"- First seen: {mem['first_seen']}  |  Last seen: {mem['last_seen']}")
     return "\n".join(lines) if lines else "No user facts stored yet."
 
 
 # ─────────────────────────────────────────
-# HISTORY — VERBATIM + SUMMARY
+# HISTORY — VERBATIM + SUMMARY  (local files)
+# Note: these reset on Render redeploy — that is expected behaviour.
+# Long-term facts live in Supabase; chat history is session-scoped.
 # ─────────────────────────────────────────
 def load_history() -> list:
     return load_json(CHAT_FILE, [])
@@ -576,7 +587,6 @@ SEARCH_YES = [
 ]
 
 SEARCH_NO = [
-    # Date/time queries
     r"\bwhat (day|date|time) is it\b",
     r"\bwhat('s| is) (today|the date|the time|the day)\b",
     r"\btoday('s)? date\b", r"\bcurrent (date|time|day)\b",
@@ -584,17 +594,14 @@ SEARCH_NO = [
     r"\bwhat (year|month) (is it|are we in)\b",
     r"\btell me the (date|time|day)\b",
     r"\bwhat time (is it|in south africa)\b",
-    # Creative / writing tasks — no search needed
     r"^write (a|an|me )", r"^create (a|an|me )", r"^draft (a|an|me )",
     r"^give me (a|an )", r"^generate (a|an )", r"^make (a|an|me )",
     r"^help me (write|create|draft|rewrite|improve)",
     r"^(rewrite|improve|edit|fix|rephrase|shorten|lengthen)\b",
     r"^what should i\b",
-    # Ad-specific
     r"\bred rooms?\b", r"\blocanto\b", r"\bphone entertainment\b",
     r"\boperator ad\b", r"\bwrite.*ad\b", r"\bad for\b",
     r"\bcreate.*ad\b", r"\bad copy\b", r"\bcopy for\b",
-    # Code tasks — Oculus handles these directly, no search needed
     r"^(write|build|create|make|code|implement|generate) (a |an |me )?(function|script|class|component|app|api|route|query|snippet|module|bot|tool)",
     r"^(fix|debug|review|refactor|optimise|optimize|explain|simplify) (my |this |the )?(code|script|function|class|error|bug|file)",
     r"^how (do i|can i|should i) (code|write|build|implement|fix|use|set up|install)",
@@ -771,6 +778,10 @@ def home():
     mem_name     = memory.get("profile", {}).get("name", "")
     greeting     = f"Welcome back, {mem_name}." if mem_name else "What are we building today?"
 
+    # Increment session count on each page load
+    memory["session_count"] = memory.get("session_count", 0) + 1
+    save_memory(memory)
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -820,11 +831,11 @@ def home():
         '''}
 
         <div class="typing-indicator" id="typingIndicator">
-    <div class="avatar ai-avatar">O</div>
-    <div class="typing-text">
-        Oculus is thinking<span class="dots"></span>
-    </div>
-</div>
+            <div class="avatar ai-avatar">O</div>
+            <div class="typing-text">
+                Oculus is thinking<span class="dots"></span>
+            </div>
+        </div>
 
         <div id="streamRow">
             <div class="avatar ai-avatar">O</div>
@@ -835,8 +846,8 @@ def home():
     <div class="input-area">
         <div class="input-wrap">
             <textarea id="msgInput" placeholder="Message Oculus AI…"
-          autocomplete="off" onkeydown="handleKey(event)"
-          rows="1"></textarea>
+                      autocomplete="off" onkeydown="handleKey(event)"
+                      rows="1"></textarea>
             <button class="send-btn" onclick="sendMessage()" title="Send">
                 <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                     <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
@@ -875,7 +886,7 @@ def ask():
     memory  = load_memory()
 
     extract_memory(user_message, memory)
-    memory["conversation_count"] = memory.get("conversation_count", 0) + 1
+    memory["message_count"] = memory.get("message_count", 0) + 1
     save_memory(memory)
 
     history.append({"role": "user", "text": user_message})
