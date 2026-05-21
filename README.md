@@ -1,53 +1,67 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Oculus AI</title>
-</head>
+<div align="center">
 
-<body style="margin:0; font-family:Arial, sans-serif; background:#0b0f14; color:#e6e6e6; line-height:1.6;">
+# 🧠 Oculus AI
 
-<div style="max-width:900px; margin:0 auto; padding:40px 20px;">
+**A custom-built intelligence system for real work.**  
+Code. Copy. Strategy. Memory. All in one.
 
-  <!-- HEADER -->
-  <div style="text-align:center; padding-bottom:30px; border-bottom:1px solid #222;">
-    <h1 style="font-size:40px; margin:0; color:#7c5cff;">🧠 Oculus AI</h1>
-    <p style="font-size:16px; color:#aaa; margin-top:10px;">
-      Built for Lex Digitals • Designed by Alex • A real-world intelligence system
-    </p>
-  </div>
+<br>
 
-  <!-- INTRO -->
-  <div style="padding:30px 0;">
-    <p style="font-size:18px;">
-      <b>Oculus AI</b> is a custom-built intelligent assistant that combines conversational AI, developer tooling,
-      marketing intelligence, and long-term memory into one unified system.
-    </p>
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat-square&logo=python&logoColor=white)
+![Flask](https://img.shields.io/badge/Flask-Backend-000000?style=flat-square&logo=flask&logoColor=white)
+![Supabase](https://img.shields.io/badge/Supabase-Memory-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
+![Render](https://img.shields.io/badge/Deployed-Render-46E3B7?style=flat-square&logo=render&logoColor=white)
+![License](https://img.shields.io/badge/License-Private-red?style=flat-square)
 
-    <p style="color:#bbb;">
-      It is built to think fast, respond cleanly, and handle real business and coding work without fluff or delay.
-    </p>
-  </div>
+<br>
 
-  <!-- CORE FEATURES -->
-  <h2 style="color:#7c5cff;">⚙️ Core Capabilities</h2>
+> Built by **Alex** · [Lex Digitals](https://lexdigitals.co.za)
 
-  <ul>
-    <li><b>Conversational Intelligence:</b> Context-aware dialogue with memory of past interactions</li>
-    <li><b>Long-Term Memory (Supabase):</b> Stores profile, projects, preferences, and business context</li>
-    <li><b>Live Web Awareness:</b> Real-time search using DuckDuckGo when needed</li>
-    <li><b>Developer Assistant:</b> Writes full working code, debugs issues, supports multiple languages</li>
-    <li><b>Marketing Engine:</b> Ads, branding, SEO, customer replies, and content strategy</li>
-  </ul>
+</div>
 
-  <!-- MEMORY -->
-  <h2 style="color:#7c5cff;">🧠 Memory System</h2>
+---
 
-  <p>
-    Oculus remembers key user data across sessions using Supabase:
-  </p>
+## What is Oculus?
 
-  <div style="background:#111826; padding:15px; border-radius:10px; font-family:monospace; font-size:13px; overflow:auto;">
+Oculus is a custom AI assistant built on top of [Xoltron](https://huggingface.co/spaces/darkc0de/chat) with a full memory system, live web search, and a clean dark UI. It handles both **developer work** and **marketing work** without switching tools.
+
+It remembers who you are. It searches the web when it needs to. It writes real, working code. It generates ads, copy, and strategy. And it does all of it without filler.
+
+---
+
+## ⚙️ Core Capabilities
+
+| Capability | Description |
+|---|---|
+| 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences and facts across sessions via Supabase |
+| 🌐 **Live Web Search** | Pulls real-time information using DuckDuckGo when the question needs it |
+| 💻 **Developer Assistant** | Writes full working code, debugs errors, explains logic — Python, JS, SQL, React, Bash and more |
+| 📣 **Marketing Engine** | Ad copy, branding, SEO, social strategy, customer replies, CIPC basics |
+| 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns |
+| 🔍 **Syntax Highlighting** | Code blocks rendered with Highlight.js — copy button included |
+
+---
+
+## 🏗️ Architecture
+
+```
+Oculus AI
+│
+├── Flask              → Web server + routing
+├── Gradio Client      → Xoltron AI (darkc0de/chat) — language model backend
+├── Supabase           → Persistent long-term memory (JSON in Postgres)
+├── DuckDuckGo DDGS    → Live web search when needed
+├── JSON (local)       → Session chat history + conversation summaries
+└── Prompt Engine      → Injects memory, search results, date/time into every request
+```
+
+---
+
+## 🧠 Memory Schema
+
+Oculus stores everything it learns about you in Supabase. The memory record looks like this:
+
+```json
 {
   "profile": {
     "name": "",
@@ -63,76 +77,90 @@
   "important_facts": [],
   "topics_discussed": [],
   "deadlines": [],
-  "conversation_count": 0
+  "session_count": 0,
+  "message_count": 0,
+  "first_seen": "",
+  "last_seen": ""
 }
-  </div>
+```
 
-  <!-- ARCHITECTURE -->
-  <h2 style="color:#7c5cff;">🏗️ Architecture</h2>
+Memory is extracted automatically from natural conversation — no forms, no setup. Just talk.
 
-  <div style="background:#111826; padding:15px; border-radius:10px; font-family:monospace; font-size:13px;">
-Flask Backend  
-│  
-├── Gradio Client → Xoltron AI (darkc0de/chat)  
-├── Supabase → Persistent memory system  
-├── DuckDuckGo → Live web search  
-├── JSON → Chat history + summaries  
-└── Prompt Engine → Context + memory injection  
-  </div>
+---
 
-  <!-- PHILOSOPHY -->
-  <h2 style="color:#7c5cff;">⚡ Design Philosophy</h2>
+## 🚀 Deployment
 
-  <ul>
-    <li>Clarity over fluff</li>
-    <li>Function over theory</li>
-    <li>Real-world usefulness over academic noise</li>
-  </ul>
+### Requirements
 
-  <p style="margin-top:10px;">
-    Oculus is built to be:
-  </p>
+- Python 3.10+
+- A [Supabase](https://supabase.com) account with a table called `oculus_memory`
+- A [Render](https://render.com) account (or any Python host)
 
-  <ul>
-    <li><b>Uncensored in reasoning</b></li>
-    <li><b>Unfiltered in output</b></li>
-    <li><b>Zero-fluff by design</b></li>
-  </ul>
+### Install dependencies
 
-  <p style="color:#aaa;">
-    It does not waste time with corporate language or unnecessary explanation. It delivers direct, usable output.
-  </p>
+```bash
+pip install flask gradio_client supabase duckduckgo_search
+```
 
-  <!-- DEPLOYMENT -->
-  <h2 style="color:#7c5cff;">🚀 Deployment</h2>
+### Environment variables
 
-  <p>Requirements:</p>
-  <ul>
-    <li>Python 3.10+</li>
-    <li>Flask</li>
-    <li>Supabase account</li>
-    <li>Gradio Xoltron access</li>
-    <li>DuckDuckGo Search</li>
-  </ul>
+Set these in your Render dashboard under **Environment**:
 
-  <p style="font-family:monospace; background:#111826; padding:10px; border-radius:8px;">
-SUPABASE_URL=your_supabase_url<br>
-SUPABASE_KEY=your_supabase_key
-  </p>
+```env
+SUPABASE_URL=your_supabase_project_url
+SUPABASE_KEY=your_supabase_anon_key
+```
 
-  <!-- FINAL NOTE -->
-  <div style="margin-top:40px; padding-top:20px; border-top:1px solid #222; text-align:center;">
-    <h2 style="color:#7c5cff;">💀 Final Note</h2>
-    <p style="color:#bbb;">
-      Oculus is not just an assistant — it is a system that learns, adapts, and evolves with real usage.
-    </p>
+### Supabase table setup
 
-    <p style="font-weight:bold;">
-      Built to think. Built to execute. Built for real work.
-    </p>
-  </div>
+Run this in your Supabase SQL editor:
 
+```sql
+CREATE TABLE oculus_memory (
+  id     INT PRIMARY KEY,
+  memory JSONB
+);
+```
+
+### Run locally
+
+```bash
+python app.py
+```
+
+---
+
+## 📁 Project Structure
+
+```
+oculus-ai/
+├── app.py              # Flask backend — all logic lives here
+├── static/
+│   ├── oculus.js       # Frontend — send/receive, markdown render, code blocks
+│   └── style.css       # Dark UI theme
+├── requirements.txt
+└── README.md
+```
+
+---
+
+## ⚡ Design Philosophy
+
+- **Clarity over fluff** — responses are direct and useful, never padded
+- **Function over theory** — it does the work, not just talks about it
+- **Memory that actually works** — context survives across sessions
+- **Code that runs** — no pseudocode, no placeholders, no "add your logic here"
+
+---
+
+## 💀 Final Note
+
+Oculus is not a wrapper around a chatbot. It is a system built around a specific use case — running a digital agency — with memory, tooling, and personality designed for that context.
+
+**Built to think. Built to execute. Built for real work.**
+
+---
+
+<div align="center">
+  <sub>Built with 🖤 by Alex · Lex Digitals</sub>
 </div>
-
-</body>
-</html>
