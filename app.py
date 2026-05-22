@@ -1,10 +1,11 @@
 """
 Oculus AI — Lex Digitals
-Backend: Xoltron (darkc0de/chat) via Gradio Client
-Features: long-term memory (Supabase) · web search · history summarisation · code output
+Multi-user edition: register · login · logout
+Memory, chat history, and summaries all stored per-user in Supabase
 """
 
-from flask import Flask, request, Response
+from flask import Flask, request, Response, session, redirect, jsonify
+from functools import wraps
 from gradio_client import Client
 import json
 import os
@@ -16,54 +17,48 @@ from supabase import create_client
 app = Flask(__name__)
 
 # ─────────────────────────────────────────
-# SUPABASE
+# CONFIG
 # ─────────────────────────────────────────
+app.secret_key = os.environ.get("SECRET_KEY", "change-this-in-production")
+
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise Exception("Missing Supabase environment variables")
+    raise Exception("Missing SUPABASE_URL or SUPABASE_KEY environment variables")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-MEMORY_TABLE = "oculus_memory"
-
-# ─────────────────────────────────────────
-# CONSTANTS
-# ─────────────────────────────────────────
-XOLTRON_SPACE = "darkc0de/chat"
-
-CHAT_FILE    = "chat_history.json"
-SUMMARY_FILE = "history_summary.json"
-
+XOLTRON_SPACE   = "darkc0de/chat"
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
 
-# Patterns that indicate operator/ad content — skip memory extraction if matched
-AD_CONTENT_PATTERNS = [
-    r"\bred rooms?\b", r"\blocanto\b", r"\bphone entertainment\b",
-    r"\boperator ad\b", r"\blooking for your dream\b",
-    r"\bcall me\b.*\bfun\b", r"\bno strings\b", r"\bdiscrete\b",
-    r"\bintimate\b", r"\bnaughty\b", r"\bsexy\b", r"\bescort\b",
-]
+# ─────────────────────────────────────────
+# AUTH HELPERS
+# ─────────────────────────────────────────
+def login_required(f):
+    """Decorator — redirects to /login if the user is not in session."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user_id" not in session:
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return decorated
 
-def is_ad_content(text: str) -> bool:
-    """Return True if the message looks like operator ad content — skip memory extraction."""
-    tl = text.lower()
-    return any(re.search(p, tl) for p in AD_CONTENT_PATTERNS)
+def current_user_id() -> str:
+    return session.get("user_id", "")
+
+def current_email() -> str:
+    return session.get("email", "")
 
 
 # ─────────────────────────────────────────
 # XOLTRON API
 # ─────────────────────────────────────────
 def query_xoltron(prompt: str) -> str:
-    """Send a prompt to Xoltron (darkc0de/chat) and return the response as a string."""
     try:
         client = Client(XOLTRON_SPACE)
-        result = client.predict(
-            message=prompt,
-            api_name="/respond"
-        )
+        result = client.predict(message=prompt, api_name="/respond")
         if isinstance(result, str):
             return result.strip()
         if isinstance(result, (list, dict)):
@@ -170,7 +165,6 @@ When search results are provided:
 ## MEMORY & IDENTITY
 User data (name, company, projects, preferences) belongs to the user — not you.
 Never claim to own Lex Digitals. Never call Alex an AI.
-
 If the user's memory context includes past projects or preferences, apply them naturally — do not announce that you remember, just use the information.
 
 You are Oculus.
@@ -210,54 +204,43 @@ Never use: "call now", "limited time", "don't miss out"
 
 
 # ─────────────────────────────────────────
-# JSON HELPERS  (local files — chat + summary only)
-# ─────────────────────────────────────────
-def load_json(file: str, default):
-    if os.path.exists(file):
-        try:
-            with open(file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return default
-
-def save_json(file: str, data):
-    with open(file, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
-
-
-# ─────────────────────────────────────────
-# LONG-TERM MEMORY  (Supabase only)
+# MEMORY  (per-user, Supabase)
 # ─────────────────────────────────────────
 MEMORY_DEFAULT = {
     "profile": {
         "name": "", "role": "", "company": "",
         "location": "", "email": "", "phone": ""
     },
-    "clients":            [],
-    "projects":           [],
-    "preferences":        [],
-    "important_facts":    [],
-    "topics_discussed":   [],
-    "deadlines":          [],
-    "first_seen":         "",
-    "last_seen":          "",
-    "session_count":      0,   # counts sessions (page loads), not individual messages
-    "message_count":      0    # counts total messages sent
+    "clients":         [],
+    "projects":        [],
+    "preferences":     [],
+    "important_facts": [],
+    "topics_discussed":[],
+    "deadlines":       [],
+    "first_seen":      "",
+    "last_seen":       "",
+    "session_count":   0,
+    "message_count":   0
 }
 
-def load_memory() -> dict:
-    try:
-        res = supabase.table(MEMORY_TABLE).select("*").eq("id", 1).execute()
-        if res.data and len(res.data) > 0:
-            mem = res.data[0].get("memory", {})
-        else:
-            mem = {}
-    except Exception as e:
-        print("Supabase load error:", e)
-        mem = {}
+AD_CONTENT_PATTERNS = [
+    r"\bred rooms?\b", r"\blocanto\b", r"\bphone entertainment\b",
+    r"\boperator ad\b", r"\blooking for your dream\b",
+    r"\bno strings\b", r"\bdiscrete\b", r"\bintimate\b",
+    r"\bnaughty\b", r"\bsexy\b", r"\bescort\b",
+]
 
-    # Merge with defaults so new fields always exist
+def is_ad_content(text: str) -> bool:
+    tl = text.lower()
+    return any(re.search(p, tl) for p in AD_CONTENT_PATTERNS)
+
+def load_memory(user_id: str) -> dict:
+    try:
+        res = supabase.table("oculus_memory").select("memory").eq("user_id", user_id).execute()
+        mem = res.data[0].get("memory", {}) if res.data else {}
+    except Exception as e:
+        print("Memory load error:", e)
+        mem = {}
     merged = json.loads(json.dumps(MEMORY_DEFAULT))
     for key, val in mem.items():
         if key in merged:
@@ -265,32 +248,21 @@ def load_memory() -> dict:
                 merged[key].update(val)
             else:
                 merged[key] = val
-
-    # Migrate old single conversation_count field if present
-    if "conversation_count" in mem and "message_count" not in mem:
-        merged["message_count"]  = mem["conversation_count"]
-        merged["session_count"]  = 0
-
     return merged
 
-
-def save_memory(mem: dict):
+def save_memory(user_id: str, mem: dict):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     mem["last_seen"] = now
     if not mem.get("first_seen"):
         mem["first_seen"] = now
-
-    # Remove legacy field if it somehow survived
     mem.pop("conversation_count", None)
-
     try:
-        supabase.table(MEMORY_TABLE).upsert({
-            "id":     1,
-            "memory": mem
+        supabase.table("oculus_memory").upsert({
+            "user_id": user_id,
+            "memory":  mem
         }).execute()
     except Exception as e:
-        print("Supabase save error:", e)
-
+        print("Memory save error:", e)
 
 def _add_unique(lst: list, item: str, max_len: int = 30) -> bool:
     item = item.strip()
@@ -303,21 +275,12 @@ def _add_unique(lst: list, item: str, max_len: int = 30) -> bool:
         lst[:] = lst[-max_len:]
     return True
 
-
 def extract_memory(text: str, mem: dict) -> bool:
-    """
-    Extract facts from a user message and store them in memory.
-    Returns True if anything changed.
-    Skips extraction entirely if the message looks like operator ad content.
-    """
-    # ── Guard: skip ad/operator content ──────────────────────────────────
     if is_ad_content(text):
         return False
-
     changed = False
     t = text.strip()
 
-    # ── Name ──────────────────────────────────────────────────────────────
     for pat in [
         r"(?:my name is|i(?:'m| am) called|call me|i go by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
         r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+here[,.]",
@@ -330,7 +293,6 @@ def extract_memory(text: str, mem: dict) -> bool:
                 changed = True
                 break
 
-    # ── Company ───────────────────────────────────────────────────────────
     for pat in [
         r"(?:i(?:'m| am) from|my company is|i work (?:at|for)|our company is|we(?:'re| are) called|the business is called)\s+(.+?)(?:\.|,|\band\b|$)",
         r"(?:my agency is|our agency is)\s+(.+?)(?:\.|,|$)",
@@ -341,7 +303,6 @@ def extract_memory(text: str, mem: dict) -> bool:
             changed = True
             break
 
-    # ── Role ──────────────────────────────────────────────────────────────
     for pat in [
         r"(?:i(?:'m| am) (?:a|an|the))\s+([\w\s]+?)(?:\s+at|\s+for|\.|,|$)",
         r"my (?:job|role|position|title) is\s+(.+?)(?:\.|,|$)",
@@ -354,7 +315,6 @@ def extract_memory(text: str, mem: dict) -> bool:
                 changed = True
                 break
 
-    # ── Location ──────────────────────────────────────────────────────────
     m = re.search(
         r"(?:i(?:'m| am) (?:based in|from|in)|we(?:'re| are) based in|located in)\s+(.+?)(?:\.|,|$)",
         t, re.IGNORECASE
@@ -363,30 +323,25 @@ def extract_memory(text: str, mem: dict) -> bool:
         mem["profile"]["location"] = m.group(1).strip()[:60]
         changed = True
 
-    # ── Email ─────────────────────────────────────────────────────────────
     m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", t)
     if m:
         mem["profile"]["email"] = m.group(0)
         changed = True
 
-    # ── SA Phone ──────────────────────────────────────────────────────────
     m = re.search(r"(?:\+27|0)[6-8]\d[\s\-]?\d{3}[\s\-]?\d{4}", t)
     if m:
         mem["profile"]["phone"] = m.group(0)
         changed = True
 
-    # ── Client names ──────────────────────────────────────────────────────
     for pat in [
         r"(?:my client is|our client is|working (?:with|for) a? ?client called|the client(?:'s name)? is)\s+(.+?)(?:\.|,|$)",
         r"(?:client:)\s*(.+?)(?:\.|,|$)",
     ]:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
-            candidate = m.group(1).strip()[:60]
-            if _add_unique(mem["clients"], candidate, max_len=20):
+            if _add_unique(mem["clients"], m.group(1).strip()[:60], max_len=20):
                 changed = True
 
-    # ── Projects ──────────────────────────────────────────────────────────
     for pat in [
         r"(?:project called|project named|project:)\s+(.+?)(?:\.|,|$)",
         r"(?:working on|launching|building|creating|developing)\s+(?:a|an|the)?\s*(.+?)(?:\s+for|\s+next|\.|,|$)",
@@ -405,7 +360,6 @@ def extract_memory(text: str, mem: dict) -> bool:
                         mem["projects"] = mem["projects"][-15:]
                     changed = True
 
-    # ── Deadlines ─────────────────────────────────────────────────────────
     m = re.search(
         r"(?:deadline|due|needed by|launch(?:ing)? on|goes live)\s+(?:is|on|by)?\s+(.+?)(?:\.|,|$)",
         t, re.IGNORECASE
@@ -422,9 +376,6 @@ def extract_memory(text: str, mem: dict) -> bool:
                 mem["deadlines"] = mem["deadlines"][-10:]
             changed = True
 
-    # ── Preferences ───────────────────────────────────────────────────────
-    # FIX: stop at sentence-ending punctuation including ! and ?
-    #      and enforce a max length of 100 chars to avoid storing long ad copy
     for pat in [
         r"(?:i (?:prefer|like|love|hate|dislike|always want|never want))\s+(.+?)(?:[.!?,]|$)",
         r"(?:always (?:use|write|format|include|avoid))\s+(.+?)(?:[.!?,]|$)",
@@ -433,24 +384,20 @@ def extract_memory(text: str, mem: dict) -> bool:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
             pref = m.group(0).strip()
-            # Skip if too long (likely ad content or a long sentence, not a real preference)
             if len(pref) <= 100:
                 if _add_unique(mem["preferences"], pref, max_len=15):
                     changed = True
 
-    # ── Explicit remember notes ───────────────────────────────────────────
     m = re.search(
         r"(?:remember (?:that )?|please note(?: that)?|keep in mind (?:that )?|don't forget (?:that )?)(.+?)(?:[.!?]|$)",
         t, re.IGNORECASE
     )
     if m:
         note = m.group(1).strip()
-        # Enforce length: must be meaningful but not a wall of text
         if 5 < len(note) <= 120:
             if _add_unique(mem["important_facts"], note, max_len=20):
                 changed = True
 
-    # ── Topic classification ──────────────────────────────────────────────
     topic_map = {
         "Facebook ads":          ["facebook", "fb ad", "facebook ad", "meta ad"],
         "Instagram content":     ["instagram", "ig ", "reel", "story", "carousel"],
@@ -467,7 +414,7 @@ def extract_memory(text: str, mem: dict) -> bool:
         "TikTok":                ["tiktok", "tik tok", "short video", "for you page"],
         "WhatsApp marketing":    ["whatsapp", "whatsapp campaign", "broadcast"],
         "Python":                ["python", ".py", "django", "flask", "fastapi", "pandas", "numpy"],
-        "JavaScript / Node":     ["javascript", "node.js", "nodejs", "npm", "express", "js"],
+        "JavaScript / Node":     ["javascript", "node.js", "nodejs", "npm", "express"],
         "React / Frontend":      ["react", "vue", "svelte", "next.js", "nextjs", "tailwind", "jsx", "tsx"],
         "HTML / CSS":            ["html", "css", "stylesheet", "flexbox", "grid layout"],
         "Databases / SQL":       ["sql", "mysql", "postgresql", "sqlite", "mongodb", "database query"],
@@ -485,7 +432,6 @@ def extract_memory(text: str, mem: dict) -> bool:
                 changed = True
 
     return changed
-
 
 def memory_to_context(mem: dict) -> str:
     lines = []
@@ -514,8 +460,8 @@ def memory_to_context(mem: dict) -> str:
             lines.append(f"  • {fact}")
     if mem.get("topics_discussed"):
         lines.append(f"- Topics worked on previously: {', '.join(mem['topics_discussed'][-12:])}")
-    sessions  = mem.get("session_count", 0)
-    messages  = mem.get("message_count", 0)
+    sessions = mem.get("session_count", 0)
+    messages = mem.get("message_count", 0)
     if messages:
         lines.append(f"- Sessions: {sessions}  |  Messages sent: {messages}")
     if mem.get("first_seen") and mem.get("last_seen"):
@@ -524,20 +470,45 @@ def memory_to_context(mem: dict) -> str:
 
 
 # ─────────────────────────────────────────
-# HISTORY — VERBATIM + SUMMARY  (local files)
-# Note: these reset on Render redeploy — that is expected behaviour.
-# Long-term facts live in Supabase; chat history is session-scoped.
+# CHAT HISTORY + SUMMARY  (per-user, Supabase)
 # ─────────────────────────────────────────
-def load_history() -> list:
-    return load_json(CHAT_FILE, [])
+def load_history(user_id: str) -> list:
+    try:
+        res = supabase.table("oculus_chat").select("messages").eq("user_id", user_id).execute()
+        if res.data:
+            return res.data[0].get("messages", [])
+    except Exception as e:
+        print("History load error:", e)
+    return []
 
-def load_summary() -> str:
-    return load_json(SUMMARY_FILE, "")
+def save_history(user_id: str, messages: list):
+    try:
+        supabase.table("oculus_chat").upsert({
+            "user_id":  user_id,
+            "messages": messages
+        }).execute()
+    except Exception as e:
+        print("History save error:", e)
 
-def save_summary(s: str):
-    save_json(SUMMARY_FILE, s)
+def load_summary(user_id: str) -> str:
+    try:
+        res = supabase.table("oculus_chat").select("summary").eq("user_id", user_id).execute()
+        if res.data:
+            return res.data[0].get("summary", "")
+    except Exception as e:
+        print("Summary load error:", e)
+    return ""
 
-def maybe_summarise_history(history: list):
+def save_summary(user_id: str, s: str):
+    try:
+        supabase.table("oculus_chat").upsert({
+            "user_id": user_id,
+            "summary": s
+        }).execute()
+    except Exception as e:
+        print("Summary save error:", e)
+
+def maybe_summarise_history(user_id: str, history: list):
     if len(history) < SUMMARISE_AFTER:
         return
     half      = len(history) // 2
@@ -556,13 +527,13 @@ def maybe_summarise_history(history: list):
     try:
         new_summary = query_xoltron(summary_prompt)
         if new_summary:
-            existing = load_summary()
+            existing = load_summary(user_id)
             combined = (existing + " " + new_summary).strip() if existing else new_summary
             if len(combined) > 700:
                 combined = combined[-700:]
-            save_summary(combined)
+            save_summary(user_id, combined)
         history[:] = history[half:]
-        save_json(CHAT_FILE, history)
+        save_history(user_id, history)
     except Exception:
         pass
 
@@ -659,7 +630,7 @@ def web_search(raw_query: str, max_results: int = 6) -> str:
 # ─────────────────────────────────────────
 # PROMPT BUILDER
 # ─────────────────────────────────────────
-def build_prompt(user_message: str, mem: dict, history: list) -> str:
+def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> str:
     mem_context = memory_to_context(mem)
     web_context = web_search(user_message) if should_search(user_message) else ""
 
@@ -676,7 +647,6 @@ def build_prompt(user_message: str, mem: dict, history: list) -> str:
     )
 
     parts = [SYSTEM_PROMPT, ""]
-
     parts += [
         "══════════ LIVE SYSTEM INFO ══════════",
         f"- Current date and time: {live_dt}",
@@ -718,7 +688,7 @@ def build_prompt(user_message: str, mem: dict, history: list) -> str:
         "══════════ CONVERSATION HISTORY ══════════",
     ]
 
-    stored_summary = load_summary()
+    stored_summary = load_summary(user_id)
     if stored_summary:
         parts.append(f"[Earlier summary]: {stored_summary}")
         parts.append("")
@@ -766,21 +736,174 @@ def render_bubble(msg: dict) -> str:
             <div class="bubble ai-bubble">{_esc(text).replace(chr(10), '<br>')}</div>
         </div>'''
 
+AUTH_STYLES = """
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0d0d0f;color:#e8e8f0;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+  .card{background:#141417;border:1px solid #2a2a32;border-radius:16px;padding:40px;width:100%;max-width:400px}
+  .logo{text-align:center;margin-bottom:32px}
+  .logo-icon{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#7c6af7,#9d78ff);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:#fff;margin:0 auto 12px;box-shadow:0 0 20px rgba(124,106,247,.3)}
+  .logo h1{font-size:20px;font-weight:700;color:#e8e8f0}
+  .logo p{font-size:13px;color:#8888a0;margin-top:4px}
+  .field{margin-bottom:16px}
+  label{display:block;font-size:13px;color:#8888a0;margin-bottom:6px}
+  input{width:100%;padding:11px 14px;background:#1c1c21;border:1px solid #2a2a32;border-radius:10px;color:#e8e8f0;font-size:14px;outline:none;transition:border-color .15s}
+  input:focus{border-color:#7c6af7;box-shadow:0 0 0 3px rgba(124,106,247,.1)}
+  .btn{width:100%;padding:12px;background:#7c6af7;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;margin-top:8px}
+  .btn:hover{background:#8f7af9}
+  .error{background:rgba(243,139,168,.1);border:1px solid rgba(243,139,168,.3);color:#f38ba8;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
+  .success{background:rgba(166,227,161,.1);border:1px solid rgba(166,227,161,.3);color:#a6e3a1;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
+  .switch{text-align:center;margin-top:20px;font-size:13px;color:#8888a0}
+  .switch a{color:#7c6af7;text-decoration:none}
+  .switch a:hover{text-decoration:underline}
+</style>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+"""
+
 
 # ─────────────────────────────────────────
-# HOME ROUTE
+# AUTH ROUTES
+# ─────────────────────────────────────────
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    error   = ""
+    success = ""
+
+    if request.method == "POST":
+        email    = (request.form.get("email") or "").strip().lower()
+        password = (request.form.get("password") or "").strip()
+        confirm  = (request.form.get("confirm") or "").strip()
+
+        if not email or not password:
+            error = "Email and password are required."
+        elif password != confirm:
+            error = "Passwords do not match."
+        elif len(password) < 6:
+            error = "Password must be at least 6 characters."
+        else:
+            try:
+                res = supabase.auth.sign_up({"email": email, "password": password})
+                if res.user:
+                    success = "Account created! You can now log in."
+                else:
+                    error = "Registration failed. Try a different email."
+            except Exception as e:
+                error = f"Registration error: {str(e)}"
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Register — Oculus AI</title>{AUTH_STYLES}</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">O</div>
+    <h1>Create Account</h1>
+    <p>Join Oculus AI</p>
+  </div>
+  {'<div class="error">' + _esc(error) + '</div>' if error else ''}
+  {'<div class="success">' + _esc(success) + '</div>' if success else ''}
+  <form method="POST">
+    <div class="field">
+      <label>Email</label>
+      <input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="Min. 6 characters" required>
+    </div>
+    <div class="field">
+      <label>Confirm Password</label>
+      <input type="password" name="confirm" placeholder="Repeat password" required>
+    </div>
+    <button class="btn" type="submit">Create Account</button>
+  </form>
+  <div class="switch">Already have an account? <a href="/login">Sign in</a></div>
+</div>
+</body></html>"""
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = ""
+
+    if "user_id" in session:
+        return redirect("/")
+
+    if request.method == "POST":
+        email    = (request.form.get("email") or "").strip().lower()
+        password = (request.form.get("password") or "").strip()
+
+        if not email or not password:
+            error = "Email and password are required."
+        else:
+            try:
+                res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                if res.user:
+                    session["user_id"] = str(res.user.id)
+                    session["email"]   = email
+                    # Increment session count in memory
+                    mem = load_memory(str(res.user.id))
+                    mem["session_count"] = mem.get("session_count", 0) + 1
+                    save_memory(str(res.user.id), mem)
+                    return redirect("/")
+                else:
+                    error = "Invalid email or password."
+            except Exception as e:
+                error = "Invalid email or password."
+
+    return f"""<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Login — Oculus AI</title>{AUTH_STYLES}</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">O</div>
+    <h1>Welcome Back</h1>
+    <p>Sign in to Oculus AI</p>
+  </div>
+  {'<div class="error">' + _esc(error) + '</div>' if error else ''}
+  <form method="POST">
+    <div class="field">
+      <label>Email</label>
+      <input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="Your password" required>
+    </div>
+    <button class="btn" type="submit">Sign In</button>
+  </form>
+  <div class="switch">Don't have an account? <a href="/register">Register</a></div>
+</div>
+</body></html>"""
+
+
+@app.route("/logout", methods=["POST"])
+def logout():
+    try:
+        supabase.auth.sign_out()
+    except Exception:
+        pass
+    session.clear()
+    return redirect("/login")
+
+
+# ─────────────────────────────────────────
+# MAIN CHAT ROUTE
 # ─────────────────────────────────────────
 @app.route("/")
+@login_required
 def home():
-    chat_history = load_history()
-    memory       = load_memory()
+    uid          = current_user_id()
+    email        = current_email()
+    chat_history = load_history(uid)
+    memory       = load_memory(uid)
     chat_html    = "".join(render_bubble(m) for m in chat_history)
     mem_name     = memory.get("profile", {}).get("name", "")
-    greeting     = f"Welcome back, {mem_name}." if mem_name else "What are we building today?"
-
-    # Increment session count on each page load
-    memory["session_count"] = memory.get("session_count", 0) + 1
-    save_memory(memory)
+    display_name = mem_name or email.split("@")[0]
+    greeting     = f"Welcome back, {display_name}." if chat_history else "What are we building today?"
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -804,7 +927,11 @@ def home():
             </div>
         </div>
         <div class="header-actions">
+            <span class="user-email">{_esc(email)}</span>
             <button class="clear-btn" onclick="clearChat()">Clear chat</button>
+            <form method="POST" action="/logout" style="margin:0">
+                <button class="logout-btn" type="submit">Sign out</button>
+            </form>
             <div class="status-pill">
                 <span class="status-dot"></span>
                 Online
@@ -832,12 +959,10 @@ def home():
 
         <div class="typing-indicator" id="typingIndicator">
             <div class="avatar ai-avatar">O</div>
-            <div class="typing-text">
-                Oculus is thinking<span class="dots"></span>
-            </div>
+            <div class="typing-text">Oculus is thinking<span class="dots"></span></div>
         </div>
 
-        <div id="streamRow">
+        <div id="streamRow" style="display:none">
             <div class="avatar ai-avatar">O</div>
             <div id="streamBubble"></div>
         </div>
@@ -867,44 +992,55 @@ def home():
 # CLEAR
 # ─────────────────────────────────────────
 @app.route("/clear", methods=["POST"])
+@login_required
 def clear():
-    save_json(CHAT_FILE, [])
-    return {"status": "cleared"}
+    uid = current_user_id()
+    try:
+        supabase.table("oculus_chat").upsert({
+            "user_id":  uid,
+            "messages": [],
+            "summary":  ""
+        }).execute()
+    except Exception as e:
+        print("Clear error:", e)
+    return jsonify({"status": "cleared"})
 
 
 # ─────────────────────────────────────────
 # ASK
 # ─────────────────────────────────────────
 @app.route("/ask", methods=["POST"])
+@login_required
 def ask():
+    uid          = current_user_id()
     data         = request.get_json()
     user_message = (data.get("message") or "").strip()
     if not user_message:
         return Response("No message provided.", mimetype="text/plain")
 
-    history = load_history()
-    memory  = load_memory()
+    history = load_history(uid)
+    memory  = load_memory(uid)
 
     extract_memory(user_message, memory)
     memory["message_count"] = memory.get("message_count", 0) + 1
-    save_memory(memory)
+    save_memory(uid, memory)
 
     history.append({"role": "user", "text": user_message})
-    maybe_summarise_history(history)
+    maybe_summarise_history(uid, history)
 
-    prompt = build_prompt(user_message, memory, history)
+    prompt = build_prompt(uid, user_message, memory, history)
 
     def generate():
         try:
             output_text = query_xoltron(prompt)
             yield output_text
             history.append({"role": "ai", "text": output_text.strip()})
-            save_json(CHAT_FILE, history)
+            save_history(uid, history)
         except Exception as e:
             error = f"[Error: {type(e).__name__}]"
             yield error
             history.append({"role": "ai", "text": error})
-            save_json(CHAT_FILE, history)
+            save_history(uid, history)
 
     return Response(generate(), mimetype="text/plain")
 
