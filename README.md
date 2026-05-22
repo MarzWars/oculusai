@@ -4,8 +4,8 @@
 
 <br><br>
 
-**A custom-built intelligence system for real work.**  
-Code. Copy. Strategy. Memory. All in one.
+**A custom-built artificial intelligence system for real work.**  
+Code. Copy. Strategy. Memory. Uncensored. All in one.
 
 <br>
 
