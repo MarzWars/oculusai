@@ -732,7 +732,9 @@ def render_bubble(msg: dict) -> str:
         </div>'''
     return f'''
         <div class="bubble-row ai-row">
-            <div class="avatar ai-avatar">O</div>
+            <div class="avatar ai-avatar">
+  <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+</div>
             <div class="bubble ai-bubble">{_esc(text).replace(chr(10), '<br>')}</div>
         </div>'''
 
@@ -797,7 +799,9 @@ def register():
 <body>
 <div class="card">
   <div class="logo">
-    <div class="logo-icon">O</div>
+    <div class="logo-icon">
+  <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+</div>
     <h1>Create Account</h1>
     <p>Join Oculus AI</p>
   </div>
@@ -859,7 +863,9 @@ def login():
 <body>
 <div class="card">
   <div class="logo">
-    <div class="logo-icon">O</div>
+    <div class="logo-icon">
+  <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+</div>
     <h1>Welcome Back</h1>
     <p>Sign in to Oculus AI</p>
   </div>
