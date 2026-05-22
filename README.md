@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🧠 Oculus AI
+<img src="static/oculus_logo.svg" alt="Oculus AI Logo" width="300"/>
+
+<br><br>
 
 **A custom-built intelligence system for real work.**  
 Code. Copy. Strategy. Memory. All in one.
@@ -153,7 +155,10 @@ oculus-ai/
 ├── app.py              # Flask backend — all logic lives here
 ├── static/
 │   ├── oculus.js       # Frontend — send/receive, markdown render, code blocks
-│   └── style.css       # Dark UI theme
+│   ├── style.css       # Dark UI theme
+│   ├── oculus_logo.svg # Full logo with wordmark
+│   ├── oculus_avatar.svg # Avatar / chat icon
+│   └── favicon.ico     # Browser tab icon
 ├── requirements.txt
 └── README.md
 ```
@@ -179,6 +184,8 @@ Oculus is not a wrapper around a chatbot. It is a system built around a specific
 ---
 
 <div align="center">
+
+<img src="static/oculus_avatar.svg" alt="Oculus Avatar" width="64"/>
 
 ### 🚀 [oculusai.onrender.com](https://oculusai.onrender.com/)
 
