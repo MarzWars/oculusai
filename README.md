@@ -183,6 +183,18 @@ Oculus is not a wrapper around a chatbot. It is a system built around a specific
 
 ---
 
+## 🚀 Coming Soon
+
+| Capability | Description |
+|---|---|
+| 🧠 **AI-Powered Memory Extraction** | The original ```extract_memory``` system relied heavily on regex matching, which could miss important details or incorrectly save irrelevant information. Oculus is being upgraded to use a dedicated AI-powered post-turn extraction pipeline that understands natural conversation context more accurately and stores cleaner long-term memory. |
+| 🔬 **Advanced Multi-Stage Reasoning** | Current responses are generated in a mostly single-pass workflow. Upcoming builds introduce a reasoning pre-pass for difficult or complex prompts, allowing Oculus to internally analyse and structure its thoughts before generating a final response. |
+| 🌐 **Tavily Search Integration** | DDGS works well for lightweight searches but has limitations around rate limits, ranking quality, and AI optimisation. Oculus is being upgraded to Tavily — a search system specifically built for LLM applications — while still retaining DDGS as a fallback provider when needed. |
+| ✨ **Rich Markdown + HTML Rendering** | Links currently render mostly as plain text in parts of the frontend. The rendering system is being upgraded with a full markdown-to-HTML formatter alongside improvements to the ```render_bubble``` pipeline for cleaner formatting, richer responses, and properly rendered links, tables, and code blocks. |
+| 🧬 **AI Inference Memory** | Oculus currently stores explicit user information but not the AI’s own inferred understanding. Future versions introduce an ```ai_notes``` memory layer generated directly by Xoltron itself, allowing Oculus to retain inferred context, behavioural patterns, conversational insights, and observations beyond literal user statements. |
+
+---
+
 <div align="center">
 
 <img src="static/oculus_avatar.svg" alt="Oculus Avatar" width="64"/>
