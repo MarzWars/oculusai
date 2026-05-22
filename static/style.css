@@ -483,4 +483,59 @@ code.inline-code {
   .code-block pre code { font-size: 12px !important; }
   .chip       { font-size: 12px; padding: 6px 12px; }
 }
+/* ── Add these to your existing style.css ── */
 
+/* Logged-in user's email shown in header */
+.user-email {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 4px 10px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sign out button */
+.logout-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all .15s;
+}
+.logout-btn:hover {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(243, 139, 168, 0.08);
+}
+
+/* Typing indicator text style (if not already present) */
+.typing-text {
+  font-size: 13px;
+  color: var(--text-muted);
+  padding: 10px 14px;
+  background: var(--bg-3);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.typing-text .dots::after {
+  content: '';
+  animation: dotdotdot 1.4s infinite;
+}
+
+@keyframes dotdotdot {
+  0%   { content: ''; }
+  25%  { content: '.'; }
+  50%  { content: '..'; }
+  75%  { content: '...'; }
+  100% { content: ''; }
+}
