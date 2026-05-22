@@ -21,6 +21,12 @@ function highlight(codeEl) {
   if (window.hljs) hljs.highlightElement(codeEl);
 }
 
+// ── Avatar HTML helper ────────────────────
+const AI_AVATAR = `
+  <div class="avatar ai-avatar">
+    <img src="/static/oculus_avatar.svg" width="20" height="20" alt="Oculus">
+  </div>`;
+
 
 // ── Escape HTML ───────────────────────────
 function escapeHtml(str) {
@@ -202,7 +208,7 @@ function insertAiBubble(rawText) {
   const row  = document.createElement('div');
   row.className = 'bubble-row ai-row';
   row.innerHTML = `
-    <div class="avatar ai-avatar">O</div>
+    ${AI_AVATAR}
     <div class="bubble ai-bubble rendered">${renderMarkdown(rawText)}</div>`;
   feed.insertBefore(row, document.getElementById('typingIndicator'));
   row.querySelectorAll('.code-block pre code').forEach(el => highlight(el));
@@ -217,10 +223,10 @@ async function sendMessage() {
   const text    = input.value.trim();
   if (!text) return;
 
-  input.value       = '';
+  input.value        = '';
   input.style.height = 'auto';
-  input.disabled    = true;
-  sendBtn.disabled  = true;
+  input.disabled     = true;
+  sendBtn.disabled   = true;
 
   removeEmptyState();
   appendUserBubble(text);
@@ -269,6 +275,13 @@ async function clearChat() {
 
 // ── Init ──────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // Fix any history bubbles loaded from server that still have the text O avatar
+  document.querySelectorAll('.ai-avatar').forEach(avatar => {
+    if (avatar.textContent.trim() === 'O') {
+      avatar.innerHTML = '<img src="/static/oculus_avatar.svg" width="20" height="20" alt="Oculus">';
+    }
+  });
+
   // Re-render any history bubbles that came as plain text from server
   document.querySelectorAll('.ai-bubble:not(.rendered)').forEach(bubble => {
     bubble.innerHTML = renderMarkdown(bubble.innerText);
@@ -284,7 +297,7 @@ document.addEventListener('DOMContentLoaded', () => {
   if (input) input.focus();
 });
 
-// Auto-grow textarea as user types
+// ── Auto-grow textarea ────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   const input = document.getElementById('msgInput');
   if (input) {
@@ -294,4 +307,3 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
-
