@@ -93,10 +93,9 @@ header {
 .logo-icon {
   width: 34px; height: 34px;
   border-radius: 8px;
-  background: linear-gradient(135deg, var(--accent), #9d78ff);
+  background: rgba(124, 106, 247, 0.12);
+  border: 1px solid rgba(124, 106, 247, 0.25);
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display); font-weight: 800; font-size: 16px; color: #fff;
-  box-shadow: 0 0 12px var(--accent-glow);
 }
 
 .logo-text strong {
@@ -166,9 +165,9 @@ header {
   font-size: 14px; margin-top: 2px;
 }
 .ai-avatar {
-  background: linear-gradient(135deg, var(--accent), #9d78ff);
-  font-family: var(--font-display); font-weight: 800; color: #fff;
-  box-shadow: 0 0 8px var(--accent-glow);
+  background: rgba(124, 106, 247, 0.12);
+  border: 1px solid rgba(124, 106, 247, 0.25);
+  box-shadow: 0 0 6px rgba(124, 106, 247, 0.1);
 }
 .user-avatar {
   background: var(--bg-4); border: 1px solid var(--border); color: var(--text-muted);
@@ -421,11 +420,12 @@ code.inline-code {
   text-align: center; flex: 1; padding: 40px 24px; gap: 12px;
 }
 .empty-icon {
-  width: 56px; height: 56px; border-radius: 14px;
-  background: linear-gradient(135deg, var(--accent), #9d78ff);
+  width: 83px; height: 83px; border-radius: 18px;
+  background: rgba(124, 106, 247, 0.12);
+  border: 1px solid rgba(124, 106, 247, 0.25);
+  box-shadow: 0 0 16px rgba(124, 106, 247, 0.1);
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-display); font-weight: 800; font-size: 24px; color: #fff;
-  box-shadow: 0 0 24px var(--accent-glow); margin-bottom: 4px;
+  margin-bottom: 4px;
 }
 .empty-state h3 { font-family: var(--font-display); font-weight: 700; font-size: 19px; color: var(--text); }
 .empty-state p  { font-size: 14px; color: var(--text-muted); max-width: 340px; line-height: 1.5; }
