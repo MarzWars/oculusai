@@ -914,13 +914,16 @@ def home():
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 </head>
 <body>
 <div class="app-shell">
 
     <header>
         <div class="logo-mark">
-            <div class="logo-icon">O</div>
+            <div class="logo-icon">
+  <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+</div>>
             <div class="logo-text">
                 <strong>Oculus AI</strong>
                 <span>Lex Digitals</span>
@@ -943,7 +946,9 @@ def home():
         {'<div class="date-divider">Today</div>' if chat_history else ''}
         {chat_html if chat_html else f'''
         <div class="empty-state">
-            <div class="empty-icon">O</div>
+            <div class="empty-icon">
+  <img src="/static/oculus_avatar.svg" width="36" height="36" alt="Oculus">
+</div>
             <h3>{greeting}</h3>
             <p>Code, copy, strategy, ads — whatever you need, let\'s get into it.</p>
             <div class="suggestion-chips">
@@ -958,7 +963,9 @@ def home():
         '''}
 
         <div class="typing-indicator" id="typingIndicator">
-            <div class="avatar ai-avatar">O</div>
+            <div class="avatar ai-avatar">
+  <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+</div>
             <div class="typing-text">Oculus is thinking<span class="dots"></span></div>
         </div>
 
