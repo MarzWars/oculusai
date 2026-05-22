@@ -953,7 +953,7 @@ def home():
         {chat_html if chat_html else f'''
         <div class="empty-state">
             <div class="empty-icon">
-  <img src="/static/oculus_avatar.svg" width="36" height="36" alt="Oculus">
+  <img src="/static/oculus_avatar.svg" width="80" height="80" alt="Oculus">
 </div>
             <h3>{greeting}</h3>
             <p>Code, copy, strategy, ads — whatever you need, let\'s get into it.</p>
