@@ -1,0 +1,95 @@
+<svg width="480" height="400" viewBox="0 0 480 400" xmlns="http://www.w3.org/2000/svg">
+<defs>
+  <linearGradient id="pupilGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#a78bfa"/>
+    <stop offset="100%" style="stop-color:#7c3aed"/>
+  </linearGradient>
+  <linearGradient id="irisGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#1e1b4b"/>
+    <stop offset="100%" style="stop-color:#0d0d14"/>
+  </linearGradient>
+  <linearGradient id="hexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" style="stop-color:#1a1730"/>
+    <stop offset="100%" style="stop-color:#0d0b1a"/>
+  </linearGradient>
+  <linearGradient id="glowLine" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" style="stop-color:#7c3aed;stop-opacity:0"/>
+    <stop offset="50%" style="stop-color:#a78bfa;stop-opacity:1"/>
+    <stop offset="100%" style="stop-color:#7c3aed;stop-opacity:0"/>
+  </linearGradient>
+</defs>
+
+<!-- Background -->
+<rect width="480" height="400" fill="#0d0b1a" rx="16"/>
+
+<!-- Hex background -->
+<polygon points="240,60 320,105 320,195 240,240 160,195 160,105"
+  fill="url(#hexGrad)" stroke="#3d2d7a" stroke-width="1.5"/>
+
+<!-- Hex inner border ring -->
+<polygon points="240,72 312,113 312,187 240,228 168,187 168,113"
+  fill="none" stroke="#4c3a8a" stroke-width="0.8" stroke-dasharray="4,3"/>
+
+<!-- Circuit lines left -->
+<line x1="160" y1="150" x2="130" y2="150" fill="none" stroke="#5b21b6" stroke-width="1"/>
+<circle cx="130" cy="150" r="2.5" fill="#7c3aed"/>
+<line x1="160" y1="130" x2="140" y2="130" fill="none" stroke="#5b21b6" stroke-width="1"/>
+<line x1="140" y1="130" x2="140" y2="115" fill="none" stroke="#5b21b6" stroke-width="1"/>
+<circle cx="140" cy="115" r="2" fill="#6d28d9"/>
+
+<!-- Circuit lines right -->
+<line x1="320" y1="150" x2="350" y2="150" fill="none" stroke="#5b21b6" stroke-width="1"/>
+<circle cx="350" cy="150" r="2.5" fill="#7c3aed"/>
+<line x1="320" y1="130" x2="340" y2="130" fill="none" stroke="#5b21b6" stroke-width="1"/>
+<line x1="340" y1="130" x2="340" y2="115" fill="none" stroke="#5b21b6" stroke-width="1"/>
+<circle cx="340" cy="115" r="2" fill="#6d28d9"/>
+
+<!-- Eye socket iris -->
+<ellipse cx="240" cy="150" rx="62" ry="46" fill="url(#irisGrad)" stroke="#4c3a8a" stroke-width="1"/>
+<ellipse cx="240" cy="150" rx="55" ry="39" fill="none" stroke="#3d2d7a" stroke-width="0.8"/>
+<ellipse cx="240" cy="150" rx="48" ry="33" fill="none" stroke="#4a3890" stroke-width="0.5" stroke-dasharray="3,2"/>
+
+<!-- Pupil -->
+<ellipse cx="240" cy="150" rx="26" ry="26" fill="url(#pupilGrad)"/>
+<ellipse cx="240" cy="150" rx="18" ry="18" fill="#1e1040"/>
+<ellipse cx="240" cy="150" rx="10" ry="10" fill="#0d0820"/>
+
+<!-- Highlight -->
+<ellipse cx="233" cy="143" rx="5" ry="4" fill="#c4b5fd" opacity="0.6"/>
+<ellipse cx="248" cy="156" rx="2.5" ry="2" fill="#a78bfa" opacity="0.3"/>
+
+<!-- Scan line -->
+<rect x="178" y="148" width="124" height="1.5" fill="url(#glowLine)" opacity="0.6"/>
+
+<!-- Eyelid curves -->
+<path d="M178,150 Q240,100 302,150" fill="none" stroke="#6d28d9" stroke-width="1.5" stroke-linecap="round"/>
+<path d="M178,150 Q240,200 302,150" fill="none" stroke="#6d28d9" stroke-width="1.5" stroke-linecap="round"/>
+<circle cx="178" cy="150" r="3" fill="#7c3aed"/>
+<circle cx="302" cy="150" r="3" fill="#7c3aed"/>
+
+<!-- Tick marks -->
+<line x1="240" y1="60" x2="240" y2="50" stroke="#4c3a8a" stroke-width="1"/>
+<line x1="320" y1="105" x2="328" y2="100" stroke="#4c3a8a" stroke-width="1"/>
+<line x1="320" y1="195" x2="328" y2="200" stroke="#4c3a8a" stroke-width="1"/>
+<line x1="240" y1="240" x2="240" y2="250" stroke="#4c3a8a" stroke-width="1"/>
+<line x1="160" y1="195" x2="152" y2="200" stroke="#4c3a8a" stroke-width="1"/>
+<line x1="160" y1="105" x2="152" y2="100" stroke="#4c3a8a" stroke-width="1"/>
+
+<!-- Wordmark -->
+<text x="240" y="300" text-anchor="middle"
+  font-family="'Segoe UI',system-ui,sans-serif"
+  font-size="36" font-weight="700" letter-spacing="10"
+  fill="#e2d9ff">OCULUS</text>
+
+<rect x="170" y="312" width="140" height="1" fill="#4c3a8a"/>
+
+<text x="240" y="332" text-anchor="middle"
+  font-family="'Segoe UI',system-ui,sans-serif"
+  font-size="12" font-weight="400" letter-spacing="6"
+  fill="#7c6af7">ARTIFICIAL INTELLIGENCE</text>
+
+<text x="240" y="370" text-anchor="middle"
+  font-family="'Segoe UI',system-ui,sans-serif"
+  font-size="11" font-weight="400" letter-spacing="2"
+  fill="#4c3a8a">LEX DIGITALS</text>
+</svg>
