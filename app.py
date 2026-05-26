@@ -11,7 +11,7 @@ import json
 import os
 import re
 from datetime import datetime
-from duckduckgo_search import DDGS
+from tavily import TavilyClient
 from supabase import create_client
 
 app = Flask(__name__)
@@ -28,6 +28,12 @@ if not SUPABASE_URL or not SUPABASE_KEY:
     raise Exception("Missing SUPABASE_URL or SUPABASE_KEY environment variables")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+TAVILY_API_KEY = os.environ.get("TAVILY_API_KEY")
+if not TAVILY_API_KEY:
+    raise Exception("Missing TAVILY_API_KEY environment variable")
+
+tavily = TavilyClient(api_key=TAVILY_API_KEY)
 
 XOLTRON_SPACE   = "darkc0de/chat"
 VERBATIM_TURNS  = 6
@@ -606,19 +612,19 @@ def refine_query(text: str) -> str:
 def web_search(raw_query: str, max_results: int = 6) -> str:
     query = refine_query(raw_query) or raw_query
     try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=max_results))
+        resp = tavily.search(query=query, max_results=max_results)
+        results = resp.get("results", [])
         if not results:
             broad = " ".join(query.split()[:4])
-            with DDGS() as ddgs:
-                results = list(ddgs.text(broad, max_results=3))
+            resp = tavily.search(query=broad, max_results=3)
+            results = resp.get("results", [])
         if not results:
             return ""
         blocks = []
         for i, r in enumerate(results, 1):
-            title  = r.get("title", "").strip()
-            body   = r.get("body", "").strip()
-            source = r.get("href", "").strip()
+            title  = (r.get("title") or "").strip()
+            body   = (r.get("content") or "").strip()
+            source = (r.get("url") or "").strip()
             if len(body) > 280:
                 body = body[:280].rsplit(" ", 1)[0] + "…"
             blocks.append(f"[{i}] {title}\n{body}\nSource: {source}")

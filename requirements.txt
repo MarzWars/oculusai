@@ -2,6 +2,6 @@ flask
 requests
 transformers
 torch
-duckduckgo-search
+tavily-python>=0.3.0
 gradio_client
 supabase
