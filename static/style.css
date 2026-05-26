@@ -478,10 +478,42 @@ code.inline-code {
 /* ── Responsive ───────────────────────── */
 @media (max-width: 640px) {
   .app-shell  { border-left: none; border-right: none; }
-  .user-row   { max-width: 90%; }
-  .bubble     { font-size: 14px; }
+  .user-row   { max-width: 92%; }
+  .bubble     { font-size: 14px; padding: 10px 13px; }
   .code-block pre code { font-size: 12px !important; }
   .chip       { font-size: 12px; padding: 6px 12px; }
+
+  /* Header: tighten up so everything fits */
+  header {
+    padding: 10px 14px;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .logo-text span { display: none; }          /* hide "Lex Digitals" subtitle */
+
+  .header-actions {
+    gap: 6px;
+    flex-shrink: 1;
+    min-width: 0;
+  }
+
+  .user-email {
+    display: none;                             /* hide email on small screens */
+  }
+
+  .status-label { display: none; }            /* keep dot, hide "Online" text */
+
+  .status-pill {
+    padding: 4px 7px;
+    min-width: 0;
+  }
+
+  .clear-btn,
+  .logout-btn {
+    font-size: 12px;
+    padding: 4px 9px;
+  }
 }
 /* ── Add these to your existing style.css ── */
 

@@ -928,8 +928,8 @@ def home():
     <header>
         <div class="logo-mark">
             <div class="logo-icon">
-  <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
-</div>>
+                <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+            </div>
             <div class="logo-text">
                 <strong>Oculus AI</strong>
                 <span>Lex Digitals</span>
@@ -937,14 +937,14 @@ def home():
         </div>
         <div class="header-actions">
             <span class="user-email">{_esc(email)}</span>
-            <button class="clear-btn" onclick="clearChat()">Clear chat</button>
+            <div class="status-pill">
+                <span class="status-dot"></span>
+                <span class="status-label">Online</span>
+            </div>
+            <button class="clear-btn" onclick="clearChat()">Clear</button>
             <form method="POST" action="/logout" style="margin:0">
                 <button class="logout-btn" type="submit">Sign out</button>
             </form>
-            <div class="status-pill">
-                <span class="status-dot"></span>
-                Online
-            </div>
         </div>
     </header>
 
