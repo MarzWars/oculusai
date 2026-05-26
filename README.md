@@ -41,7 +41,7 @@ It remembers who you are. It searches the web when it needs to. It writes real, 
 |---|---|
 | 🔐 **Multi-User Auth** | Register, login, and logout — each user's data is fully isolated |
 | 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences and facts across sessions via Supabase |
-| 🌐 **Live Web Search** | Pulls real-time information using DuckDuckGo when the question needs it |
+| 🌐 **Live Web Search** | Pulls real-time information using Tavily Search when the question needs it |
 | 💻 **Developer Assistant** | Writes full working code, debugs errors, explains logic — Python, JS, SQL, React, Bash and more |
 | 📣 **Marketing Engine** | Ad copy, branding, SEO, social strategy, customer replies, CIPC basics |
 | 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns |
@@ -58,7 +58,7 @@ Oculus AI
 ├── Gradio Client      → Xoltron AI (darkc0de/chat) — language model backend
 ├── Supabase Auth      → User registration, login, logout
 ├── Supabase DB        → Persistent memory + chat history per user
-├── DuckDuckGo DDGS    → Live web search when needed
+├── Tavily Search      → Live web search when needed
 └── Prompt Engine      → Injects memory, search results, date/time into every request
 ```
 
@@ -106,7 +106,7 @@ Memory is extracted automatically from natural conversation — no forms, no set
 ### Install dependencies
 
 ```bash
-pip install flask gradio_client supabase duckduckgo_search
+pip install flask gradio_client supabase tavily-python
 ```
 
 ### Environment variables
@@ -117,6 +117,7 @@ Set these in your Render dashboard under **Environment**:
 SUPABASE_URL=your_supabase_project_url
 SUPABASE_KEY=your_supabase_secret_key
 SECRET_KEY=your_flask_session_secret
+TAVILY_API_KEY=your_tavily_api_key
 ```
 
 ### Supabase table setup
@@ -189,7 +190,7 @@ Oculus is not a wrapper around a chatbot. It is a system built around a specific
 |---|---|
 | 🧠 **AI-Powered Memory Extraction** | The original ```extract_memory``` system relied heavily on regex matching, which could miss important details or incorrectly save irrelevant information. Oculus is being upgraded to use a dedicated AI-powered post-turn extraction pipeline that understands natural conversation context more accurately and stores cleaner long-term memory. |
 | 🔬 **Advanced Multi-Stage Reasoning** | Current responses are generated in a mostly single-pass workflow. Upcoming builds introduce a reasoning pre-pass for difficult or complex prompts, allowing Oculus to internally analyse and structure its thoughts before generating a final response. |
-| 🌐 **Tavily Search Integration** | DDGS works well for lightweight searches but has limitations around rate limits, ranking quality, and AI optimisation. Oculus is being upgraded to Tavily — a search system specifically built for LLM applications — while still retaining DDGS as a fallback provider when needed. |
+| 🌐 **Tavily Search Integration** | ✅ Complete — DDGS replaced with Tavily Search API. Cleaner results, better ranking, built for LLM applications. DDGS dependency removed. |
 | ✨ **Rich Markdown + HTML Rendering** | Links currently render mostly as plain text in parts of the frontend. The rendering system is being upgraded with a full markdown-to-HTML formatter alongside improvements to the ```render_bubble``` pipeline for cleaner formatting, richer responses, and properly rendered links, tables, and code blocks. |
 | 🧬 **AI Inference Memory** | Oculus currently stores explicit user information but not the AI’s own inferred understanding. Future versions introduce an ```ai_notes``` memory layer generated directly by Xoltron itself, allowing Oculus to retain inferred context, behavioural patterns, conversational insights, and observations beyond literal user statements. |
 

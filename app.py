@@ -723,6 +723,22 @@ def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> s
 def _esc(s: str) -> str:
     return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
+def _render_links(text: str) -> str:
+    """Convert markdown links and bare URLs to clickable <a> tags."""
+    # [text](url)
+    text = re.sub(
+        r'\[([^\]]+)\]\((https?://[^\)]+)\)',
+        r'<a href="\2" target="_blank" rel="noopener noreferrer">\1</a>',
+        text
+    )
+    # bare https:// URLs not already inside an href
+    text = re.sub(
+        r'(?<!["\(])(https?://[^\s<>")\]]+)',
+        r'<a href="\1" target="_blank" rel="noopener noreferrer">\1</a>',
+        text
+    )
+    return text
+
 def render_bubble(msg: dict) -> str:
     text = msg["text"]
     if msg["role"] == "user":
@@ -741,7 +757,7 @@ def render_bubble(msg: dict) -> str:
             <div class="avatar ai-avatar">
   <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
 </div>
-            <div class="bubble ai-bubble">{_esc(text).replace(chr(10), '<br>')}</div>
+            <div class="bubble ai-bubble">{_render_links(_esc(text)).replace(chr(10), '<br>')}</div>
         </div>'''
 
 AUTH_STYLES = """

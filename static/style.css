@@ -475,6 +475,18 @@ code.inline-code {
 /* Legacy stream row — hidden */
 #streamRow { display: none !important; }
 
+.ai-bubble a,
+.user-bubble a {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+.ai-bubble a:hover,
+.user-bubble a:hover {
+  color: #a99bfa;
+}
+
 /* ── Responsive ───────────────────────── */
 @media (max-width: 640px) {
   .app-shell  { border-left: none; border-right: none; }

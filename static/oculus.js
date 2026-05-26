@@ -78,24 +78,30 @@ function renderMarkdown(text) {
   // 4. Italic
   html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
 
-  // 5. Headings
+  // 5. Links — [text](url) and bare https:// URLs
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
+    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  html = html.replace(/(?<!["\(])(https?:\/\/[^\s<>")\]]+)/g,
+    '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+
+  // 6. Headings
   html = html.replace(/^### (.+)$/gm, '<h3 class="md-h3">$1</h3>');
   html = html.replace(/^## (.+)$/gm,  '<h2 class="md-h2">$1</h2>');
   html = html.replace(/^# (.+)$/gm,   '<h1 class="md-h1">$1</h1>');
 
-  // 6. Horizontal rule
+  // 7. Horizontal rule
   html = html.replace(/^---+$/gm, '<hr class="md-hr">');
 
-  // 7. Tables
+  // 8. Tables
   html = renderTables(html);
 
-  // 8. Bullet lists
+  // 9. Bullet lists
   html = renderLists(html);
 
-  // 9. Paragraphs
+  // 10. Paragraphs
   html = renderParagraphs(html);
 
-  // 10. Restore code blocks
+  // 11. Restore code blocks
   codeBlocks.forEach((block, idx) => {
     html = html.replace(`%%CODE_BLOCK_${idx}%%`, block);
   });
