@@ -94,6 +94,23 @@ function renderMarkdown(text) {
 </details>`;
   });
 
+  // 1b. Protect details blocks
+  const thinkingBlocks = [];
+  
+  // Protect completed details blocks
+  html = html.replace(/<details class="thinking-block"([\s\S]*?)<\/details>/gi, (match) => {
+    const idx = thinkingBlocks.length;
+    thinkingBlocks.push(match);
+    return `%%THINKING_BLOCK_${idx}%%`;
+  });
+  
+  // Protect open/streaming details blocks
+  html = html.replace(/<details class="thinking-block"([\s\S]*)$/gi, (match) => {
+    const idx = thinkingBlocks.length;
+    thinkingBlocks.push(match);
+    return `%%THINKING_BLOCK_${idx}%%`;
+  });
+
   // 2. Inline code
   html = html.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
 
@@ -126,9 +143,14 @@ function renderMarkdown(text) {
   // 10. Paragraphs
   html = renderParagraphs(html);
 
-  // 11. Restore code blocks
+  // 11. Restore thinking blocks
+  thinkingBlocks.forEach((block, idx) => {
+    html = html.replace(`%%THINKING_BLOCK_${idx}%%`, () => block);
+  });
+
+  // 12. Restore code blocks
   codeBlocks.forEach((block, idx) => {
-    html = html.replace(`%%CODE_BLOCK_${idx}%%`, block);
+    html = html.replace(`%%CODE_BLOCK_${idx}%%`, () => block);
   });
 
   return html;
@@ -162,7 +184,7 @@ function renderParagraphs(html) {
   return html.split(/\n{2,}/).map(block => {
     block = block.trim();
     if (!block) return '';
-    if (/^<(div|ul|ol|h[1-6]|pre|table|hr|blockquote|details)/i.test(block)) return block;
+    if (/^<(div|ul|ol|h[1-6]|pre|table|hr|blockquote|details)/i.test(block) || /^%%THINKING_BLOCK_\d+%%/.test(block)) return block;
     return `<p>${block.replace(/\n/g, '<br>')}</p>`;
   }).join('');
 }

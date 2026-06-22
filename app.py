@@ -1197,6 +1197,7 @@ def ask():
     save_memory(uid, memory)
 
     history.append({"role": "user", "text": user_message})
+    save_history(uid, history)
 
     prompt = build_prompt(uid, user_message, memory, history)
 
