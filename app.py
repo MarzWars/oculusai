@@ -39,15 +39,19 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY:
     raise Exception("Missing OPENROUTER_API_KEY environment variable")
 
-# Free unmoderated models — verified from OpenRouter /api/v1/models on 2026-06-22
-# Faster/smaller models first for quick responses. Large ones are fallback.
+# Unmoderated/general models (Paid versions first for high speed, then free fallbacks)
 OR_MODELS = [
-    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # adult-tuned, uncensored
-    "meta-llama/llama-3.3-70b-instruct:free",                         # fast 70B, unmoderated
-    "nex-agi/nex-n2-pro:free",                                        # fast MoE, unmoderated
-    "nvidia/nemotron-3-super-120b-a12b:free",                         # 120B, unmoderated
-    "nousresearch/hermes-3-llama-3.1-405b:free",                      # 405B slow but powerful
-    "nvidia/nemotron-3-ultra-550b-a55b:free",                         # 550B, last resort
+    "nvidia/nemotron-3-super-120b-a12b",                         # PAID - fast, cheap, unmoderated
+    "meta-llama/llama-3.3-70b-instruct",                         # PAID - fast, cheap, general purpose
+    "nex-agi/nex-n2-pro",                                        # PAID - fast MoE
+    "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, slow, unmoderated
+    "nvidia/nemotron-3-ultra-550b-a55b",                         # PAID - very large model
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE fallback - Venice uncensored
+    "nvidia/nemotron-3-super-120b-a12b:free",                         # FREE fallback
+    "meta-llama/llama-3.3-70b-instruct:free",                         # FREE fallback
+    "nex-agi/nex-n2-pro:free",                                        # FREE fallback
+    "nousresearch/hermes-3-llama-3.1-405b:free",                      # FREE fallback
+    "nvidia/nemotron-3-ultra-550b-a55b:free",                         # FREE fallback
 ]
 OR_TIMEOUT = 45  # seconds per model attempt before trying next
 VERBATIM_TURNS  = 6
