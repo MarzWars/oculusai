@@ -41,17 +41,17 @@ if not OPENROUTER_API_KEY:
 
 # Unmoderated/general models (Paid versions first for high speed, then free fallbacks)
 OR_MODELS = [
-    "nvidia/nemotron-3-super-120b-a12b",                         # PAID - fast, cheap, unmoderated
-    "meta-llama/llama-3.3-70b-instruct",                         # PAID - fast, cheap, general purpose
-    "nex-agi/nex-n2-pro",                                        # PAID - fast MoE
-    "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, slow, unmoderated
-    "nvidia/nemotron-3-ultra-550b-a55b",                         # PAID - very large model
+    "nvidia/nemotron-super-49b-v1",                                 # PAID - fast, cheap, unmoderated (replaces deprecated nemotron-3-super-120b-a12b)
+    "meta-llama/llama-3.3-70b-instruct",                            # PAID - fast, cheap, general purpose
+    "nex-agi/nex-n2-pro",                                           # PAID - fast MoE
+    "nousresearch/hermes-3-llama-3.1-405b",                         # PAID - powerful, slow, unmoderated
+    "nvidia/nemotron-ultra-253b-v1",                                 # PAID - very large model
     "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE fallback - Venice uncensored
-    "nvidia/nemotron-3-super-120b-a12b:free",                         # FREE fallback
-    "meta-llama/llama-3.3-70b-instruct:free",                         # FREE fallback
-    "nex-agi/nex-n2-pro:free",                                        # FREE fallback
-    "nousresearch/hermes-3-llama-3.1-405b:free",                      # FREE fallback
-    "nvidia/nemotron-3-ultra-550b-a55b:free",                         # FREE fallback
+    "nvidia/nemotron-super-49b-v1:free",                             # FREE fallback
+    "meta-llama/llama-3.3-70b-instruct:free",                        # FREE fallback
+    "nex-agi/nex-n2-pro:free",                                       # FREE fallback
+    "nousresearch/hermes-3-llama-3.1-405b:free",                     # FREE fallback
+    "nvidia/nemotron-ultra-253b-v1:free",                            # FREE fallback
 ]
 OR_TIMEOUT = 45  # seconds per model attempt before trying next
 VERBATIM_TURNS  = 6
@@ -119,22 +119,7 @@ def query_openrouter(prompt: str) -> str:
 
 def query_openrouter_stream(prompt: str):
     """Send a prompt to OpenRouter, streaming the response chunks, cycling through fallbacks on error."""
-    # Check if this is an ad prompt to prioritize uncensored models
-    is_ad = "RED ROOMS" in prompt or "operator ad" in prompt.lower() or "vulgar" in prompt.lower()
-    
-    models = list(OR_MODELS)
-    if is_ad:
-        priority = [
-            "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-            "nousresearch/hermes-3-llama-3.1-405b",
-            "nousresearch/hermes-3-llama-3.1-405b:free",
-        ]
-        for m in reversed(priority):
-            if m in models:
-                models.remove(m)
-                models.insert(0, m)
-            else:
-                models.insert(0, m)
+    models = OR_MODELS
                 
     last_error = None
     for model in models:
@@ -180,6 +165,13 @@ def query_openrouter_stream(prompt: str):
             
             if in_thinking:
                 yield "</think>"
+            
+            if not yielded_any:
+                # Model connected but returned no actual content — try the next one
+                print(f"[OpenRouter] {model} returned empty response, trying next model...")
+                last_error = Exception(f"Empty response from {model}")
+                continue  # fall through to next model
+
             return  # Successful completion of stream
         except Exception as e:
             err_str = str(e)

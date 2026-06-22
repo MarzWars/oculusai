@@ -4,13 +4,13 @@
 
 // ── Load Highlight.js from CDN ───────────
 (function loadHighlightJs() {
-  const link  = document.createElement('link');
-  link.rel    = 'stylesheet';
-  link.href   = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css';
+  const link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css';
   document.head.appendChild(link);
 
-  const script  = document.createElement('script');
-  script.src    = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js';
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js';
   script.onload = () => {
     document.querySelectorAll('.code-block pre code').forEach(el => hljs.highlightElement(el));
   };
@@ -46,9 +46,9 @@ function renderMarkdown(text) {
   const codeBlocks = [];
   html = html.replace(/```(\w+)?\n?([\s\S]*?)```/g, (_, lang, code) => {
     const language = (lang || '').trim();
-    const label    = language || 'code';
-    const escaped  = escapeHtml(code.trimEnd());
-    const idx      = codeBlocks.length;
+    const label = language || 'code';
+    const escaped = escapeHtml(code.trimEnd());
+    const idx = codeBlocks.length;
     codeBlocks.push(`
 <div class="code-block">
   <div class="code-header">
@@ -96,14 +96,14 @@ function renderMarkdown(text) {
 
   // 1b. Protect details blocks
   const thinkingBlocks = [];
-  
+
   // Protect completed details blocks
   html = html.replace(/<details class="thinking-block"([\s\S]*?)<\/details>/gi, (match) => {
     const idx = thinkingBlocks.length;
     thinkingBlocks.push(match);
     return `%%THINKING_BLOCK_${idx}%%`;
   });
-  
+
   // Protect open/streaming details blocks
   html = html.replace(/<details class="thinking-block"([\s\S]*)$/gi, (match) => {
     const idx = thinkingBlocks.length;
@@ -128,8 +128,8 @@ function renderMarkdown(text) {
 
   // 6. Headings
   html = html.replace(/^### (.+)$/gm, '<h3 class="md-h3">$1</h3>');
-  html = html.replace(/^## (.+)$/gm,  '<h2 class="md-h2">$1</h2>');
-  html = html.replace(/^# (.+)$/gm,   '<h1 class="md-h1">$1</h1>');
+  html = html.replace(/^## (.+)$/gm, '<h2 class="md-h2">$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1 class="md-h1">$1</h1>');
 
   // 7. Horizontal rule
   html = html.replace(/^---+$/gm, '<hr class="md-hr">');
@@ -173,7 +173,7 @@ function renderTables(html) {
     rows.forEach((row, i) => {
       if (/^\|[-| :]+\|$/.test(row.trim())) return;
       const cells = row.split('|').filter((_, j, a) => j > 0 && j < a.length - 1);
-      const tag   = i === 0 ? 'th' : 'td';
+      const tag = i === 0 ? 'th' : 'td';
       out += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
     });
     return out + '</table></div>';
@@ -194,17 +194,17 @@ function renderParagraphs(html) {
 function copyCode(btn) {
   const text = btn.closest('.code-block').querySelector('pre code').innerText;
   navigator.clipboard.writeText(text).then(() => {
-    const iconCopy  = btn.querySelector('.icon-copy');
+    const iconCopy = btn.querySelector('.icon-copy');
     const iconCheck = btn.querySelector('.icon-check');
-    const label     = btn.querySelector('.copy-label');
-    iconCopy.style.display  = 'none';
+    const label = btn.querySelector('.copy-label');
+    iconCopy.style.display = 'none';
     iconCheck.style.display = 'block';
-    label.textContent       = 'Copied!';
+    label.textContent = 'Copied!';
     btn.classList.add('copied');
     setTimeout(() => {
-      iconCopy.style.display  = 'block';
+      iconCopy.style.display = 'block';
       iconCheck.style.display = 'none';
-      label.textContent       = 'Copy';
+      label.textContent = 'Copy';
       btn.classList.remove('copied');
     }, 2000);
   });
@@ -222,8 +222,8 @@ function removeEmptyState() {
   if (empty) empty.remove();
   if (!document.querySelector('.date-divider')) {
     const feed = document.getElementById('chatFeed');
-    const div  = document.createElement('div');
-    div.className   = 'date-divider';
+    const div = document.createElement('div');
+    div.className = 'date-divider';
     div.textContent = 'Today';
     feed.insertBefore(div, feed.firstChild);
   }
@@ -231,7 +231,7 @@ function removeEmptyState() {
 
 function appendUserBubble(text) {
   const feed = document.getElementById('chatFeed');
-  const row  = document.createElement('div');
+  const row = document.createElement('div');
   row.className = 'bubble-row user-row';
   row.innerHTML = `
     <div class="bubble user-bubble"><p>${escapeHtml(text)}</p></div>
@@ -258,7 +258,7 @@ function hideTyping() {
 
 function insertAiBubble(rawText) {
   const feed = document.getElementById('chatFeed');
-  const row  = document.createElement('div');
+  const row = document.createElement('div');
   row.className = 'bubble-row ai-row';
   row.innerHTML = `
     ${AI_AVATAR}
@@ -271,15 +271,15 @@ function insertAiBubble(rawText) {
 
 // ── Send message ──────────────────────────
 async function sendMessage() {
-  const input   = document.getElementById('msgInput');
+  const input = document.getElementById('msgInput');
   const sendBtn = document.querySelector('.send-btn');
-  const text    = input.value.trim();
+  const text = input.value.trim();
   if (!text) return;
 
-  input.value        = '';
+  input.value = '';
   input.style.height = 'auto';
-  input.disabled     = true;
-  sendBtn.disabled   = true;
+  input.disabled = true;
+  sendBtn.disabled = true;
 
   removeEmptyState();
   appendUserBubble(text);
@@ -287,7 +287,7 @@ async function sendMessage() {
 
   // Create stream bubble placeholder
   const feed = document.getElementById('chatFeed');
-  const row  = document.createElement('div');
+  const row = document.createElement('div');
   row.className = 'bubble-row ai-row';
   row.style.display = 'none'; // hide until first chunk arrives
   row.innerHTML = `
@@ -298,9 +298,9 @@ async function sendMessage() {
 
   try {
     const resp = await fetch('/ask', {
-      method:  'POST',
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ message: text }),
+      body: JSON.stringify({ message: text }),
     });
     if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
 
@@ -330,9 +330,17 @@ async function sendMessage() {
       }
     }
 
-    // Highlight any code blocks in the final message
-    bubble.querySelectorAll('.code-block pre code').forEach(el => highlight(el));
-    scrollToBottom();
+    // Always dismiss the typing indicator when the stream ends,
+    // even if no content was ever received (empty/whitespace response).
+    if (!hasShown) {
+      hideTyping();
+      row.remove();
+      insertAiBubble('_No response received from the model. Please try again._');
+    } else {
+      // Highlight any code blocks in the final message
+      bubble.querySelectorAll('.code-block pre code').forEach(el => highlight(el));
+      scrollToBottom();
+    }
 
   } catch (err) {
     hideTyping();
@@ -342,7 +350,7 @@ async function sendMessage() {
     }
     insertAiBubble(`**Error:** ${err.message}`);
   } finally {
-    input.disabled   = false;
+    input.disabled = false;
     sendBtn.disabled = false;
     input.focus();
   }
