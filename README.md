@@ -48,7 +48,8 @@ It remembers who you are. It searches the web when it needs to. It writes real, 
 | 💻 **Developer Assistant** | Writes full working code, debugs errors, explains logic — Python, JS, SQL, React, Bash and more |
 | 📣 **Marketing Engine** | Ad copy, branding, social strategy, customer replies, CIPC basics |
 | 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns |
-| 🔄 **Model Fallback Chain** | If the primary AI model is busy, the system automatically tries the next one — no manual intervention needed |
+| ⚙️ **Manual Model Selection** | Pin a specific model (e.g., Hermes 3 70B, Llama 3.3 70B, Dolphin Mistral 24B) via the header dropdown |
+| 🔄 **Model Fallback Chain** | If the preferred/pinned model (or the primary model in auto mode) is busy, the system automatically falls back to the next available model in the chain |
 
 ---
 
@@ -59,21 +60,23 @@ Oculus AI
 │
 ├── Flask              → Web server + routing + session-based auth
 ├── OpenRouter API     → AI model gateway (OpenAI-compatible)
-│   ├── Dolphin Mistral 24B Venice  → Primary — uncensored, adult-content tuned
-│   ├── Llama 3.3 70B               → Fallback 1 — fast, unmoderated
-│   ├── Nex N2 Pro                  → Fallback 2 — fast MoE, unmoderated
-│   ├── Nemotron Super 120B         → Fallback 3 — large, unmoderated
-│   ├── Hermes 3 Llama 405B         → Fallback 4 — very large, unmoderated
-│   └── Nemotron Ultra 550B         → Fallback 5 — last resort
+│   ├── Hermes 3 70B                → Primary (Default) — fast, unmoderated
+│   ├── Nemotron 3 Super 120B       → Fallback 1 — fast, moderated
+│   ├── Llama 3.3 70B               → Fallback 2 — balanced, moderated
+│   ├── Hermes 3 405B               → Fallback 3 — powerful, unmoderated
+│   ├── Dolphin Mistral 24B         → Fallback 4 — uncensored, free
+│   └── Free Fallbacks              → (Nemotron 3, Llama 3.3, Hermes 3 405B)
 ├── Supabase Auth      → User registration, login, logout
 ├── Supabase DB        → Persistent memory + chat history per user
 ├── Tavily Search      → Live web search when needed
 └── Prompt Engine      → Injects memory, search results, date/time into every request
 ```
 
-### How the Fallback Chain Works
+### Model Selection & Fallback Chain
 
-Each request tries the models in order. If a model is **rate-limited (429)**, returns an **invalid ID (400)**, or **times out (45 seconds)**, it is skipped and the next model is tried automatically. The response always comes from whichever model picks it up first.
+* **Manual Selection:** Users can choose a preferred model via the dropdown selector in the header (e.g., Hermes 3 70B, Llama 3.3 70B, Dolphin Mistral 24B, etc.).
+* **Automatic Fallback:** Each request tries the preferred model first. If a model is **rate-limited (429)**, returns an **invalid ID (400)**, or **times out (45 seconds)**, it is skipped and the next model in the chain is tried automatically to guarantee a response.
+
 
 ---
 
