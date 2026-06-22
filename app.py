@@ -40,15 +40,16 @@ if not OPENROUTER_API_KEY:
     raise Exception("Missing OPENROUTER_API_KEY environment variable")
 
 # Free unmoderated models — verified from OpenRouter /api/v1/models on 2026-06-22
-# Priority order: best for adult/creative content first.
+# Faster/smaller models first for quick responses. Large ones are fallback.
 OR_MODELS = [
     "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # adult-tuned, uncensored
-    "nousresearch/hermes-3-llama-3.1-405b:free",                      # 405B, unmoderated
-    "nvidia/nemotron-3-ultra-550b-a55b:free",                         # 550B, unmoderated
+    "meta-llama/llama-3.3-70b-instruct:free",                         # fast 70B, unmoderated
+    "nex-agi/nex-n2-pro:free",                                        # fast MoE, unmoderated
     "nvidia/nemotron-3-super-120b-a12b:free",                         # 120B, unmoderated
-    "meta-llama/llama-3.3-70b-instruct:free",                         # 70B, unmoderated
-    "nex-agi/nex-n2-pro:free",                                        # unmoderated fallback
+    "nousresearch/hermes-3-llama-3.1-405b:free",                      # 405B slow but powerful
+    "nvidia/nemotron-3-ultra-550b-a55b:free",                         # 550B, last resort
 ]
+OR_TIMEOUT = 45  # seconds per model attempt before trying next
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
 
@@ -82,6 +83,7 @@ def query_openrouter(prompt: str) -> str:
             client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=OPENROUTER_API_KEY,
+                timeout=OR_TIMEOUT,
             )
             response = client.chat.completions.create(
                 model=model,
@@ -95,8 +97,10 @@ def query_openrouter(prompt: str) -> str:
             return response.choices[0].message.content.strip()
         except Exception as e:
             err_str = str(e)
-            # Skip to next model on rate-limit (429) OR invalid model ID (400)
-            if "429" in err_str or "400" in err_str or "rate" in err_str.lower() or "not a valid model" in err_str.lower():
+            # Skip to next model on rate-limit (429), invalid model (400), or timeout
+            if ("429" in err_str or "400" in err_str or "rate" in err_str.lower()
+                    or "not a valid model" in err_str.lower()
+                    or "timeout" in err_str.lower() or "timed out" in err_str.lower()):
                 print(f"[OpenRouter] {model} skipped ({type(e).__name__}), trying next...")
                 last_error = e
                 continue  # try next model
