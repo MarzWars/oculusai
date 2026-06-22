@@ -39,9 +39,15 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY:
     raise Exception("Missing OPENROUTER_API_KEY environment variable")
 
-# Free uncensored model — Dolphin Mistral 24B Venice Edition
-# To switch models, change this string to any OpenRouter model ID
-OR_MODEL       = "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
+# Free uncensored models in priority order.
+# If one is rate-limited (429) the next one is tried automatically.
+OR_MODELS = [
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # best for adult copy
+    "cognitivecomputations/dolphin3.0-r1-mistral-nemo:free",          # fallback uncensored
+    "neversleep/llama-3.1-lumimaid-8b:free",                          # adult-content tuned
+    "meta-llama/llama-3.3-70b-instruct:free",                         # smart general fallback
+    "mistralai/mistral-7b-instruct:free",                             # last resort
+]
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
 
@@ -68,26 +74,37 @@ def current_email() -> str:
 # OPENROUTER API
 # ─────────────────────────────────────────
 def query_openrouter(prompt: str) -> str:
-    """Send a prompt to OpenRouter and return the text response."""
-    try:
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=OPENROUTER_API_KEY,
-        )
-        response = client.chat.completions.create(
-            model=OR_MODEL,
-            messages=[
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=2048,
-            temperature=0.85,
-        )
-        return response.choices[0].message.content.strip()
-    except Exception as e:
-        import traceback
-        print("[OpenRouter ERROR]", type(e).__name__, str(e))
-        traceback.print_exc()
-        raise RuntimeError(f"OpenRouter error — {type(e).__name__}: {e}")
+    """Send a prompt to OpenRouter, cycling through fallback models on rate-limit."""
+    last_error = None
+    for model in OR_MODELS:
+        try:
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=OPENROUTER_API_KEY,
+            )
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=2048,
+                temperature=0.85,
+            )
+            print(f"[OpenRouter] Used model: {model}")
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            err_str = str(e)
+            if "429" in err_str or "rate" in err_str.lower():
+                print(f"[OpenRouter] {model} rate-limited, trying next...")
+                last_error = e
+                continue  # try next model
+            # Non-rate-limit error — log and raise immediately
+            import traceback
+            print("[OpenRouter ERROR]", type(e).__name__, err_str)
+            traceback.print_exc()
+            raise RuntimeError(f"OpenRouter error — {type(e).__name__}: {e}")
+    # All models exhausted
+    raise RuntimeError(f"All models rate-limited. Try again in 30 seconds. Last error: {last_error}")
 
 
 # ─────────────────────────────────────────
