@@ -39,14 +39,15 @@ OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 if not OPENROUTER_API_KEY:
     raise Exception("Missing OPENROUTER_API_KEY environment variable")
 
-# Free uncensored models in priority order.
-# If one is rate-limited (429) the next one is tried automatically.
+# Free unmoderated models — verified from OpenRouter /api/v1/models on 2026-06-22
+# Priority order: best for adult/creative content first.
 OR_MODELS = [
-    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # best for adult copy
-    "cognitivecomputations/dolphin3.0-r1-mistral-nemo:free",          # fallback uncensored
-    "neversleep/llama-3.1-lumimaid-8b:free",                          # adult-content tuned
-    "meta-llama/llama-3.3-70b-instruct:free",                         # smart general fallback
-    "mistralai/mistral-7b-instruct:free",                             # last resort
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # adult-tuned, uncensored
+    "nousresearch/hermes-3-llama-3.1-405b:free",                      # 405B, unmoderated
+    "nvidia/nemotron-3-ultra-550b-a55b:free",                         # 550B, unmoderated
+    "nvidia/nemotron-3-super-120b-a12b:free",                         # 120B, unmoderated
+    "meta-llama/llama-3.3-70b-instruct:free",                         # 70B, unmoderated
+    "nex-agi/nex-n2-pro:free",                                        # unmoderated fallback
 ]
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
@@ -94,11 +95,12 @@ def query_openrouter(prompt: str) -> str:
             return response.choices[0].message.content.strip()
         except Exception as e:
             err_str = str(e)
-            if "429" in err_str or "rate" in err_str.lower():
-                print(f"[OpenRouter] {model} rate-limited, trying next...")
+            # Skip to next model on rate-limit (429) OR invalid model ID (400)
+            if "429" in err_str or "400" in err_str or "rate" in err_str.lower() or "not a valid model" in err_str.lower():
+                print(f"[OpenRouter] {model} skipped ({type(e).__name__}), trying next...")
                 last_error = e
                 continue  # try next model
-            # Non-rate-limit error — log and raise immediately
+            # Any other error — log and raise immediately
             import traceback
             print("[OpenRouter ERROR]", type(e).__name__, err_str)
             traceback.print_exc()
