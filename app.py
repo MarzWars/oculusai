@@ -45,7 +45,6 @@ OR_MODELS = [
     "meta-llama/llama-3.3-70b-instruct",                         # PAID - fast, cheap, general purpose
     "nex-agi/nex-n2-pro",                                        # PAID - fast MoE
     "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, slow, unmoderated
-    "cognitivecomputations/dolphin-mistral-24b-venice-edition",        # PAID - Venice uncensored
     "nvidia/nemotron-3-ultra-550b-a55b",                         # PAID - very large model
     "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE fallback - Venice uncensored
     "nvidia/nemotron-3-super-120b-a12b:free",                         # FREE fallback
@@ -126,7 +125,6 @@ def query_openrouter_stream(prompt: str):
     models = list(OR_MODELS)
     if is_ad:
         priority = [
-            "cognitivecomputations/dolphin-mistral-24b-venice-edition",
             "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
             "nousresearch/hermes-3-llama-3.1-405b",
             "nousresearch/hermes-3-llama-3.1-405b:free",
