@@ -69,9 +69,12 @@ function renderMarkdown(text) {
     return `%%CODE_BLOCK_${idx}%%`;
   });
 
-  // Handle <think> blocks
-  // 1. Closed thinking blocks (collapsed by default)
-  html = html.replace(/<think>([\s\S]*?)<\/think>/gi, (_, thought) => {
+  // Handle <think> and <thinking> blocks (different models use different tags)
+  // Build a combined tag pattern: think|thinking
+  const thinkTagPattern = 'think(?:ing)?';
+
+  // 1. Closed thinking blocks — <think>…</think> or <thinking>…</thinking>
+  html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*?)</(?:${thinkTagPattern})>`, 'gi'), (_, thought) => {
     return `
 <details class="thinking-block">
   <summary class="thinking-header">
@@ -82,8 +85,8 @@ function renderMarkdown(text) {
 </details>`;
   });
 
-  // 2. Open/streaming thinking blocks
-  html = html.replace(/<think>([\s\S]*)$/gi, (_, thought) => {
+  // 2. Open/streaming thinking blocks — tag opened but not yet closed
+  html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*)$`, 'gi'), (_, thought) => {
     return `
 <details class="thinking-block" open>
   <summary class="thinking-header">

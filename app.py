@@ -1104,22 +1104,6 @@ def home():
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <style>
-        .model-selector {{ display:flex; align-items:center; gap:6px; }}
-        .model-label {{ font-size:11px; color:#8888a0; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }}
-        #modelSelect {{
-            background:#1c1c21; border:1px solid #2a2a32; border-radius:8px;
-            color:#c0c0d0; font-size:12px; padding:5px 28px 5px 10px;
-            cursor:pointer; outline:none; transition:border-color .15s;
-            appearance:none; -webkit-appearance:none;
-            background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-            background-repeat:no-repeat; background-position:right 8px center;
-        }}
-        #modelSelect:hover, #modelSelect:focus {{ border-color:#7c6af7; }}
-        #modelSelect option {{ background:#1c1c21; color:#e8e8f0; }}
-        #modelStatus {{ transition:all .3s; }}
-        #modelStatus.switching {{ color:#7c6af7; }}
-    </style>
 </head>
 <body>
 <div class="app-shell">
