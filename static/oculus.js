@@ -290,26 +290,26 @@ function renderStreamingHtml(text) {
     return '';
   });
   for (const thought of closedBlocks) {
-    html += `<details class="thinking-block">
-  <summary class="thinking-header">
+    html += `<div class="live-thinking">
+  <div class="live-thinking-header">
     <span class="thinking-icon">🧠</span>
-    <span class="thinking-title">Thought Process</span>
-  </summary>
-  <div class="thinking-content">${escapeHtml(thought)}</div>
-</details>`;
+    <span>Thinking...</span>
+  </div>
+  <div class="live-thinking-content">${escapeHtml(thought)}</div>
+</div>`;
   }
 
   // 2. Open (still streaming) thinking block
   const openMatch = remaining.match(openRe);
   if (openMatch) {
     remaining = remaining.replace(openRe, '');
-    html += `<details class="thinking-block" open>
-  <summary class="thinking-header">
+    html += `<div class="live-thinking">
+  <div class="live-thinking-header">
     <span class="thinking-icon">🧠</span>
-    <span class="thinking-title">Thought Process</span>
-  </summary>
-  <div class="thinking-content">${escapeHtml(openMatch[1])}<span class="stream-cursor"></span></div>
-</details>`;
+    <span>Thinking...</span>
+  </div>
+  <div class="live-thinking-content">${escapeHtml(openMatch[1])}<span class="stream-cursor"></span></div>
+</div>`;
   }
 
   // 3. Main response text (everything outside thinking tags)

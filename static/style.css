@@ -681,3 +681,25 @@ code.inline-code {
   max-height: 280px;
   overflow-y: auto;
 }
+
+/* ── Live Streaming Thinking (greyed out) ── */
+.live-thinking {
+  margin-bottom: 12px;
+}
+.live-thinking-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+.live-thinking-content {
+  font-size: 13.5px;
+  color: var(--text-faint);
+  font-style: italic;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}

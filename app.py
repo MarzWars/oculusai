@@ -1273,7 +1273,7 @@ def ask():
             history.append({"role": "ai", "text": error})
             save_history(uid, history)
 
-    return Response(generate(), mimetype="text/plain")
+    return Response(generate(), mimetype="text/event-stream")
 
 
 # ─────────────────────────────────────────
