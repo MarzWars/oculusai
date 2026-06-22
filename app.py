@@ -53,7 +53,7 @@ OR_MODELS = [
     "nousresearch/hermes-3-llama-3.1-405b:free",                      # FREE fallback
     "nvidia/nemotron-3-ultra-550b-a55b:free",                         # FREE fallback
 ]
-OR_TIMEOUT = 45  # seconds per model attempt before trying next
+OR_TIMEOUT = 20  # seconds per model attempt before trying next
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
 
@@ -114,6 +114,45 @@ def query_openrouter(prompt: str) -> str:
             traceback.print_exc()
             raise RuntimeError(f"OpenRouter error — {type(e).__name__}: {e}")
     # All models exhausted
+    raise RuntimeError(f"All models rate-limited. Try again in 30 seconds. Last error: {last_error}")
+
+
+def query_openrouter_stream(prompt: str):
+    """Send a prompt to OpenRouter, streaming the response chunks, cycling through fallbacks on error."""
+    last_error = None
+    for model in OR_MODELS:
+        try:
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=OPENROUTER_API_KEY,
+                timeout=OR_TIMEOUT,
+            )
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=2048,
+                temperature=0.85,
+                stream=True,
+            )
+            print(f"[OpenRouter] Streaming from model: {model}")
+            for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+            return  # Successful completion of stream
+        except Exception as e:
+            err_str = str(e)
+            if ("429" in err_str or "400" in err_str or "rate" in err_str.lower()
+                    or "not a valid model" in err_str.lower()
+                    or "timeout" in err_str.lower() or "timed out" in err_str.lower()):
+                print(f"[OpenRouter] {model} skipped ({type(e).__name__}) during stream initialization, trying next...")
+                last_error = e
+                continue
+            import traceback
+            print("[OpenRouter ERROR]", type(e).__name__, err_str)
+            traceback.print_exc()
+            raise RuntimeError(f"OpenRouter error — {type(e).__name__}: {e}")
     raise RuntimeError(f"All models rate-limited. Try again in 30 seconds. Last error: {last_error}")
 
 
@@ -1104,18 +1143,28 @@ def ask():
     save_memory(uid, memory)
 
     history.append({"role": "user", "text": user_message})
-    maybe_summarise_history(uid, history)
 
     prompt = build_prompt(uid, user_message, memory, history)
 
     def generate():
         try:
-            output_text = query_openrouter(prompt)
-            yield output_text
-            history.append({"role": "ai", "text": output_text.strip()})
+            output_chunks = []
+            for chunk in query_openrouter_stream(prompt):
+                output_chunks.append(chunk)
+                yield chunk
+            
+            full_text = "".join(output_chunks)
+            history.append({"role": "ai", "text": full_text.strip()})
             save_history(uid, history)
+
+            # Summarise in background after responding and saving
+            import threading
+            threading.Thread(
+                target=maybe_summarise_history,
+                args=(uid, history.copy())
+            ).start()
         except Exception as e:
-            error = f"[Error: {str(e)}]"
+            error = f"\n[Error: {str(e)}]"
             print("[ASK ERROR]", error)
             yield error
             history.append({"role": "ai", "text": error})

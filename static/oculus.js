@@ -238,6 +238,17 @@ async function sendMessage() {
   appendUserBubble(text);
   showTyping();
 
+  // Create stream bubble placeholder
+  const feed = document.getElementById('chatFeed');
+  const row  = document.createElement('div');
+  row.className = 'bubble-row ai-row';
+  row.style.display = 'none'; // hide until first chunk arrives
+  row.innerHTML = `
+    ${AI_AVATAR}
+    <div class="bubble ai-bubble rendered"></div>`;
+  feed.insertBefore(row, document.getElementById('typingIndicator'));
+  const bubble = row.querySelector('.ai-bubble');
+
   try {
     const resp = await fetch('/ask', {
       method:  'POST',
@@ -245,11 +256,43 @@ async function sendMessage() {
       body:    JSON.stringify({ message: text }),
     });
     if (!resp.ok) throw new Error(`Server error: ${resp.status}`);
-    const fullText = await resp.text();
-    hideTyping();
-    insertAiBubble(fullText);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+    let accumulated = "";
+    let hasShown = false;
+
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
+      if (value) {
+        const chunk = decoder.decode(value, { stream: !done });
+        accumulated += chunk;
+
+        if (!hasShown && accumulated.trim()) {
+          // Hide typing indicator, show the streaming bubble
+          hideTyping();
+          row.style.display = 'flex';
+          hasShown = true;
+        }
+
+        // Render markdown for the accumulated response
+        bubble.innerHTML = renderMarkdown(accumulated);
+        scrollToBottom();
+      }
+    }
+
+    // Highlight any code blocks in the final message
+    bubble.querySelectorAll('.code-block pre code').forEach(el => highlight(el));
+    scrollToBottom();
+
   } catch (err) {
     hideTyping();
+    // Remove the unused streaming row if it wasn't shown
+    if (!hasShown) {
+      row.remove();
+    }
     insertAiBubble(`**Error:** ${err.message}`);
   } finally {
     input.disabled   = false;
