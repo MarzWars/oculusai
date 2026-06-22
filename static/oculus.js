@@ -357,6 +357,34 @@ async function sendMessage() {
 }
 
 
+// ── Model switcher ────────────────────────
+async function setModel(modelId) {
+  const select = document.getElementById('modelSelect');
+  const status = document.getElementById('modelStatus');
+  if (select) select.disabled = true;
+  if (status) { status.textContent = 'Switching…'; status.classList.add('switching'); }
+
+  try {
+    const resp = await fetch('/set_model', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: modelId }),
+    });
+    const data = await resp.json();
+    if (data.status === 'ok') {
+      if (status) { status.textContent = data.name; status.classList.remove('switching'); }
+    } else {
+      if (status) { status.textContent = 'Error'; status.classList.remove('switching'); }
+      if (select) select.value = select.dataset.previous || select.value;
+    }
+  } catch (err) {
+    if (status) { status.textContent = 'Error'; status.classList.remove('switching'); }
+  } finally {
+    if (select) select.disabled = false;
+  }
+}
+
+
 // ── Keyboard / chips / clear ──────────────
 function handleKey(e) {
   if (e.key === 'Enter' && !e.shiftKey) {

@@ -40,19 +40,26 @@ if not OPENROUTER_API_KEY:
     raise Exception("Missing OPENROUTER_API_KEY environment variable")
 
 # Unmoderated/general models (Paid versions first for high speed, then free fallbacks)
+# Full fallback chain used when no model is pinned
 OR_MODELS = [
-    "nvidia/nemotron-super-49b-v1",                                 # PAID - fast, cheap, unmoderated (replaces deprecated nemotron-3-super-120b-a12b)
-    "meta-llama/llama-3.3-70b-instruct",                            # PAID - fast, cheap, general purpose
-    "nex-agi/nex-n2-pro",                                           # PAID - fast MoE
-    "nousresearch/hermes-3-llama-3.1-405b",                         # PAID - powerful, slow, unmoderated
-    "nvidia/nemotron-ultra-253b-v1",                                 # PAID - very large model
-    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE fallback - Venice uncensored
-    "nvidia/nemotron-super-49b-v1:free",                             # FREE fallback
-    "meta-llama/llama-3.3-70b-instruct:free",                        # FREE fallback
-    "nex-agi/nex-n2-pro:free",                                       # FREE fallback
-    "nousresearch/hermes-3-llama-3.1-405b:free",                     # FREE fallback
-    "nvidia/nemotron-ultra-253b-v1:free",                            # FREE fallback
+    "nvidia/nemotron-3-super-120b-a12b",                         # PAID - fast, cheap, unmoderated
+    "meta-llama/llama-3.3-70b-instruct",                         # PAID - balanced
+    "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, unmoderated
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE - Venice uncensored
+    "nvidia/nemotron-3-super-120b-a12b:free",                         # FREE fallback
+    "meta-llama/llama-3.3-70b-instruct:free",                         # FREE fallback
+    "nousresearch/hermes-3-llama-3.1-405b:free",                      # FREE fallback
 ]
+
+# Models shown in the manual switcher UI (label, tag, id)
+MODEL_OPTIONS = [
+    {"id": "nvidia/nemotron-3-super-120b-a12b",    "name": "Nemotron 3 Super 120B", "tag": "Fast · Cheap"},
+    {"id": "meta-llama/llama-3.3-70b-instruct",    "name": "Llama 3.3 70B",         "tag": "Balanced"},
+    {"id": "nousresearch/hermes-3-llama-3.1-405b", "name": "Hermes 3 405B",          "tag": "Powerful"},
+    {"id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+                                                   "name": "Dolphin Mistral 24B",    "tag": "Free · Uncensored"},
+]
+DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b"
 OR_TIMEOUT = 45  # seconds per model attempt before trying next
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
@@ -79,10 +86,19 @@ def current_email() -> str:
 # ─────────────────────────────────────────
 # OPENROUTER API
 # ─────────────────────────────────────────
-def query_openrouter(prompt: str) -> str:
+def _build_model_list(preferred_model: str = None) -> list:
+    """Return model list with preferred model first (if given), falling back to full OR_MODELS chain."""
+    if preferred_model and preferred_model != "auto":
+        rest = [m for m in OR_MODELS if m != preferred_model]
+        return [preferred_model] + rest
+    return OR_MODELS
+
+
+def query_openrouter(prompt: str, preferred_model: str = None) -> str:
     """Send a prompt to OpenRouter, cycling through fallback models on rate-limit."""
     last_error = None
-    for model in OR_MODELS:
+    models = _build_model_list(preferred_model)
+    for model in models:
         try:
             client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
@@ -117,9 +133,9 @@ def query_openrouter(prompt: str) -> str:
     raise RuntimeError(f"All models rate-limited. Try again in 30 seconds. Last error: {last_error}")
 
 
-def query_openrouter_stream(prompt: str):
+def query_openrouter_stream(prompt: str, preferred_model: str = None):
     """Send a prompt to OpenRouter, streaming the response chunks, cycling through fallbacks on error."""
-    models = OR_MODELS
+    models = _build_model_list(preferred_model)
                 
     last_error = None
     for model in models:
@@ -290,8 +306,6 @@ When search results are provided:
 User data (name, company, projects, preferences) belongs to the user — not you.
 Never claim to own Lex Digitals. Never call Alex an AI.
 If the user's memory context includes past projects or preferences, apply them naturally — do not announce that you remember, just use the information.
-Do NOT regurgitate, introduce, or summarize user memory, email, or past topics in your greeting or response. Never tell the user what is in their profile, email, or memory unless they explicitly ask.
-For simple greetings (e.g., "Hello", "Hi", "Hey"), reply with a brief, sharp greeting in character as Oculus (e.g., "What are we building today?", "How can I help you today?") without listing session details, email, or past topics.
 
 You are Oculus.
 Alex built you.
@@ -1062,6 +1076,14 @@ def home():
     mem_name     = memory.get("profile", {}).get("name", "")
     display_name = mem_name or email.split("@")[0]
     greeting     = f"Welcome back, {display_name}." if chat_history else "What are we building today?"
+    active_model = session.get("selected_model", DEFAULT_MODEL)
+    active_name  = next((m["name"] for m in MODEL_OPTIONS if m["id"] == active_model), active_model)
+
+    model_options_html = "".join(
+        f'<option value="{m["id"]}" {"selected" if m["id"] == active_model else ""}>'
+        f'{m["name"]} — {m["tag"]}</option>'
+        for m in MODEL_OPTIONS
+    )
 
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -1073,6 +1095,22 @@ def home():
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <style>
+        .model-selector {{ display:flex; align-items:center; gap:6px; }}
+        .model-label {{ font-size:11px; color:#8888a0; text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }}
+        #modelSelect {{
+            background:#1c1c21; border:1px solid #2a2a32; border-radius:8px;
+            color:#c0c0d0; font-size:12px; padding:5px 28px 5px 10px;
+            cursor:pointer; outline:none; transition:border-color .15s;
+            appearance:none; -webkit-appearance:none;
+            background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238888a0' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+            background-repeat:no-repeat; background-position:right 8px center;
+        }}
+        #modelSelect:hover, #modelSelect:focus {{ border-color:#7c6af7; }}
+        #modelSelect option {{ background:#1c1c21; color:#e8e8f0; }}
+        #modelStatus {{ transition:all .3s; }}
+        #modelStatus.switching {{ color:#7c6af7; }}
+    </style>
 </head>
 <body>
 <div class="app-shell">
@@ -1089,9 +1127,15 @@ def home():
         </div>
         <div class="header-actions">
             <span class="user-email">{_esc(email)}</span>
+            <div class="model-selector">
+                <label class="model-label">Model</label>
+                <select id="modelSelect" onchange="setModel(this.value)" title="Switch AI model">
+                    {model_options_html}
+                </select>
+            </div>
             <div class="status-pill">
                 <span class="status-dot"></span>
-                <span class="status-label">Online</span>
+                <span class="status-label" id="modelStatus">{active_name}</span>
             </div>
             <button class="clear-btn" onclick="clearChat()">Clear</button>
             <form method="POST" action="/logout" style="margin:0">
@@ -1154,6 +1198,22 @@ def home():
 
 
 # ─────────────────────────────────────────
+# SET MODEL
+# ─────────────────────────────────────────
+@app.route("/set_model", methods=["POST"])
+@login_required
+def set_model():
+    data  = request.get_json()
+    model = (data.get("model") or "").strip()
+    valid_ids = {m["id"] for m in MODEL_OPTIONS}
+    if model not in valid_ids:
+        return jsonify({"error": "Invalid model"}), 400
+    session["selected_model"] = model
+    name = next((m["name"] for m in MODEL_OPTIONS if m["id"] == model), model)
+    return jsonify({"status": "ok", "model": model, "name": name})
+
+
+# ─────────────────────────────────────────
 # CLEAR
 # ─────────────────────────────────────────
 @app.route("/clear", methods=["POST"])
@@ -1194,11 +1254,12 @@ def ask():
     save_history(uid, history)
 
     prompt = build_prompt(uid, user_message, memory, history)
+    preferred_model = session.get("selected_model", DEFAULT_MODEL)
 
     def generate():
         try:
             output_chunks = []
-            for chunk in query_openrouter_stream(prompt):
+            for chunk in query_openrouter_stream(prompt, preferred_model=preferred_model):
                 output_chunks.append(chunk)
                 yield chunk
             
