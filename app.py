@@ -84,7 +84,10 @@ def query_openrouter(prompt: str) -> str:
         )
         return response.choices[0].message.content.strip()
     except Exception as e:
-        raise RuntimeError(f"OpenRouter API error: {type(e).__name__}: {e}")
+        import traceback
+        print("[OpenRouter ERROR]", type(e).__name__, str(e))
+        traceback.print_exc()
+        raise RuntimeError(f"OpenRouter error — {type(e).__name__}: {e}")
 
 
 # ─────────────────────────────────────────
@@ -1085,7 +1088,8 @@ def ask():
             history.append({"role": "ai", "text": output_text.strip()})
             save_history(uid, history)
         except Exception as e:
-            error = f"[Error: {type(e).__name__}]"
+            error = f"[Error: {str(e)}]"
+            print("[ASK ERROR]", error)
             yield error
             history.append({"role": "ai", "text": error})
             save_history(uid, history)
