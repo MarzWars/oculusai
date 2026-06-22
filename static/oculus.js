@@ -69,6 +69,31 @@ function renderMarkdown(text) {
     return `%%CODE_BLOCK_${idx}%%`;
   });
 
+  // Handle <think> blocks
+  // 1. Closed thinking blocks (collapsed by default)
+  html = html.replace(/<think>([\s\S]*?)<\/think>/gi, (_, thought) => {
+    return `
+<details class="thinking-block">
+  <summary class="thinking-header">
+    <span class="thinking-icon">🧠</span>
+    <span class="thinking-title">Thought Process</span>
+  </summary>
+  <div class="thinking-content">${thought}</div>
+</details>`;
+  });
+
+  // 2. Open/streaming thinking blocks
+  html = html.replace(/<think>([\s\S]*)$/gi, (_, thought) => {
+    return `
+<details class="thinking-block" open>
+  <summary class="thinking-header">
+    <span class="thinking-icon">🧠</span>
+    <span class="thinking-title">Thought Process</span>
+  </summary>
+  <div class="thinking-content">${thought}</div>
+</details>`;
+  });
+
   // 2. Inline code
   html = html.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
 
@@ -137,7 +162,7 @@ function renderParagraphs(html) {
   return html.split(/\n{2,}/).map(block => {
     block = block.trim();
     if (!block) return '';
-    if (/^<(div|ul|ol|h[1-6]|pre|table|hr|blockquote)/i.test(block)) return block;
+    if (/^<(div|ul|ol|h[1-6]|pre|table|hr|blockquote|details)/i.test(block)) return block;
     return `<p>${block.replace(/\n/g, '<br>')}</p>`;
   }).join('');
 }

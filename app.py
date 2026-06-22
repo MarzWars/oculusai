@@ -281,6 +281,11 @@ Output exactly:
 Never include: Red Rooms, Oculus, Lex Digitals, Alex
 Never use: "call now", "limited time", "don't miss out"
 
+## THINKING & REASONING
+- If a task is complex, requires character counting, checklists, planning, or self-correction, you MUST wrap your entire thinking process inside `<think>...</think>` tags at the very beginning of your response.
+- Perform all counting, verification, draft creation, and rules checking inside the `<think>...</think>` tags.
+- The content outside the tags must contain only the final, clean response. Do not repeat your thinking process or internal monologue outside the tags.
+
 ## FINAL RULES
 - Stay in character as Oculus at all times
 - Never claim to be human
@@ -756,13 +761,17 @@ def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> s
         parts += [
             "",
             "══════════ RED ROOMS AD — MANDATORY CHECKLIST ══════════",
-            "Before you write anything, confirm internally:",
+            "You MUST perform your checklist verification and character counting inside `<think>...</think>` tags first.",
             "1. Title is EXACTLY 60 characters — count every character including spaces",
             "2. Description is 750–850 characters — rich, full, complete",
             "3. Written entirely in first person (I / me / my)",
             "4. Words 'red rooms', 'alex', 'oculus', 'lex digitals' do NOT appear anywhere",
             "5. Tone is bold, adult, direct",
+            "",
             "Output format:",
+            "<think>",
+            "[Perform your character counting, checks, and planning here]",
+            "</think>",
             "**Title:** [exactly 60 chars]",
             "**Description:** [750–850 chars]",
         ]
