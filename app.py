@@ -6,7 +6,7 @@ Memory, chat history, and summaries all stored per-user in Supabase
 
 from flask import Flask, request, Response, session, redirect, jsonify
 from functools import wraps
-from gradio_client import Client
+from openai import OpenAI
 import json
 import os
 import re
@@ -35,7 +35,13 @@ if not TAVILY_API_KEY:
 
 tavily = TavilyClient(api_key=TAVILY_API_KEY)
 
-XOLTRON_SPACE   = "darkc0de/chat"
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+if not OPENROUTER_API_KEY:
+    raise Exception("Missing OPENROUTER_API_KEY environment variable")
+
+# Free uncensored model — Dolphin Mistral 24B Venice Edition
+# To switch models, change this string to any OpenRouter model ID
+OR_MODEL       = "cognitivecomputations/dolphin-mistral-24b-venice-edition:free"
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
 
@@ -59,19 +65,26 @@ def current_email() -> str:
 
 
 # ─────────────────────────────────────────
-# XOLTRON API
+# OPENROUTER API
 # ─────────────────────────────────────────
-def query_xoltron(prompt: str) -> str:
+def query_openrouter(prompt: str) -> str:
+    """Send a prompt to OpenRouter and return the text response."""
     try:
-        client = Client(XOLTRON_SPACE)
-        result = client.predict(message=prompt, api_name="/respond")
-        if isinstance(result, str):
-            return result.strip()
-        if isinstance(result, (list, dict)):
-            return json.dumps(result)
-        return str(result).strip()
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=OPENROUTER_API_KEY,
+        )
+        response = client.chat.completions.create(
+            model=OR_MODEL,
+            messages=[
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=2048,
+            temperature=0.85,
+        )
+        return response.choices[0].message.content.strip()
     except Exception as e:
-        raise RuntimeError(f"Xoltron API error: {type(e).__name__}: {e}")
+        raise RuntimeError(f"OpenRouter API error: {type(e).__name__}: {e}")
 
 
 # ─────────────────────────────────────────
@@ -531,7 +544,7 @@ def maybe_summarise_history(user_id: str, history: list):
         f"{chunk_text}\n\nSummary:"
     )
     try:
-        new_summary = query_xoltron(summary_prompt)
+        new_summary = query_openrouter(summary_prompt)
         if new_summary:
             existing = load_summary(user_id)
             combined = (existing + " " + new_summary).strip() if existing else new_summary
@@ -1067,7 +1080,7 @@ def ask():
 
     def generate():
         try:
-            output_text = query_xoltron(prompt)
+            output_text = query_openrouter(prompt)
             yield output_text
             history.append({"role": "ai", "text": output_text.strip()})
             save_history(uid, history)
