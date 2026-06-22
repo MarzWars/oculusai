@@ -135,24 +135,6 @@ def query_openrouter(prompt: str, preferred_model: str = None) -> str:
     raise RuntimeError(f"All models rate-limited. Try again in 30 seconds. Last error: {last_error}")
 
 
-TOOLS = [{
-    "type": "function",
-    "function": {
-        "name": "search_web",
-        "description": "Search the live web using Tavily for up-to-date information, news, documentation, or anything you don't know.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "query": {
-                    "type": "string", 
-                    "description": "The search query. Make it specific and concise."
-                }
-            },
-            "required": ["query"]
-        }
-    }
-}]
-
 def query_openrouter_stream(prompt: str, preferred_model: str = None):
     """Send a prompt to OpenRouter, streaming the response chunks, cycling through fallbacks on error."""
     models = _build_model_list(preferred_model)
@@ -160,58 +142,38 @@ def query_openrouter_stream(prompt: str, preferred_model: str = None):
     last_error = None
     for model in models:
         yielded_any = False
-        attempt_with_tools = True
-        
-        while True:
-            try:
-                client = OpenAI(
-                    base_url="https://openrouter.ai/api/v1",
-                    api_key=OPENROUTER_API_KEY,
-                    timeout=OR_TIMEOUT,
-                )
-                
-                messages = [{"role": "user", "content": prompt}]
-                
-                kwargs = {
-                    "model": model,
-                    "messages": messages,
-                    "max_tokens": 2048,
-                    "temperature": 0.85,
-                    "stream": True,
-                }
-                if attempt_with_tools:
-                    kwargs["tools"] = TOOLS
-                
-                response = client.chat.completions.create(**kwargs)
-                print(f"[OpenRouter] Streaming from model: {model} (tools={attempt_with_tools})")
+        try:
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=OPENROUTER_API_KEY,
+                timeout=OR_TIMEOUT,
+            )
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=2048,
+                temperature=0.85,
+                stream=True,
+            )
+            print(f"[OpenRouter] Streaming from model: {model}")
             in_thinking = False
-            
-            tool_call_id = None
-            tool_name = None
-            tool_args = ""
-            
             for chunk in response:
                 if chunk.choices:
                     delta = chunk.choices[0].delta
-                    
-                    if delta.tool_calls:
-                        tc = delta.tool_calls[0]
-                        if tc.id: tool_call_id = tc.id
-                        if tc.function and tc.function.name: tool_name = tc.function.name
-                        if tc.function and tc.function.arguments: tool_args += tc.function.arguments
-                        continue
                     
                     # Handle reasoning_content if present
                     reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
                     if reasoning:
                         if not in_thinking:
-                            yield "<think>\n"
+                            yield "<think>"
                             in_thinking = True
                         yield reasoning
                         yielded_any = True
                     else:
                         if in_thinking:
-                            yield "\n</think>\n"
+                            yield "</think>"
                             in_thinking = False
                         
                         content = getattr(delta, "content", None)
@@ -219,101 +181,33 @@ def query_openrouter_stream(prompt: str, preferred_model: str = None):
                             yield content
                             yielded_any = True
             
-            if tool_name == "search_web":
-                if in_thinking:
-                    yield "\n</think>\n"
-                    in_thinking = False
-                
-                try:
-                    args_dict = json.loads(tool_args)
-                    query = args_dict.get("query", "")
-                except Exception:
-                    query = tool_args
-                
-                yield f"<think>🔍 Searching the web for: {query}...</think>\n\n"
-                
-                # Execute search
-                search_results = web_search(query)
-                if not search_results:
-                    search_results = "No results found."
-                    
-                messages.append({
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [{
-                        "id": tool_call_id,
-                        "type": "function",
-                        "function": {"name": tool_name, "arguments": tool_args}
-                    }]
-                })
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tool_call_id,
-                    "name": tool_name,
-                    "content": search_results
-                })
-                
-                response2 = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    max_tokens=2048,
-                    temperature=0.85,
-                    stream=True,
-                )
-                
-                for chunk in response2:
-                    if chunk.choices:
-                        delta = chunk.choices[0].delta
-                        reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
-                        if reasoning:
-                            if not in_thinking:
-                                yield "<think>\n"
-                                in_thinking = True
-                            yield reasoning
-                            yielded_any = True
-                        else:
-                            if in_thinking:
-                                yield "\n</think>\n"
-                                in_thinking = False
-                            content = getattr(delta, "content", None)
-                            if content:
-                                yield content
-                                yielded_any = True
-            
             if in_thinking:
-                yield "\n</think>\n"
+                yield "</think>"
             
-            if not yielded_any and not tool_name:
+            if not yielded_any:
                 # Model connected but returned no actual content — try the next one
                 print(f"[OpenRouter] {model} returned empty response, trying next model...")
                 last_error = Exception(f"Empty response from {model}")
-                break  # break while loop to try next model
+                continue  # fall through to next model
 
             return  # Successful completion of stream
-            
         except Exception as e:
             err_str = str(e)
-            if attempt_with_tools and not yielded_any and "tool" in err_str.lower():
-                print(f"[OpenRouter] {model} doesn't support tools. Retrying without tools... ({err_str})")
-                attempt_with_tools = False
-                continue  # Retry same model without tools
-                
             if yielded_any:
                 print(f"[OpenRouter ERROR] Mid-stream failure on {model}: {err_str}")
                 raise
                 
-            if ("429" in err_str or "400" in err_str or "404" in err_str or "rate" in err_str.lower()
+            if ("429" in err_str or "400" in err_str or "rate" in err_str.lower()
                     or "not a valid model" in err_str.lower()
                     or "timeout" in err_str.lower() or "timed out" in err_str.lower()):
                 print(f"[OpenRouter] {model} skipped ({type(e).__name__}) during stream initialization, trying next...")
                 last_error = e
-                break  # try next model
+                continue
             import traceback
             print("[OpenRouter ERROR]", type(e).__name__, err_str)
             traceback.print_exc()
             raise RuntimeError(f"OpenRouter error — {type(e).__name__}: {e}")
-            
-    raise RuntimeError(f"All models rate-limited or failed. Try again in 30 seconds. Last error: {last_error}")
+    raise RuntimeError(f"All models rate-limited. Try again in 30 seconds. Last error: {last_error}")
 
 
 # ─────────────────────────────────────────
@@ -840,7 +734,17 @@ SEARCH_NO = [
     r"\bwrite (a |the )?(function|class|script|component|query|loop|api|endpoint)\b",
 ]
 
-
+def should_search(text: str) -> bool:
+    if not text or len(text.strip()) < 6:
+        return False
+    tl = text.lower().strip()
+    for pat in SEARCH_NO:
+        if re.search(pat, tl):
+            return False
+    for pat in SEARCH_YES:
+        if re.search(pat, tl):
+            return True
+    return False
 
 def refine_query(text: str) -> str:
     t = text.strip()
@@ -883,6 +787,7 @@ def web_search(raw_query: str, max_results: int = 6) -> str:
 # ─────────────────────────────────────────
 def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> str:
     mem_context = memory_to_context(mem)
+    web_context = web_search(user_message) if should_search(user_message) else ""
 
     rr_patterns = [
         r"\bred rooms?\b", r"\blocanto\b", r"\bphone entertain",
@@ -906,6 +811,13 @@ def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> s
         mem_context,
     ]
 
+    if web_context:
+        parts += [
+            "",
+            "══════════ LIVE WEB SEARCH RESULTS ══════════",
+            "Use these to inform your answer. Weave naturally — do not paste them raw.",
+            web_context,
+        ]
 
     if is_rr:
         parts += [
