@@ -160,24 +160,30 @@ def query_openrouter_stream(prompt: str, preferred_model: str = None):
     last_error = None
     for model in models:
         yielded_any = False
-        try:
-            client = OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=OPENROUTER_API_KEY,
-                timeout=OR_TIMEOUT,
-            )
-            
-            messages = [{"role": "user", "content": prompt}]
-            
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_tokens=2048,
-                temperature=0.85,
-                stream=True,
-                tools=TOOLS
-            )
-            print(f"[OpenRouter] Streaming from model: {model}")
+        attempt_with_tools = True
+        
+        while True:
+            try:
+                client = OpenAI(
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=OPENROUTER_API_KEY,
+                    timeout=OR_TIMEOUT,
+                )
+                
+                messages = [{"role": "user", "content": prompt}]
+                
+                kwargs = {
+                    "model": model,
+                    "messages": messages,
+                    "max_tokens": 2048,
+                    "temperature": 0.85,
+                    "stream": True,
+                }
+                if attempt_with_tools:
+                    kwargs["tools"] = TOOLS
+                
+                response = client.chat.completions.create(**kwargs)
+                print(f"[OpenRouter] Streaming from model: {model} (tools={attempt_with_tools})")
             in_thinking = False
             
             tool_call_id = None
@@ -281,26 +287,33 @@ def query_openrouter_stream(prompt: str, preferred_model: str = None):
                 # Model connected but returned no actual content — try the next one
                 print(f"[OpenRouter] {model} returned empty response, trying next model...")
                 last_error = Exception(f"Empty response from {model}")
-                continue  # fall through to next model
+                break  # break while loop to try next model
 
             return  # Successful completion of stream
+            
         except Exception as e:
             err_str = str(e)
+            if attempt_with_tools and not yielded_any and "tool" in err_str.lower():
+                print(f"[OpenRouter] {model} doesn't support tools. Retrying without tools... ({err_str})")
+                attempt_with_tools = False
+                continue  # Retry same model without tools
+                
             if yielded_any:
                 print(f"[OpenRouter ERROR] Mid-stream failure on {model}: {err_str}")
                 raise
                 
-            if ("429" in err_str or "400" in err_str or "rate" in err_str.lower()
+            if ("429" in err_str or "400" in err_str or "404" in err_str or "rate" in err_str.lower()
                     or "not a valid model" in err_str.lower()
                     or "timeout" in err_str.lower() or "timed out" in err_str.lower()):
                 print(f"[OpenRouter] {model} skipped ({type(e).__name__}) during stream initialization, trying next...")
                 last_error = e
-                continue
+                break  # try next model
             import traceback
             print("[OpenRouter ERROR]", type(e).__name__, err_str)
             traceback.print_exc()
             raise RuntimeError(f"OpenRouter error — {type(e).__name__}: {e}")
-    raise RuntimeError(f"All models rate-limited. Try again in 30 seconds. Last error: {last_error}")
+            
+    raise RuntimeError(f"All models rate-limited or failed. Try again in 30 seconds. Last error: {last_error}")
 
 
 # ─────────────────────────────────────────
