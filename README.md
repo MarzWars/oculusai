@@ -28,90 +28,104 @@ Code. Copy. Strategy. Memory. Uncensored. All in one.
 
 ---
 
-# Oculus AI (Uncensored)
+## What is Oculus?
 
-One-line elevator pitch
+Oculus is a custom AI assistant powered by **OpenRouter** — a gateway to multiple large language models — with a full persistent memory system, automated live web search, multi-user authentication, and a clean dark UI. It handles both **developer work** and **marketing work** without switching tools.
 
-A lightweight, self-hostable AI web app for exploring large language models without preset filters — built for researchers and teams who need an uncensored sandbox for experimentation and production prototypes.
+It remembers who you are. It searches the web when it needs to. It writes real, working code. It generates ads, copy, and strategy. And it does all of it without filler — and without guardrails blocking legitimate adult ad content.
 
-Why it matters
+---
 
-Oculus AI provides a fast, web-based interface to interact with multiple LLM backends, keep long-term memory per user, and run workflows that combine web search, memory, and model reasoning.
+## ⚙️ Core Capabilities
 
-Quick wins — Try it in under 5 minutes
+| Capability | Description |
+|---|---|
+| 🔐 **Multi-User Auth** | Register, login, and logout — each user's data is fully isolated |
+| 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences and facts across sessions via Supabase |
+| 🔄 **Real-Time Streaming** | Token-by-token streaming so responses appear word-by-word in real time |
+| 🔬 **Collapsible Thinking** | Shows the AI's internal reasoning live in greyed-out font, folding it into a collapsible block when the final response starts |
+| 🌐 **Live Web Search** | Pulls real-time information using Tavily Search automatically when the query demands it |
+| 💻 **Developer Assistant** | Writes full working code, debugs errors, explains logic — Python, JS, SQL, React, Bash and more |
+| 📣 **Marketing Engine** | Ad copy, branding, social strategy, customer replies, CIPC basics |
+| 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns |
+| 🔄 **Model Fallback Chain** | If the primary AI model is busy, the system automatically tries the next one — no manual intervention needed |
 
-1. Clone the repo
+---
 
-   git clone https://github.com/MarzWars/oculusai.git
-   cd oculusai
-
-2. Create a virtualenv & install
-
-   python -m venv .venv
-   source .venv/bin/activate   # macOS / Linux
-   .venv\Scripts\activate     # Windows
-   pip install -r requirements.txt
-
-3. Run locally (example)
-
-   # replace with the project's actual start command if different
-   python app.py
-
-4. Open http://localhost:8000 (or the port printed by the server)
-
-If you require API keys, place them in a .env file or set them in your host environment (see "Environment" below).
-
-Demo / Screenshots
-
-Include a screenshot or short GIF showing the UI. Example:
-
-![screenshot](static/screenshot.png)
-
-If you have a hosted demo, it's linked at the top: https://oculusai.onrender.com/
-
-Highlights
-
-- Fast, minimal UI for prompt experimentation
-- Extensible adapter system for multiple LLM backends via OpenRouter
-- Long-term, per-user memory stored in Supabase
-- Real-time token streaming for live responses
-- Exportable conversation logs and prompt histories
-
-Quick usage example
-
-```python
-from oculusai import Client
-client = Client(api_key="YOUR_API_KEY")
-print(client.chat("Say hello in a pirate voice"))
-```
-
-Architecture overview
+## 🏗️ Architecture
 
 ```
 Oculus AI
 │
 ├── Flask              → Web server + routing + session-based auth
 ├── OpenRouter API     → AI model gateway (OpenAI-compatible)
+│   ├── Dolphin Mistral 24B Venice  → Primary — uncensored, adult-content tuned
+│   ├── Llama 3.3 70B               → Fallback 1 — fast, unmoderated
+│   ├── Nex N2 Pro                  → Fallback 2 — fast MoE, unmoderated
+│   ├── Nemotron Super 120B         → Fallback 3 — large, unmoderated
+│   ├── Hermes 3 Llama 405B         → Fallback 4 — very large, unmoderated
+│   └── Nemotron Ultra 550B         → Fallback 5 — last resort
 ├── Supabase Auth      → User registration, login, logout
 ├── Supabase DB        → Persistent memory + chat history per user
 ├── Tavily Search      → Live web search when needed
 └── Prompt Engine      → Injects memory, search results, date/time into every request
 ```
 
-Deployment & Requirements
+### How the Fallback Chain Works
 
-- Python 3.10+
-- Supabase project (for auth & storage)
-- OpenRouter API key (or configured LLM backend)
-- A host (Render, Vercel, Heroku, or similar) or run locally
+Each request tries the models in order. If a model is **rate-limited (429)**, returns an **invalid ID (400)**, or **times out (45 seconds)**, it is skipped and the next model is tried automatically. The response always comes from whichever model picks it up first.
 
-Install dependencies
+---
 
-```bash
-pip install -r requirements.txt
+## 🧠 Memory Schema
+
+Oculus stores everything it learns about you in Supabase — isolated per user. The memory record looks like this:
+
+```json
+{
+  "profile": {
+    "name": "",
+    "role": "",
+    "company": "",
+    "location": "",
+    "email": "",
+    "phone": ""
+  },
+  "clients": [],
+  "projects": [],
+  "preferences": [],
+  "important_facts": [],
+  "topics_discussed": [],
+  "deadlines": [],
+  "session_count": 0,
+  "message_count": 0,
+  "first_seen": "",
+  "last_seen": ""
+}
 ```
 
-Environment variables (example)
+Memory is extracted automatically from natural conversation — no forms, no setup. Just talk.
+
+---
+
+## 🚀 Deployment
+
+### Requirements
+
+- Python 3.10+
+- A [Supabase](https://supabase.com) account
+- A [Render](https://render.com) account (or any Python host)
+- An [OpenRouter](https://openrouter.ai) account (free tier works; credits recommended for speed)
+
+### Install dependencies
+
+```bash
+pip install flask openai supabase tavily-python requests
+```
+
+### Environment variables
+
+Set these in your Render dashboard under **Environment**:
 
 ```env
 SUPABASE_URL=your_supabase_project_url
@@ -121,7 +135,11 @@ TAVILY_API_KEY=your_tavily_api_key
 OPENROUTER_API_KEY=your_openrouter_api_key
 ```
 
-Supabase table setup (example)
+> **Get your OpenRouter key:** Sign up at [openrouter.ai](https://openrouter.ai) → Settings → API Keys
+
+### Supabase table setup
+
+Run this in your Supabase SQL editor:
 
 ```sql
 -- Per-user memory
@@ -138,45 +156,83 @@ CREATE TABLE oculus_chat (
 );
 ```
 
-Project structure (overview)
+Also go to **Supabase → Authentication → Settings** and disable **"Enable email confirmations"** so users can log in immediately after registering.
+
+### Run locally
+
+```bash
+python app.py
+```
+
+---
+
+## 📁 Project Structure
 
 ```
 oculus-ai/
-├── app.py
-├── requirements.txt
+├── app.py              # Flask backend — all logic lives here
+├── requirements.txt    # Dependencies (flask, openai, supabase, tavily-python)
 ├── static/
-│   ├── oculus.js
-│   ├── style.css
-│   ├── oculus_logo.svg
-│   └── favicon.ico
+│   ├── oculus.js       # Frontend — send/receive, markdown render, code blocks
+│   ├── style.css       # Dark UI theme
+│   ├── oculus_logo.svg # Full logo with wordmark
+│   ├── oculus_avatar.svg # Avatar / chat icon
+│   └── favicon.ico     # Browser tab icon
 └── README.md
 ```
 
-Contributing
+---
 
-Contributions are welcome. A CONTRIBUTING.md will land soon with setup, tests, and style guides. If you're getting started, look for issues labeled `good first issue`.
+## 💸 OpenRouter Costs & Speed
 
-License
+| Setup | Response Time | Models Available | Rate Limits |
+|---|---|---|---|
+| **Free tier** | 30 sec — 2+ min | Shared pool | Shared with all users |
+| **With credits ($5–$10)** | **5 – 15 seconds** | Dolphin 24B (primary) | Your own quota |
 
-This repository is available under the MIT License. See LICENSE for details.
+At approximately **$0.20 per million tokens**, a typical message (system prompt + request + response ≈ 2,500 tokens) costs roughly **0.05 US cents**. A $5 top-up covers around **1,500+ messages**.
 
-Security and community
+Add credits at: [openrouter.ai → Settings → Credits](https://openrouter.ai/settings/credits)
 
-- Consider adding SECURITY.md and CODE_OF_CONDUCT.md for contributor trust.
-- Add GitHub topics: ai, lms, chatbot, research, python, webapp, prompt-engineering
+---
 
-What changed in this update
+## ⚡ Design Philosophy
 
-- Clarified the elevator pitch and quick-start instructions
-- Added a small "Try it" quick-start so newcomers can run the app in minutes
-- Added explicit environment variable notes and sample Supabase schema
-- Called out contributing/next steps (CONTRIBUTING.md, good-first-issue)
+- **Clarity over fluff** — responses are direct and useful, never padded
+- **Function over theory** — it does the work, not just talks about it
+- **Memory that actually works** — context survives across sessions and deploys
+- **Code that runs** — no pseudocode, no placeholders, no "add your logic here"
+- **Private by design** — every user's data is fully isolated, no crossover
+- **Uncensored by design** — models chosen specifically for minimal guardrails on adult/creative content
+- **Premium User Experience** — real-time word-by-word streaming combined with dynamic styling and custom animated reasoning blocks
 
-Next steps I can do for you
+---
 
-- Create CONTRIBUTING.md and CODE_OF_CONDUCT.md
-- Add 2–3 ready-to-implement `good first issue` issue templates and open them in the repo
-- Draft social post copy (Hacker News/Reddit/Twitter)
-- Create a short demo GIF checklist and hosting steps
+## 💀 Final Note
 
-If you want any of those created, tell me which and I'll add them directly to the repository.
+Oculus is not a wrapper around a chatbot. It is a system built around a specific use case — running a digital agency — with memory, tooling, and personality designed for that context. The AI backend is chosen specifically to handle adult content without refusals, making it a practical tool for legitimate businesses like Red Rooms.
+
+**Built to think. Built to execute. Built for real work.**
+
+---
+
+## 🚀 Coming Soon
+
+| Capability | Description |
+|---|---|
+| 🧠 **AI-Powered Memory Extraction** | Upgrade the regex-based `extract_memory` system to use a dedicated AI post-turn pipeline for cleaner, more accurate long-term memory. |
+| 🔬 **Advanced Multi-Stage Reasoning** | Introduce a reasoning pre-pass for complex prompts so Oculus structures its thinking before generating a final response. |
+| ✨ **Rich Markdown + HTML Rendering** | Full markdown-to-HTML formatter for the `render_bubble` pipeline — tables, links, code blocks all rendered cleanly. |
+| 🧬 **AI Inference Memory** | An `ai_notes` memory layer generated by the model itself — retaining inferred context, patterns, and observations beyond literal user statements. |
+
+---
+
+<div align="center">
+
+<img src="static/oculus_avatar.svg" alt="Oculus Avatar" width="64"/>
+
+### 🚀 [oculusai.onrender.com](https://oculusai.onrender.com/)
+
+<sub>Built with 🖤 by Alex · Lex Digitals</sub>
+
+</div>
