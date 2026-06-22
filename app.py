@@ -45,6 +45,7 @@ OR_MODELS = [
     "meta-llama/llama-3.3-70b-instruct",                         # PAID - fast, cheap, general purpose
     "nex-agi/nex-n2-pro",                                        # PAID - fast MoE
     "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, slow, unmoderated
+    "cognitivecomputations/dolphin-mistral-24b-venice-edition",        # PAID - Venice uncensored
     "nvidia/nemotron-3-ultra-550b-a55b",                         # PAID - very large model
     "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE fallback - Venice uncensored
     "nvidia/nemotron-3-super-120b-a12b:free",                         # FREE fallback
@@ -53,7 +54,7 @@ OR_MODELS = [
     "nousresearch/hermes-3-llama-3.1-405b:free",                      # FREE fallback
     "nvidia/nemotron-3-ultra-550b-a55b:free",                         # FREE fallback
 ]
-OR_TIMEOUT = 20  # seconds per model attempt before trying next
+OR_TIMEOUT = 45  # seconds per model attempt before trying next
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
 
@@ -119,8 +120,27 @@ def query_openrouter(prompt: str) -> str:
 
 def query_openrouter_stream(prompt: str):
     """Send a prompt to OpenRouter, streaming the response chunks, cycling through fallbacks on error."""
+    # Check if this is an ad prompt to prioritize uncensored models
+    is_ad = "RED ROOMS" in prompt or "operator ad" in prompt.lower() or "vulgar" in prompt.lower()
+    
+    models = list(OR_MODELS)
+    if is_ad:
+        priority = [
+            "cognitivecomputations/dolphin-mistral-24b-venice-edition",
+            "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+            "nousresearch/hermes-3-llama-3.1-405b",
+            "nousresearch/hermes-3-llama-3.1-405b:free",
+        ]
+        for m in reversed(priority):
+            if m in models:
+                models.remove(m)
+                models.insert(0, m)
+            else:
+                models.insert(0, m)
+                
     last_error = None
-    for model in OR_MODELS:
+    for model in models:
+        yielded_any = False
         try:
             client = OpenAI(
                 base_url="https://openrouter.ai/api/v1",
@@ -149,6 +169,7 @@ def query_openrouter_stream(prompt: str):
                             yield "<think>"
                             in_thinking = True
                         yield reasoning
+                        yielded_any = True
                     else:
                         if in_thinking:
                             yield "</think>"
@@ -157,12 +178,17 @@ def query_openrouter_stream(prompt: str):
                         content = getattr(delta, "content", None)
                         if content:
                             yield content
+                            yielded_any = True
             
             if in_thinking:
                 yield "</think>"
             return  # Successful completion of stream
         except Exception as e:
             err_str = str(e)
+            if yielded_any:
+                print(f"[OpenRouter ERROR] Mid-stream failure on {model}: {err_str}")
+                raise
+                
             if ("429" in err_str or "400" in err_str or "rate" in err_str.lower()
                     or "not a valid model" in err_str.lower()
                     or "timeout" in err_str.lower() or "timed out" in err_str.lower()):
@@ -303,7 +329,8 @@ Never use: "call now", "limited time", "don't miss out"
 
 ## THINKING & REASONING
 - If a task is complex, requires character counting, checklists, planning, or self-correction, you MUST wrap your entire thinking process inside `<think>...</think>` tags at the very beginning of your response.
-- Perform all counting, verification, draft creation, and rules checking inside the `<think>...</think>` tags.
+- Keep your thinking process extremely concise and focused. Do not output long essays, unnecessary commentary, or excessive token-heavy counting/monologue inside the `<think>...</think>` tags.
+- Never copy or mimic long-winded thinking monologues from the chat history.
 - The content outside the tags must contain only the final, clean response. Do not repeat your thinking process or internal monologue outside the tags.
 
 ## FINAL RULES
