@@ -42,8 +42,9 @@ if not OPENROUTER_API_KEY:
 # Unmoderated/general models (Paid versions first for high speed, then free fallbacks)
 # Full fallback chain used when no model is pinned
 OR_MODELS = [
-    "nvidia/nemotron-3-super-120b-a12b",                         # PAID - fast, cheap, unmoderated
-    "meta-llama/llama-3.3-70b-instruct",                         # PAID - balanced
+    "nousresearch/hermes-3-llama-3.1-70b",                       # PAID - fast, cheap, unmoderated
+    "nvidia/nemotron-3-super-120b-a12b",                         # PAID - fast, cheap, moderated
+    "meta-llama/llama-3.3-70b-instruct",                         # PAID - balanced, moderated
     "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, unmoderated
     "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE - Venice uncensored
     "nvidia/nemotron-3-super-120b-a12b:free",                         # FREE fallback
@@ -53,13 +54,14 @@ OR_MODELS = [
 
 # Models shown in the manual switcher UI (label, tag, id)
 MODEL_OPTIONS = [
-    {"id": "nvidia/nemotron-3-super-120b-a12b",    "name": "Nemotron 3 Super 120B", "tag": "Fast · Cheap"},
-    {"id": "meta-llama/llama-3.3-70b-instruct",    "name": "Llama 3.3 70B",         "tag": "Balanced"},
-    {"id": "nousresearch/hermes-3-llama-3.1-405b", "name": "Hermes 3 405B",          "tag": "Powerful"},
+    {"id": "nousresearch/hermes-3-llama-3.1-70b",   "name": "Hermes 3 70B",          "tag": "Unmoderated · Fast · Cheap"},
+    {"id": "nvidia/nemotron-3-super-120b-a12b",    "name": "Nemotron 3 Super 120B", "tag": "Moderated · Fast · Cheap"},
+    {"id": "meta-llama/llama-3.3-70b-instruct",    "name": "Llama 3.3 70B",         "tag": "Moderated · Balanced"},
+    {"id": "nousresearch/hermes-3-llama-3.1-405b", "name": "Hermes 3 405B",          "tag": "Unmoderated · Powerful"},
     {"id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-                                                   "name": "Dolphin Mistral 24B",    "tag": "Free · Uncensored"},
+                                                   "name": "Dolphin Mistral 24B",    "tag": "Uncensored · Free"},
 ]
-DEFAULT_MODEL = "nvidia/nemotron-3-super-120b-a12b"
+DEFAULT_MODEL = "nousresearch/hermes-3-llama-3.1-70b"
 OR_TIMEOUT = 45  # seconds per model attempt before trying next
 VERBATIM_TURNS  = 6
 SUMMARISE_AFTER = 10
