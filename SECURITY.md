@@ -8,10 +8,10 @@ Below are the versions of this project currently supported with security updates
 
 | Version | Supported |
 | ------- | --------- |
-| 5.1.x   | :white_check_mark: Supported |
-| 5.0.x   | :x: End of Life |
-| 4.0.x   | :white_check_mark: Supported |
-| < 4.0   | :x: End of Life |
+| 5.5.x   | :white_check_mark: Supported |
+| 3.0.x   | :x: End of Life |
+| 4.2.x   | :x: End of Life |
+| < 2.0   | :x: End of Life |
 
 ## Reporting a Vulnerability
 
