@@ -137,9 +137,29 @@ def query_openrouter_stream(prompt: str):
                 stream=True,
             )
             print(f"[OpenRouter] Streaming from model: {model}")
+            in_thinking = False
             for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+                if chunk.choices:
+                    delta = chunk.choices[0].delta
+                    
+                    # Handle reasoning_content if present
+                    reasoning = getattr(delta, "reasoning_content", None) or getattr(delta, "reasoning", None)
+                    if reasoning:
+                        if not in_thinking:
+                            yield "<think>"
+                            in_thinking = True
+                        yield reasoning
+                    else:
+                        if in_thinking:
+                            yield "</think>"
+                            in_thinking = False
+                        
+                        content = getattr(delta, "content", None)
+                        if content:
+                            yield content
+            
+            if in_thinking:
+                yield "</think>"
             return  # Successful completion of stream
         except Exception as e:
             err_str = str(e)
