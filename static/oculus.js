@@ -272,6 +272,60 @@ function insertAiBubble(rawText) {
 }
 
 
+// ── Live streaming renderer ───────────────
+// Used DURING a stream: lightweight, no heavy markdown parsing.
+// Splits text into thinking blocks + response, adds a blinking cursor.
+function renderStreamingHtml(text) {
+  let html = '';
+  let remaining = text;
+
+  // Match both <think>...</think> and <thinking>...</thinking>
+  const closedRe = /<(?:think|thinking)>([\s\S]*?)<\/(?:think|thinking)>/gi;
+  const openRe   = /<(?:think|thinking)>([\s\S]*)$/i;
+
+  // 1. Closed (complete) thinking blocks
+  const closedBlocks = [];
+  remaining = remaining.replace(closedRe, (_, thought) => {
+    closedBlocks.push(thought);
+    return '';
+  });
+  for (const thought of closedBlocks) {
+    html += `<details class="thinking-block">
+  <summary class="thinking-header">
+    <span class="thinking-icon">🧠</span>
+    <span class="thinking-title">Thought Process</span>
+  </summary>
+  <div class="thinking-content">${escapeHtml(thought)}</div>
+</details>`;
+  }
+
+  // 2. Open (still streaming) thinking block
+  const openMatch = remaining.match(openRe);
+  if (openMatch) {
+    remaining = remaining.replace(openRe, '');
+    html += `<details class="thinking-block" open>
+  <summary class="thinking-header">
+    <span class="thinking-icon">🧠</span>
+    <span class="thinking-title">Thought Process</span>
+  </summary>
+  <div class="thinking-content">${escapeHtml(openMatch[1])}<span class="stream-cursor"></span></div>
+</details>`;
+  }
+
+  // 3. Main response text (everything outside thinking tags)
+  const responseText = remaining
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
+
+  if (responseText || (!openMatch && !closedBlocks.length)) {
+    html += `<span class="stream-response">${responseText}<span class="stream-cursor"></span></span>`;
+  }
+
+  return html;
+}
+
+
 // ── Send message ──────────────────────────
 async function sendMessage() {
   const input = document.getElementById('msgInput');
@@ -327,20 +381,20 @@ async function sendMessage() {
           hasShown = true;
         }
 
-        // Render markdown for the accumulated response
-        bubble.innerHTML = renderMarkdown(accumulated);
+        // Live streaming render — lightweight, shows text as it arrives
+        bubble.innerHTML = renderStreamingHtml(accumulated);
         scrollToBottom();
       }
     }
 
-    // Always dismiss the typing indicator when the stream ends,
-    // even if no content was ever received (empty/whitespace response).
+    // Stream finished
     if (!hasShown) {
       hideTyping();
       row.remove();
       insertAiBubble('_No response received from the model. Please try again._');
     } else {
-      // Highlight any code blocks in the final message
+      // Final pass: full markdown rendering now that we have the complete text
+      bubble.innerHTML = renderMarkdown(accumulated);
       bubble.querySelectorAll('.code-block pre code').forEach(el => highlight(el));
       scrollToBottom();
     }
