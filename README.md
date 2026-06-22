@@ -45,7 +45,6 @@ It remembers who you are. It searches the web when it needs to. It writes real, 
 | 🌐 **Live Web Search** | Pulls real-time information using Tavily Search when the question needs it |
 | 💻 **Developer Assistant** | Writes full working code, debugs errors, explains logic — Python, JS, SQL, React, Bash and more |
 | 📣 **Marketing Engine** | Ad copy, branding, SEO, social strategy, customer replies, CIPC basics |
-| 🔞 **Red Rooms Ad Mode** | Specialised mode for generating adult phone entertainment operator ads — uncensored, first-person, format-enforced |
 | 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns |
 | 🔄 **Model Fallback Chain** | If the primary AI model is busy, the system automatically tries the next one — no manual intervention needed |
 
