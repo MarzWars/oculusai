@@ -73,8 +73,6 @@ def login_required(f):
     """Decorator — redirects to /login if the user is not in session."""
     @wraps(f)
     def decorated(*args, **kwargs):
-        if SUPABASE_KEY == "dummy":
-            return f(*args, **kwargs)
         if "user_id" not in session:
             return redirect("/login")
         return f(*args, **kwargs)
@@ -392,32 +390,6 @@ def is_ad_content(text: str) -> bool:
     return any(re.search(p, tl) for p in AD_CONTENT_PATTERNS)
 
 def load_memory(user_id: str) -> dict:
-    if SUPABASE_KEY == "dummy":
-        return {
-            "profile": {
-                "name": "Jane Doe",
-                "role": "Software Engineer",
-                "company": "Lex Digitals",
-                "location": "Cape Town",
-                "email": "jane@example.com",
-                "phone": "+27 82 123 4567"
-            },
-            "clients": ["PayFast", "Yoco"],
-            "projects": [
-                {"name": "E-Commerce Gateway Integration", "added": "2026-06-23"}
-            ],
-            "preferences": [
-                "Prefers Python over JavaScript",
-                "Hates Tailwind CSS"
-            ],
-            "important_facts": [
-                "Alex built Oculus AI"
-            ],
-            "topics_discussed": ["Python", "Flask"],
-            "deadlines": [
-                {"item": "Launch Beta Website", "date": "by Friday", "added": "2026-06-23"}
-            ]
-        }
     try:
         res = supabase.table("oculus_memory").select("memory").eq("user_id", user_id).execute()
         mem = res.data[0].get("memory", {}) if res.data else {}
@@ -906,11 +878,6 @@ def memory_to_context(mem: dict) -> str:
 # CHAT HISTORY + SUMMARY  (per-user, Supabase)
 # ─────────────────────────────────────────
 def load_history(user_id: str) -> list:
-    if SUPABASE_KEY == "dummy":
-        return [
-            {"role": "user", "text": "Hello Oculus! How is my profile looking?"},
-            {"role": "ai", "text": "Hello Jane! Your profile is set up as Software Engineer at Lex Digitals. I remember that you prefer Python and dislike Tailwind CSS."}
-        ]
     try:
         res = supabase.table("oculus_chat").select("messages").eq("user_id", user_id).execute()
         if res.data:
@@ -1358,10 +1325,10 @@ def logout():
 # MAIN CHAT ROUTE
 # ─────────────────────────────────────────
 @app.route("/")
-# @login_required
+@login_required
 def home():
-    uid          = current_user_id() or "test-user-123"
-    email        = current_email() or "jane@example.com"
+    uid          = current_user_id()
+    email        = current_email()
     chat_history = load_history(uid)
     memory       = load_memory(uid)
     chat_html    = "".join(render_bubble(m) for m in chat_history)
