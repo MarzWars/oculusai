@@ -430,7 +430,7 @@ def _add_unique(lst: list, item: str, max_len: int = 30) -> bool:
         lst[:] = lst[-max_len:]
     return True
 
-def extract_memory(text: str, mem: dict) -> bool:
+def extract_memory_regex(text: str, mem: dict) -> bool:
     if is_ad_content(text):
         return False
     changed = False
@@ -587,6 +587,193 @@ def extract_memory(text: str, mem: dict) -> bool:
                 changed = True
 
     return changed
+
+
+def query_openrouter_extraction(prompt: str, preferred_model: str = None) -> str:
+    """Send a prompt to OpenRouter with low temperature for extraction, cycling through fallback models on rate-limit."""
+    last_error = None
+    models = _build_model_list(preferred_model)
+    for model in models:
+        try:
+            client = OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=OPENROUTER_API_KEY,
+                timeout=20,
+            )
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=1024,
+                temperature=0.1,
+            )
+            print(f"[OpenRouter Extraction] Used model: {model}")
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            err_str = str(e)
+            if ("429" in err_str or "400" in err_str or "rate" in err_str.lower()
+                    or "not a valid model" in err_str.lower()
+                    or "timeout" in err_str.lower() or "timed out" in err_str.lower()):
+                print(f"[OpenRouter Extraction] {model} skipped ({type(e).__name__}), trying next...")
+                last_error = e
+                continue
+            print("[OpenRouter Extraction ERROR]", type(e).__name__, err_str)
+            raise RuntimeError(f"OpenRouter extraction error — {type(e).__name__}: {e}")
+    raise RuntimeError(f"All extraction models failed/rate-limited. Last error: {last_error}")
+
+
+def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
+    """Safely merges LLM updates dictionary into current_memory."""
+    changed = False
+
+    # 1. Profile
+    profile_updates = updates.get("profile", {})
+    if isinstance(profile_updates, dict):
+        for field in ["name", "role", "company", "location", "email", "phone"]:
+            new_val = (profile_updates.get(field) or "").strip()
+            if new_val and current_memory["profile"].get(field) != new_val:
+                current_memory["profile"][field] = new_val
+                changed = True
+
+    # 2. Clients
+    client_updates = updates.get("clients", [])
+    if isinstance(client_updates, list):
+        for client in client_updates:
+            if isinstance(client, str):
+                if _add_unique(current_memory["clients"], client, max_len=20):
+                    changed = True
+
+    # 3. Projects
+    project_updates = updates.get("projects", [])
+    if isinstance(project_updates, list):
+        for project in project_updates:
+            proj_name = ""
+            if isinstance(project, dict) and "name" in project:
+                proj_name = project["name"].strip()
+            elif isinstance(project, str):
+                proj_name = project.strip()
+                
+            if proj_name:
+                existing = [p.get("name", "").lower() for p in current_memory["projects"]]
+                if proj_name.lower() not in existing:
+                    current_memory["projects"].append({
+                        "name": proj_name[:80],
+                        "added": datetime.now().strftime("%Y-%m-%d")
+                    })
+                    if len(current_memory["projects"]) > 15:
+                        current_memory["projects"] = current_memory["projects"][-15:]
+                    changed = True
+
+    # 4. Preferences
+    pref_updates = updates.get("preferences", [])
+    if isinstance(pref_updates, list):
+        for pref in pref_updates:
+            if isinstance(pref, str):
+                if _add_unique(current_memory["preferences"], pref, max_len=15):
+                    changed = True
+
+    # 5. Important Facts
+    fact_updates = updates.get("important_facts", [])
+    if isinstance(fact_updates, list):
+        for fact in fact_updates:
+            if isinstance(fact, str):
+                if _add_unique(current_memory["important_facts"], fact, max_len=20):
+                    changed = True
+
+    # 6. Deadlines
+    deadline_updates = updates.get("deadlines", [])
+    if isinstance(deadline_updates, list):
+        for dl in deadline_updates:
+            item_name = ""
+            date_val = ""
+            if isinstance(dl, dict) and "item" in dl and "date" in dl:
+                item_name = dl["item"].strip()
+                date_val = dl["date"].strip()
+            elif isinstance(dl, str):
+                item_name = dl.strip()
+                date_val = "Not specified"
+                
+            if item_name:
+                current_memory["deadlines"].append({
+                    "item": item_name[:80],
+                    "date": date_val[:60],
+                    "added": datetime.now().strftime("%Y-%m-%d")
+                })
+                if len(current_memory["deadlines"]) > 10:
+                    current_memory["deadlines"] = current_memory["deadlines"][-10:]
+                changed = True
+
+    # 7. Topics
+    topic_updates = updates.get("topics_discussed", [])
+    if isinstance(topic_updates, list):
+        for topic in topic_updates:
+            if isinstance(topic, str):
+                if _add_unique(current_memory["topics_discussed"], topic, max_len=30):
+                    changed = True
+
+    return changed
+
+
+def extract_memory_llm(user_message: str, current_memory: dict, preferred_model: str = None) -> bool:
+    """Uses LLM to extract structured memory from the user's message, falling back to regex on failure."""
+    if is_ad_content(user_message):
+        return False
+
+    prompt = f"""You are a precise, background memory extraction agent for Oculus AI.
+Your job is to analyze the user's latest message and their current memory JSON state, and output a JSON object representing the UPDATES to apply.
+
+Analyze the user's message and determine if it contains new or updated facts, role changes, project references, company, location, clients, deadlines, preferences, or topics.
+
+Compare the message to the current memory state:
+- "profile": Extract "name", "role", "company", "location", "email", "phone". If any field is updated or revealed, include it.
+- "clients": List of client names they work with. Only include new, unique client names.
+- "projects": List of project names. Only include new projects.
+- "preferences": List of user preference strings (e.g., "likes Python", "dislikes Tailwind"). Only include new preferences.
+- "important_facts": List of important facts (e.g., "Alex's business logo is blue"). Only include new facts.
+- "deadlines": List of deadline objects, e.g., {{"item": "Launch website", "date": "by Friday"}}.
+- "topics_discussed": List of general topics mentioned (e.g., "Python", "React", "SEO", "Facebook ads").
+
+Your output MUST be a single, valid JSON object matching the updates.
+Do NOT include any explanation, intro, or formatting wrappers like ```json ... ```. Just return the raw JSON string.
+If nothing should be updated, return exactly: {{}}
+
+Current Memory State:
+{json.dumps(current_memory, indent=2)}
+
+User Latest Message:
+"{user_message}"
+
+JSON Updates:"""
+
+    try:
+        raw_res = query_openrouter_extraction(prompt, preferred_model=preferred_model)
+        cleaned = raw_res.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n", "", cleaned)
+            cleaned = re.sub(r"\n```$", "", cleaned)
+        cleaned = cleaned.strip()
+        
+        updates = json.loads(cleaned)
+        if isinstance(updates, dict) and updates:
+            return merge_memory_updates(current_memory, updates)
+    except Exception as e:
+        print(f"[Memory Extraction Error] LLM extraction failed: {e}. Falling back to Regex extraction.")
+        return extract_memory_regex(user_message, current_memory)
+    return False
+
+
+def extract_memory_async(user_id: str, user_message: str, preferred_model: str = None):
+    """Background task to run LLM memory extraction and save to Supabase."""
+    try:
+        mem = load_memory(user_id)
+        changed = extract_memory_llm(user_message, mem, preferred_model=preferred_model)
+        if changed:
+            save_memory(user_id, mem)
+            print(f"[Async Memory] Successfully extracted and saved new LLM facts for user: {user_id}")
+    except Exception as e:
+        print("[Async Memory Error] Failed to extract LLM memory:", e)
+
 
 def memory_to_context(mem: dict) -> str:
     lines = []
@@ -1239,7 +1426,7 @@ def ask():
     history = load_history(uid)
     memory  = load_memory(uid)
 
-    extract_memory(user_message, memory)
+    extract_memory_regex(user_message, memory)
     memory["message_count"] = memory.get("message_count", 0) + 1
     save_memory(uid, memory)
 
@@ -1265,6 +1452,12 @@ def ask():
             threading.Thread(
                 target=maybe_summarise_history,
                 args=(uid, history.copy())
+            ).start()
+
+            # Run deep LLM extraction in background
+            threading.Thread(
+                target=extract_memory_async,
+                args=(uid, user_message, preferred_model)
             ).start()
         except Exception as e:
             error = f"\n[Error: {str(e)}]"
