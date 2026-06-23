@@ -1475,6 +1475,105 @@ def clear():
 
 
 # ─────────────────────────────────────────
+# MEMORY API ENDPOINTS
+# ─────────────────────────────────────────
+@app.route("/api/memory", methods=["GET"])
+@login_required
+def get_memory_api():
+    uid = current_user_id()
+    mem = load_memory(uid)
+    return jsonify(mem)
+
+
+@app.route("/api/memory/update", methods=["POST"])
+@login_required
+def update_memory_api():
+    uid = current_user_id()
+    data = request.get_json() or {}
+    update_type = data.get("type")
+    
+    mem = load_memory(uid)
+    changed = False
+    
+    if update_type == "profile":
+        field = data.get("field")
+        value = (data.get("value") or "").strip()
+        if field in mem["profile"]:
+            mem["profile"][field] = value
+            changed = True
+            
+    elif update_type == "list":
+        key = data.get("key")
+        value = (data.get("value") or "").strip()
+        if key in ["preferences", "important_facts", "clients", "topics_discussed"]:
+            if _add_unique(mem[key], value):
+                changed = True
+                
+    elif update_type == "project":
+        name = (data.get("name") or "").strip()
+        if name:
+            existing = [p.get("name", "").lower() for p in mem["projects"]]
+            if name.lower() not in existing:
+                mem["projects"].append({
+                    "name": name[:80],
+                    "added": datetime.now().strftime("%Y-%m-%d")
+                })
+                changed = True
+                
+    elif update_type == "deadline":
+        item = (data.get("item") or "").strip()
+        date_val = (data.get("date") or "").strip()
+        if item and date_val:
+            mem["deadlines"].append({
+                "item": item[:80],
+                "date": date_val[:60],
+                "added": datetime.now().strftime("%Y-%m-%d")
+            })
+            changed = True
+            
+    if changed:
+        save_memory(uid, mem)
+        return jsonify({"status": "ok", "memory": mem})
+    return jsonify({"status": "no_change", "error": "Invalid request parameters or duplicate item"}), 400
+
+
+@app.route("/api/memory/delete", methods=["POST"])
+@login_required
+def delete_memory_api():
+    uid = current_user_id()
+    data = request.get_json() or {}
+    key = data.get("key")
+    
+    mem = load_memory(uid)
+    changed = False
+    
+    if key in ["preferences", "important_facts", "clients", "topics_discussed"]:
+        val = data.get("value")
+        if val in mem[key]:
+            mem[key].remove(val)
+            changed = True
+            
+    elif key == "projects":
+        name = data.get("name")
+        initial_len = len(mem["projects"])
+        mem["projects"] = [p for p in mem["projects"] if p.get("name") != name]
+        if len(mem["projects"]) < initial_len:
+            changed = True
+            
+    elif key == "deadlines":
+        item = data.get("item")
+        initial_len = len(mem["deadlines"])
+        mem["deadlines"] = [d for d in mem["deadlines"] if d.get("item") != item]
+        if len(mem["deadlines"]) < initial_len:
+            changed = True
+            
+    if changed:
+        save_memory(uid, mem)
+        return jsonify({"status": "ok", "memory": mem})
+    return jsonify({"status": "no_change", "error": "Item not found"}), 404
+
+
+# ─────────────────────────────────────────
 # ASK
 # ─────────────────────────────────────────
 @app.route("/ask", methods=["POST"])
