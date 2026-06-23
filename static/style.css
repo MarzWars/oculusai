@@ -992,4 +992,80 @@ code.inline-code {
     width: 100%;
     right: -100%;
   }
+}
+
+/* ── File Uploads & Drag Overlay ───────────────────────── */
+.drag-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(10, 10, 12, 0.85); backdrop-filter: blur(8px);
+  z-index: 9999; display: none; align-items: center; justify-content: center;
+  pointer-events: none; opacity: 0; transition: opacity .25s ease;
+}
+.drag-overlay.active {
+  display: flex; pointer-events: auto; opacity: 1;
+}
+.drag-overlay-card {
+  display: flex; flex-direction: column; align-items: center; gap: 16px;
+  padding: 40px 60px; border: 2px dashed var(--accent); border-radius: var(--radius);
+  background: rgba(22, 22, 28, 0.7); box-shadow: 0 12px 40px rgba(0,0,0,0.5);
+  max-width: 90%; text-align: center; transform: scale(0.9); transition: transform .25s ease;
+}
+.drag-overlay.active .drag-overlay-card {
+  transform: scale(1);
+}
+.drag-overlay-card svg {
+  width: 64px; height: 64px; fill: var(--accent);
+}
+.drag-overlay-card span {
+  font-family: var(--font-sans); font-size: 18px; font-weight: 500; color: var(--text);
+}
+.drag-overlay-card .drag-overlay-hint {
+  font-size: 13px; color: var(--text-muted); font-weight: 400;
+}
+
+.attach-btn {
+  width: 34px; height: 34px; border-radius: var(--radius-sm);
+  background: none; border: none;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: all .15s;
+}
+.attach-btn:hover { background: var(--bg-4); }
+.attach-btn svg { width: 18px; height: 18px; fill: var(--text-muted); transition: fill .15s; }
+.attach-btn:hover svg { fill: var(--text); }
+
+/* File Chips Container */
+.upload-chips-container {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 8px 12px; margin-bottom: 8px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  max-height: 100px; overflow-y: auto;
+}
+.upload-chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px; background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25); border-radius: 6px;
+  font-size: 12px; color: var(--text); transition: all 0.15s;
+}
+.upload-chip:hover {
+  border-color: var(--accent); background: rgba(99, 102, 241, 0.18);
+}
+.upload-chip .chip-name {
+  max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.upload-chip .chip-size {
+  color: var(--text-faint); font-size: 10px;
+}
+.upload-chip .chip-delete {
+  cursor: pointer; font-size: 14px; font-weight: bold; color: var(--text-muted);
+  line-height: 1; transition: color 0.15s;
+}
+.upload-chip .chip-delete:hover {
+  color: var(--danger);
+}
+.upload-chip.warning {
+  border-color: var(--warning); background: rgba(245, 158, 11, 0.08);
+}
+.upload-chip.warning:hover {
+  background: rgba(245, 158, 11, 0.15);
 }

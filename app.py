@@ -1373,6 +1373,15 @@ def home():
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
 </head>
 <body>
+<div class="drag-overlay" id="dragOverlay">
+    <div class="drag-overlay-card">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+        </svg>
+        <span>Drop files here to upload to Oculus AI</span>
+        <span class="drag-overlay-hint">Supports plaintext and programming code files (.py, .js, .json, .css, etc.)</span>
+    </div>
+</div>
 <div class="app-shell">
 
     <header>
@@ -1439,7 +1448,14 @@ def home():
     </div>
 
     <div class="input-area">
+        <div class="upload-chips-container" id="uploadChipsContainer" style="display:none;"></div>
         <div class="input-wrap">
+            <button class="attach-btn" onclick="triggerFileSelect()" type="button" title="Attach files">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-3.31 2.69-6 6-6s6 2.69 6 6v10.5c0 4.42-3.58 8-8 8s-8-3.58-8-8V6h2v9.5c0 3.31 2.69 6 6 6s6-2.69 6-6V5c0-2.21-1.79-4-4-4s-4 1.79-4 4v12.5c0 1.1.9 2 2 2s2-.9 2-2V6h2z"/>
+                </svg>
+            </button>
+            <input type="file" id="fileInput" style="display:none;" multiple onchange="handleFileSelect(event)">
             <textarea id="msgInput" placeholder="Message Oculus AI…"
                       autocomplete="off" onkeydown="handleKey(event)"
                       rows="1"></textarea>

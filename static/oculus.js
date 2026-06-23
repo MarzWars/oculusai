@@ -846,3 +846,130 @@ async function deleteBrainDeadline(item) {
     console.error("Failed to delete deadline:", err);
   }
 }
+
+// ─────────────────────────────────────────
+// FILE ATTACHMENTS & DRAG-AND-DROP UPLOAD
+// ─────────────────────────────────────────
+
+function triggerFileSelect() {
+  const input = document.getElementById('fileInput');
+  if (input) input.click();
+}
+
+function handleFileSelect(event) {
+  const files = event.target.files;
+  if (files && files.length) {
+    uploadFiles(files);
+  }
+}
+
+async function uploadFiles(files) {
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files', files[i]);
+  }
+
+  try {
+    const resp = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+    const data = await resp.json();
+    if (resp.ok || data.status === 'partial') {
+      renderUploadedChips(data.files);
+      if (data.errors && data.errors.length) {
+        alert("Upload warning:\n" + data.errors.join("\n"));
+      }
+    } else {
+      alert("Upload failed: " + (data.error || "Unknown error"));
+    }
+  } catch (err) {
+    console.error("Error uploading files:", err);
+    alert("Upload failed: Network or connection error.");
+  }
+}
+
+function renderUploadedChips(files) {
+  const container = document.getElementById('uploadChipsContainer');
+  if (!container) return;
+
+  if (!files || files.length === 0) {
+    container.innerHTML = '';
+    container.style.display = 'none';
+    return;
+  }
+
+  container.innerHTML = files.map(file => {
+    // Label warning for files larger than 500KB (512,000 bytes)
+    const isLarge = file.size > 512000;
+    const warningClass = isLarge ? 'warning' : '';
+    const displaySize = (file.size / 1024).toFixed(1) + ' KB';
+    const warningTitle = isLarge ? 'title="Large file - may consume substantial context limit"' : '';
+
+    return `
+      <div class="upload-chip ${warningClass}" ${warningTitle}>
+        <span class="chip-icon">📄</span>
+        <span class="chip-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
+        <span class="chip-size">(${displaySize})</span>
+        <span class="chip-delete" onclick="deleteUploadedFile('${escapeHtml(file.name)}')">×</span>
+      </div>
+    `;
+  }).join('');
+
+  container.style.display = 'flex';
+}
+
+async function deleteUploadedFile(filename) {
+  try {
+    const resp = await fetch('/api/upload/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: filename })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      renderUploadedChips(data.files);
+    }
+  } catch (err) {
+    console.error("Error deleting file:", err);
+  }
+}
+
+function clearUploadedChipsUI() {
+  const container = document.getElementById('uploadChipsContainer');
+  if (container) {
+    container.innerHTML = '';
+    container.style.display = 'none';
+  }
+  const fileInput = document.getElementById('fileInput');
+  if (fileInput) fileInput.value = '';
+}
+
+// Window drag-and-drop listener setup
+window.addEventListener('dragenter', (e) => {
+  e.preventDefault();
+  const overlay = document.getElementById('dragOverlay');
+  if (overlay) overlay.classList.add('active');
+});
+
+window.addEventListener('dragover', (e) => {
+  e.preventDefault();
+});
+
+window.addEventListener('dragleave', (e) => {
+  // Only deactivate if dragged out of browser viewport bounds
+  if (e.clientX === 0 && e.clientY === 0) {
+    const overlay = document.getElementById('dragOverlay');
+    if (overlay) overlay.classList.remove('active');
+  }
+});
+
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  const overlay = document.getElementById('dragOverlay');
+  if (overlay) overlay.classList.remove('active');
+
+  if (e.dataTransfer && e.dataTransfer.files.length) {
+    uploadFiles(e.dataTransfer.files);
+  }
+});
