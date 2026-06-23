@@ -496,3 +496,353 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 });
+
+
+// ─────────────────────────────────────────
+// 🧠 OCULUS BRAIN (MEMORY DASHBOARD) CONTROLLER
+// ─────────────────────────────────────────
+let currentBrainMemory = null;
+
+async function toggleBrain() {
+  const drawer = document.getElementById('brainDrawer');
+  const overlay = document.getElementById('brainOverlay');
+  if (!drawer || !overlay) return;
+
+  const isOpen = drawer.classList.contains('open');
+  if (isOpen) {
+    drawer.classList.remove('open');
+    overlay.classList.remove('open');
+  } else {
+    drawer.classList.add('open');
+    overlay.classList.add('open');
+    await loadBrainMemory();
+  }
+}
+
+async function loadBrainMemory() {
+  const content = document.querySelector('.brain-drawer-content');
+  if (content) content.innerHTML = '<div class="brain-loading">Loading brain state...</div>';
+
+  try {
+    const resp = await fetch('/api/memory');
+    if (!resp.ok) throw new Error("Failed to fetch memory");
+    currentBrainMemory = await resp.json();
+    renderBrain(currentBrainMemory);
+  } catch (err) {
+    if (content) content.innerHTML = `<div class="brain-loading" style="color:var(--red)">Error: ${err.message}</div>`;
+  }
+}
+
+function renderBrain(mem) {
+  const content = document.querySelector('.brain-drawer-content');
+  if (!content) return;
+
+  const profile = mem.profile || {};
+  const clients = mem.clients || [];
+  const projects = mem.projects || [];
+  const preferences = mem.preferences || [];
+  const importantFacts = mem.important_facts || [];
+  const deadlines = mem.deadlines || [];
+
+  content.innerHTML = `
+    <!-- PROFILE SECTION -->
+    <div class="brain-section">
+      <div class="brain-section-title">User Profile</div>
+      <div class="brain-profile-grid">
+        <div class="brain-profile-field">
+          <label>Name</label>
+          <input type="text" id="bp-name" value="${escapeHtml(profile.name || '')}">
+        </div>
+        <div class="brain-profile-field">
+          <label>Role</label>
+          <input type="text" id="bp-role" value="${escapeHtml(profile.role || '')}">
+        </div>
+        <div class="brain-profile-field">
+          <label>Company</label>
+          <input type="text" id="bp-company" value="${escapeHtml(profile.company || '')}">
+        </div>
+        <div class="brain-profile-field">
+          <label>Location</label>
+          <input type="text" id="bp-location" value="${escapeHtml(profile.location || '')}">
+        </div>
+        <div class="brain-profile-field">
+          <label>Email</label>
+          <input type="email" id="bp-email" value="${escapeHtml(profile.email || '')}">
+        </div>
+        <div class="brain-profile-field">
+          <label>Phone</label>
+          <input type="text" id="bp-phone" value="${escapeHtml(profile.phone || '')}">
+        </div>
+        <button class="brain-save-btn" onclick="saveBrainProfile()">Save Profile</button>
+      </div>
+    </div>
+
+    <!-- PREFERENCES SECTION -->
+    <div class="brain-section">
+      <div class="brain-section-title">Preferences</div>
+      <div class="brain-list" id="brain-prefs-list">
+        ${renderBrainListItems("preferences", preferences)}
+      </div>
+      <div class="brain-add-form">
+        <input type="text" class="brain-add-input" id="brain-pref-add-input" placeholder="Add preference...">
+        <button class="brain-add-btn" onclick="addBrainListItem('preferences', 'brain-pref-add-input')">Add</button>
+      </div>
+    </div>
+
+    <!-- IMPORTANT FACTS SECTION -->
+    <div class="brain-section">
+      <div class="brain-section-title">Important Facts</div>
+      <div class="brain-list" id="brain-facts-list">
+        ${renderBrainListItems("important_facts", importantFacts)}
+      </div>
+      <div class="brain-add-form">
+        <input type="text" class="brain-add-input" id="brain-fact-add-input" placeholder="Add fact...">
+        <button class="brain-add-btn" onclick="addBrainListItem('important_facts', 'brain-fact-add-input')">Add</button>
+      </div>
+    </div>
+
+    <!-- ACTIVE PROJECTS SECTION -->
+    <div class="brain-section">
+      <div class="brain-section-title">Active Projects</div>
+      <div class="brain-list" id="brain-projects-list">
+        ${renderBrainProjectItems(projects)}
+      </div>
+      <div class="brain-add-form">
+        <input type="text" class="brain-add-input" id="brain-project-add-input" placeholder="Add project name...">
+        <button class="brain-add-btn" onclick="addBrainProject()">Add</button>
+      </div>
+    </div>
+
+    <!-- DEADLINES SECTION -->
+    <div class="brain-section">
+      <div class="brain-section-title">Upcoming Deadlines</div>
+      <div class="brain-list" id="brain-deadlines-list">
+        ${renderBrainDeadlineItems(deadlines)}
+      </div>
+      <div class="brain-add-form" style="flex-direction:column; gap:6px;">
+        <div style="display:flex; gap:6px;">
+          <input type="text" style="flex:2;" class="brain-add-input" id="brain-deadline-add-item" placeholder="Task name...">
+          <input type="text" style="flex:1;" class="brain-add-input" id="brain-deadline-add-date" placeholder="Date (e.g. Friday)...">
+        </div>
+        <button class="brain-add-btn" style="width:100%" onclick="addBrainDeadline()">Add Deadline</button>
+      </div>
+    </div>
+
+    <!-- CLIENTS SECTION -->
+    <div class="brain-section">
+      <div class="brain-section-title">Known Clients</div>
+      <div class="brain-list" id="brain-clients-list">
+        ${renderBrainListItems("clients", clients)}
+      </div>
+      <div class="brain-add-form">
+        <input type="text" class="brain-add-input" id="brain-client-add-input" placeholder="Add client name...">
+        <button class="brain-add-btn" onclick="addBrainListItem('clients', 'brain-client-add-input')">Add</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderBrainListItems(key, lst) {
+  if (!lst || lst.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
+  return lst.map(item => `
+    <div class="brain-list-item">
+      <span class="brain-list-text">${escapeHtml(item)}</span>
+      <button class="brain-delete-btn" onclick="deleteBrainListItem('${key}', \`${escapeHtml(item).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete fact">×</button>
+    </div>
+  `).join('');
+}
+
+function renderBrainProjectItems(projects) {
+  if (!projects || projects.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
+  return projects.map(proj => `
+    <div class="brain-list-item">
+      <div class="brain-deadline-info">
+        <span class="brain-list-text" style="color:var(--text); font-weight:500;">${escapeHtml(proj.name || '')}</span>
+        <span>Added: ${escapeHtml(proj.added || '')}</span>
+      </div>
+      <button class="brain-delete-btn" onclick="deleteBrainProject(\`${escapeHtml(proj.name).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete project">×</button>
+    </div>
+  `).join('');
+}
+
+function renderBrainDeadlineItems(deadlines) {
+  if (!deadlines || deadlines.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
+  return deadlines.map(dl => `
+    <div class="brain-list-item">
+      <div class="brain-deadline-info">
+        <span class="brain-list-text" style="color:var(--text); font-weight:500;">${escapeHtml(dl.item || '')}</span>
+        <span style="color:var(--purple); font-weight:500;">Due: ${escapeHtml(dl.date || '')}</span>
+      </div>
+      <button class="brain-delete-btn" onclick="deleteBrainDeadline(\`${escapeHtml(dl.item).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete deadline">×</button>
+    </div>
+  `).join('');
+}
+
+async function saveBrainProfile() {
+  const fields = ["name", "role", "company", "location", "email", "phone"];
+  let updatedCount = 0;
+  
+  for (const field of fields) {
+    const el = document.getElementById(`bp-${field}`);
+    if (!el) continue;
+    
+    const newVal = el.value.trim();
+    const oldVal = (currentBrainMemory.profile || {})[field] || "";
+    
+    if (newVal !== oldVal) {
+      try {
+        const resp = await fetch('/api/memory/update', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            type: "profile",
+            field: field,
+            value: newVal
+          })
+        });
+        if (resp.ok) updatedCount++;
+      } catch (err) {
+        console.error(`Failed to update field ${field}:`, err);
+      }
+    }
+  }
+  
+  if (updatedCount > 0) {
+    alert("Profile saved successfully!");
+    await loadBrainMemory();
+  }
+}
+
+async function addBrainListItem(key, inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  const val = el.value.trim();
+  if (!val) return;
+
+  try {
+    const resp = await fetch('/api/memory/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: "list",
+        key: key,
+        value: val
+      })
+    });
+    if (resp.ok) {
+      el.value = '';
+      await loadBrainMemory();
+    } else {
+      const errData = await resp.json();
+      alert(errData.error || "Failed to add item.");
+    }
+  } catch (err) {
+    alert("Error updating memory: " + err.message);
+  }
+}
+
+async function deleteBrainListItem(key, value) {
+  try {
+    const resp = await fetch('/api/memory/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: key,
+        value: value
+      })
+    });
+    if (resp.ok) {
+      await loadBrainMemory();
+    }
+  } catch (err) {
+    console.error("Failed to delete memory item:", err);
+  }
+}
+
+async function addBrainProject() {
+  const el = document.getElementById('brain-project-add-input');
+  if (!el) return;
+  const val = el.value.trim();
+  if (!val) return;
+
+  try {
+    const resp = await fetch('/api/memory/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: "project",
+        name: val
+      })
+    });
+    if (resp.ok) {
+      el.value = '';
+      await loadBrainMemory();
+    }
+  } catch (err) {
+    console.error("Failed to add project:", err);
+  }
+}
+
+async function deleteBrainProject(name) {
+  try {
+    const resp = await fetch('/api/memory/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: "projects",
+        name: name
+      })
+    });
+    if (resp.ok) {
+      await loadBrainMemory();
+    }
+  } catch (err) {
+    console.error("Failed to delete project:", err);
+  }
+}
+
+async function addBrainDeadline() {
+  const elItem = document.getElementById('brain-deadline-add-item');
+  const elDate = document.getElementById('brain-deadline-add-date');
+  if (!elItem || !elDate) return;
+  const item = elItem.value.trim();
+  const date = elDate.value.trim();
+  if (!item || !date) return;
+
+  try {
+    const resp = await fetch('/api/memory/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        type: "deadline",
+        item: item,
+        date: date
+      })
+    });
+    if (resp.ok) {
+      elItem.value = '';
+      elDate.value = '';
+      await loadBrainMemory();
+    }
+  } catch (err) {
+    console.error("Failed to add deadline:", err);
+  }
+}
+
+async function deleteBrainDeadline(item) {
+  try {
+    const resp = await fetch('/api/memory/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        key: "deadlines",
+        item: item
+      })
+    });
+    if (resp.ok) {
+      await loadBrainMemory();
+    }
+  } catch (err) {
+    console.error("Failed to delete deadline:", err);
+  }
+}
