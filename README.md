@@ -230,11 +230,16 @@ Add credits at: [openrouter.ai → Settings → Credits](https://openrouter.ai/s
 
 ## 🚀 Coming Soon
 
-| Capability | Description |
-|---|---|
-| 🌐 **Smart Search Classifier** | LLM-based classifier to dynamically route queries to web search and generate optimised Tavily query strings, replacing simple keyword matching |
-| 🔬 **Multi-Stage Reasoning Pre-pass** | A structured reasoning step before final response generation — Oculus thinks through complex prompts in stages before committing to an answer |
-| 🖼️ **Image Understanding** | Upload screenshots, mockups, or diagrams and ask Oculus to explain, reproduce, or improve them |
+| Capability                          | Description |
+|-------------------------------------|-----------|
+| 🌐 **Smart Search Classifier**      | LLM decides when and how to search the web, generating optimised queries |
+| 🔬 **Multi-Stage Reasoning**        | Structured reasoning pass before final response for better complex task handling |
+| 🖼️ **Image Understanding**         | Upload and analyze screenshots, mockups, and designs |
+| 🏢 **Client Workspaces**            | Fully isolated per-client environments with dedicated memory, files, and projects |
+| 📋 **Project & Deadline Management**| Automatic task/deadline extraction and tracking |
+| 📄 **Advanced RAG & Document Intelligence** | Semantic search over PDFs, DOCX, and other documents with citations |
+| 🔧 **AI Actions Engine**            | Generate proposals, send emails, create tasks, and automate workflows |
+| 📱 **Enhanced Mobile Experience**   | Full PWA support and optimised Brain UI on mobile |
 
 ---
 
