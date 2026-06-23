@@ -1,0 +1,296 @@
+import re
+import json
+from datetime import datetime
+from flask import Blueprint, session, request, Response, jsonify, render_template
+
+from config import Config
+from backend.extensions import supabase
+from backend.models import query_openrouter, query_openrouter_stream
+from backend.auth import login_required, current_user_id, current_email
+from backend.memory import (
+    load_memory, save_memory, extract_memory_regex, 
+    extract_memory_async, memory_to_context
+)
+from backend.prompts import SYSTEM_PROMPT
+from backend.search import web_search, should_search
+
+chat_bp = Blueprint("chat", __name__)
+
+def load_history(user_id: str) -> list:
+    try:
+        res = supabase.table("oculus_chat").select("messages").eq("user_id", user_id).execute()
+        if res.data:
+            return res.data[0].get("messages", [])
+    except Exception as e:
+        print("History load error:", e)
+    return []
+
+def save_history(user_id: str, messages: list):
+    try:
+        supabase.table("oculus_chat").upsert({
+            "user_id":  user_id,
+            "messages": messages
+        }).execute()
+    except Exception as e:
+        print("History save error:", e)
+
+def load_summary(user_id: str) -> str:
+    try:
+        res = supabase.table("oculus_chat").select("summary").eq("user_id", user_id).execute()
+        if res.data:
+            return res.data[0].get("summary", "")
+    except Exception as e:
+        print("Summary load error:", e)
+    return ""
+
+def save_summary(user_id: str, s: str):
+    try:
+        supabase.table("oculus_chat").upsert({
+            "user_id": user_id,
+            "summary": s
+        }).execute()
+    except Exception as e:
+        print("Summary save error:", e)
+
+def maybe_summarise_history(user_id: str, history: list):
+    if len(history) < Config.SUMMARISE_AFTER:
+        return
+    half      = len(history) // 2
+    old_chunk = history[:half]
+    lines     = []
+    for msg in old_chunk:
+        role = "User" if msg["role"] == "user" else "Oculus"
+        lines.append(f"{role}: {msg['text'][:120]}")
+    chunk_text = "\n".join(lines)
+    summary_prompt = (
+        "Summarise the following conversation in 3-5 sentences. "
+        "Focus on: topics covered, decisions made, user facts revealed, ongoing work. "
+        "Be concise. Plain text only.\n\n"
+        f"{chunk_text}\n\nSummary:"
+    )
+    try:
+        new_summary = query_openrouter(summary_prompt)
+        if new_summary:
+            existing = load_summary(user_id)
+            combined = (existing + " " + new_summary).strip() if existing else new_summary
+            if len(combined) > 700:
+                combined = combined[-700:]
+            save_summary(user_id, combined)
+        history[:] = history[half:]
+        save_history(user_id, history)
+    except Exception:
+        pass
+
+
+def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> str:
+    mem_context = memory_to_context(mem)
+    web_context = web_search(user_message) if should_search(user_message) else ""
+
+    # Format uploaded files context
+    from backend.files import UPLOADED_FILES_CACHE
+    uploaded_files = UPLOADED_FILES_CACHE.get(user_id, [])
+    file_context = ""
+    if uploaded_files:
+        blocks = []
+        for uf in uploaded_files:
+            name = uf.get("name", "unknown")
+            content = uf.get("content", "")
+            blocks.append(f"[File: {name}]\n[Content]:\n{content}\n[End of File: {name}]")
+        file_context = "══════════ UPLOADED FILE CONTEXT ══════════\nUse the following user-attached files to answer their query:\n\n" + "\n\n".join(blocks)
+
+    rr_patterns = [
+        r"\bred rooms?\b", r"\blocanto\b", r"\bphone entertain",
+        r"\boperator ad\b", r"\bad for.*operator\b"
+    ]
+    is_rr = any(re.search(p, user_message, re.IGNORECASE) for p in rr_patterns)
+
+    now     = datetime.now()
+    live_dt = (
+        f"{now.strftime('%A, %d %B %Y')}  |  "
+        f"Time: {now.strftime('%H:%M')} SAST (UTC+2)"
+    )
+
+    parts = [SYSTEM_PROMPT, ""]
+    parts += [
+        "══════════ LIVE SYSTEM INFO ══════════",
+        f"- Current date and time: {live_dt}",
+        "  Use this as the authoritative date/time. Never guess the date.",
+        "",
+        "══════════ PERSISTENT USER MEMORY ══════════",
+        mem_context,
+    ]
+
+    if file_context:
+        parts += [
+            "",
+            file_context,
+        ]
+
+    if web_context:
+        parts += [
+            "",
+            "══════════ LIVE WEB SEARCH RESULTS ══════════",
+            "Use these to inform your answer. Weave naturally — do not paste them raw.",
+            web_context,
+        ]
+
+    if is_rr:
+        parts += [
+            "",
+            "══════════ RED ROOMS AD — MANDATORY CHECKLIST ══════════",
+            "You MUST perform your checklist verification and character counting inside `<think>...</think>` tags first.",
+            "1. Title is EXACTLY 60 characters — count every character including spaces",
+            "2. Description is 750–850 characters — rich, full, complete",
+            "3. Written entirely in first person (I / me / my)",
+            "4. Words 'red rooms', 'alex', 'oculus', 'lex digitals' do NOT appear anywhere",
+            "5. Tone is bold, adult, direct",
+            "",
+            "Output format:",
+            "<think>",
+            "[Perform your character counting, checks, and planning here]",
+            "</think>",
+            "**Title:** [exactly 60 chars]",
+            "**Description:** [750–850 chars]",
+        ]
+
+    parts += [
+        "",
+        "Follow formatting rules exactly. Blank lines between paragraphs. '- ' for bullets.",
+        "Code always in fenced code blocks with language specified. Never truncate code output.",
+        "Be concise unless depth is needed. Never start a response with the word 'I'.",
+        "",
+        "══════════ CONVERSATION HISTORY ══════════",
+    ]
+
+    stored_summary = load_summary(user_id)
+    if stored_summary:
+        parts.append(f"[Earlier summary]: {stored_summary}")
+        parts.append("")
+
+    prior = history[:-1]
+    for msg in prior[-Config.VERBATIM_TURNS:]:
+        role    = "User" if msg["role"] == "user" else "Oculus"
+        content = msg.get("text", "").strip()
+        if content:
+            parts.append(f"{role}: {content}")
+
+    parts += [
+        "",
+        "══════════ CURRENT MESSAGE ══════════",
+        f"User: {user_message}",
+        "",
+        "Oculus:",
+    ]
+
+    return "\n".join(parts)
+
+
+@chat_bp.route("/")
+@login_required
+def home():
+    uid          = current_user_id()
+    email        = current_email()
+    chat_history = load_history(uid)
+    memory       = load_memory(uid)
+    mem_name     = memory.get("profile", {}).get("name", "")
+    display_name = mem_name or email.split("@")[0]
+    greeting     = f"Welcome back, {display_name}." if chat_history else "What are we building today?"
+    active_model = session.get("selected_model", Config.DEFAULT_MODEL)
+    active_name  = next((m["name"] for m in Config.MODEL_OPTIONS if m["id"] == active_model), active_model)
+
+    return render_template(
+        "index.html",
+        email=email,
+        chat_history=chat_history,
+        greeting=greeting,
+        active_model=active_model,
+        active_name=active_name,
+        model_options=Config.MODEL_OPTIONS
+    )
+
+
+@chat_bp.route("/set_model", methods=["POST"])
+@login_required
+def set_model():
+    data  = request.get_json()
+    model = (data.get("model") or "").strip()
+    valid_ids = {m["id"] for m in Config.MODEL_OPTIONS}
+    if model not in valid_ids:
+        return jsonify({"error": "Invalid model"}), 400
+    session["selected_model"] = model
+    name = next((m["name"] for m in Config.MODEL_OPTIONS if m["id"] == model), model)
+    return jsonify({"status": "ok", "model": model, "name": name})
+
+
+@chat_bp.route("/clear", methods=["POST"])
+@login_required
+def clear():
+    uid = current_user_id()
+    try:
+        supabase.table("oculus_chat").upsert({
+            "user_id":  uid,
+            "messages": [],
+            "summary":  ""
+        }).execute()
+    except Exception as e:
+        print("Clear error:", e)
+    return jsonify({"status": "cleared"})
+
+
+@chat_bp.route("/ask", methods=["POST"])
+@login_required
+def ask():
+    uid          = current_user_id()
+    data         = request.get_json()
+    user_message = (data.get("message") or "").strip()
+    if not user_message:
+        return Response("No message provided.", mimetype="text/plain")
+
+    history = load_history(uid)
+    memory  = load_memory(uid)
+
+    extract_memory_regex(user_message, memory)
+    memory["message_count"] = memory.get("message_count", 0) + 1
+    save_memory(uid, memory)
+
+    history.append({"role": "user", "text": user_message})
+    save_history(uid, history)
+
+    prompt = build_prompt(uid, user_message, memory, history)
+    # Clear uploaded files cache immediately
+    from backend.files import UPLOADED_FILES_CACHE
+    UPLOADED_FILES_CACHE.pop(uid, None)
+    
+    preferred_model = session.get("selected_model", Config.DEFAULT_MODEL)
+
+    def generate():
+        try:
+            output_chunks = []
+            for chunk in query_openrouter_stream(prompt, preferred_model=preferred_model):
+                output_chunks.append(chunk)
+                yield chunk
+            
+            full_text = "".join(output_chunks)
+            history.append({"role": "ai", "text": full_text.strip()})
+            save_history(uid, history)
+
+            # Summarise in background after responding and saving
+            import threading
+            threading.Thread(
+                target=maybe_summarise_history,
+                args=(uid, history.copy())
+            ).start()
+
+            # Run deep LLM extraction in background
+            threading.Thread(
+                target=extract_memory_async,
+                args=(uid, user_message, preferred_model)
+            ).start()
+        except Exception as e:
+            error = f"\n[Error: {str(e)}]"
+            print("[ASK ERROR]", error)
+            yield error
+            history.append({"role": "ai", "text": error})
+            save_history(uid, history)
+
+    return Response(generate(), mimetype="text/event-stream")

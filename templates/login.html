@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Login — Oculus AI</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{background:#0d0d0f;color:#e8e8f0;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
+    .card{background:#141417;border:1px solid #2a2a32;border-radius:16px;padding:40px;width:100%;max-width:400px}
+    .logo{text-align:center;margin-bottom:32px}
+    .logo-icon{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#7c6af7,#9d78ff);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:#fff;margin:0 auto 12px;box-shadow:0 0 20px rgba(124,106,247,.3)}
+    .logo h1{font-size:20px;font-weight:700;color:#e8e8f0}
+    .logo p{font-size:13px;color:#8888a0;margin-top:4px}
+    .field{margin-bottom:16px}
+    label{display:block;font-size:13px;color:#8888a0;margin-bottom:6px}
+    input{width:100%;padding:11px 14px;background:#1c1c21;border:1px solid #2a2a32;border-radius:10px;color:#e8e8f0;font-size:14px;outline:none;transition:border-color .15s}
+    input:focus{border-color:#7c6af7;box-shadow:0 0 0 3px rgba(124,106,247,.1)}
+    .btn{width:100%;padding:12px;background:#7c6af7;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;margin-top:8px}
+    .btn:hover{background:#8f7af9}
+    .error{background:rgba(243,139,168,.1);border:1px solid rgba(243,139,168,.3);color:#f38ba8;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
+    .success{background:rgba(166,227,161,.1);border:1px solid rgba(166,227,161,.3);color:#a6e3a1;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
+    .switch{text-align:center;margin-top:20px;font-size:13px;color:#8888a0}
+    .switch a{color:#7c6af7;text-decoration:none}
+    .switch a:hover{text-decoration:underline}
+  </style>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">
+      <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+    </div>
+    <h1>Welcome Back</h1>
+    <p>Sign in to Oculus AI</p>
+  </div>
+  {% if error %}
+    <div class="error">{{ error }}</div>
+  {% endif %}
+  <form method="POST">
+    <div class="field">
+      <label>Email</label>
+      <input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input type="password" name="password" placeholder="Your password" required>
+    </div>
+    <button class="btn" type="submit">Sign In</button>
+  </form>
+  <div class="switch">Don't have an account? <a href="/register">Register</a></div>
+</div>
+</body>
+</html>

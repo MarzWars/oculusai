@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Oculus AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+</head>
+<body>
+<div class="drag-overlay" id="dragOverlay">
+    <div class="drag-overlay-card">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/>
+        </svg>
+        <span>Drop files here to upload to Oculus AI</span>
+        <span class="drag-overlay-hint">Supports plaintext and programming code files (.py, .js, .json, .css, etc.)</span>
+    </div>
+</div>
+<div class="app-shell">
+
+    <header>
+        <div class="logo-mark">
+            <div class="logo-icon">
+                <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+            </div>
+            <div class="logo-text">
+                <strong>Oculus AI</strong>
+                <span>Lex Digitals</span>
+            </div>
+        </div>
+        <div class="header-actions">
+            <span class="user-email">{{ email | esc }}</span>
+            <div class="model-selector">
+                <label class="model-label">Model</label>
+                <select id="modelSelect" onchange="setModel(this.value)" title="Switch AI model">
+                    {% for m in model_options %}
+                        <option value="{{ m.id }}" {% if m.id == active_model %}selected{% endif %}>
+                            {{ m.name }} — {{ m.tag }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="status-pill">
+                <span class="status-dot"></span>
+                <span class="status-label" id="modelStatus">{{ active_name }}</span>
+            </div>
+            <button class="brain-btn" onclick="toggleBrain()" title="Oculus Brain (Memory)">🧠 Brain</button>
+            <button class="clear-btn" onclick="clearChat()">Clear</button>
+            <form method="POST" action="/logout" style="margin:0">
+                <button class="logout-btn" type="submit">Sign out</button>
+            </form>
+        </div>
+    </header>
+
+    <div class="chat-feed" id="chatFeed">
+        {% if chat_history %}
+            <div class="date-divider">Today</div>
+            {% for m in chat_history %}
+                {% if m.role == 'user' %}
+                    <div class="bubble-row user-row">
+                        <div class="bubble user-bubble"><p>{{ m.text | esc }}</p></div>
+                        <div class="avatar user-avatar">
+                            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <circle cx="12" cy="8" r="4" fill="currentColor"/>
+                                <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                            </svg>
+                        </div>
+                    </div>
+                {% else %}
+                    <div class="bubble-row ai-row">
+                        <div class="avatar ai-avatar">
+                            <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+                        </div>
+                        <div class="bubble ai-bubble">{{ m.text | format_ai_response | safe }}</div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-state">
+                <div class="empty-icon">
+                    <img src="/static/oculus_avatar.svg" width="80" height="80" alt="Oculus">
+                </div>
+                <h3>{{ greeting }}</h3>
+                <p>Code, copy, strategy, ads — whatever you need, let's get into it.</p>
+                <div class="suggestion-chips">
+                    <div class="chip" onclick="fillMsg(this)">Write a Python script</div>
+                    <div class="chip" onclick="fillMsg(this)">Debug my code</div>
+                    <div class="chip" onclick="fillMsg(this)">Write a Facebook ad</div>
+                    <div class="chip" onclick="fillMsg(this)">Red Rooms ad</div>
+                    <div class="chip" onclick="fillMsg(this)">Build a REST API</div>
+                    <div class="chip" onclick="fillMsg(this)">Help with a customer reply</div>
+                </div>
+            </div>
+        {% endif %}
+
+        <div class="typing-indicator" id="typingIndicator">
+            <div class="avatar ai-avatar">
+                <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+            </div>
+            <div class="typing-text">Oculus is thinking<span class="dots"></span></div>
+        </div>
+
+        <div id="streamRow" style="display:none">
+            <div class="avatar ai-avatar">O</div>
+            <div id="streamBubble"></div>
+        </div>
+    </div>
+
+    <div class="input-area">
+        <div class="upload-chips-container" id="uploadChipsContainer" style="display:none;"></div>
+        <div class="input-wrap">
+            <button class="attach-btn" onclick="triggerFileSelect()" type="button" title="Attach files">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-3.31 2.69-6 6-6s6 2.69 6 6v10.5c0 4.42-3.58 8-8 8s-8-3.58-8-8V6h2v9.5c0 3.31 2.69 6 6 6s6-2.69 6-6V5c0-2.21-1.79-4-4-4s-4 1.79-4 4v12.5c0 1.1.9 2 2 2s2-.9 2-2V6h2z"/>
+                </svg>
+            </button>
+            <input type="file" id="fileInput" style="display:none;" multiple onchange="handleFileSelect(event)">
+            <textarea id="msgInput" placeholder="Message Oculus AI…"
+                      autocomplete="off" onkeydown="handleKey(event)"
+                      rows="1"></textarea>
+            <button class="send-btn" onclick="sendMessage()" title="Send">
+                <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
+        <div class="input-hint">Oculus can make mistakes. Verify important info.</div>
+    </div>
+
+</div>
+
+<!-- Oculus Brain Memory Drawer -->
+<div class="brain-drawer" id="brainDrawer">
+    <div class="brain-drawer-header">
+        <h3>🧠 Oculus Brain</h3>
+        <button class="close-drawer-btn" onclick="toggleBrain()">×</button>
+    </div>
+    <div class="brain-drawer-content">
+        <div class="brain-loading">Loading brain state...</div>
+    </div>
+</div>
+<div class="brain-overlay" id="brainOverlay" onclick="toggleBrain()"></div>
+
+<script src="/static/oculus.js"></script>
+</body>
+</html>
