@@ -83,9 +83,6 @@ def maybe_summarise_history(user_id: str, history: list):
 
 
 def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> str:
-    mem_context = memory_to_context(mem)
-    web_context = web_search(user_message) if should_search(user_message) else ""
-
     # Format uploaded files context
     from backend.files import UPLOADED_FILES_CACHE
     uploaded_files = UPLOADED_FILES_CACHE.get(user_id, [])
@@ -94,8 +91,13 @@ def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> s
         blocks = []
         for uf in uploaded_files:
             name = uf.get("name", "unknown")
-            content = uf.get("content", "")
-            blocks.append(f"[File: {name}]\n[Content]:\n{content}\n[End of File: {name}]")
+            if uf.get("is_long"):
+                size_kb = round(uf.get("size", 0) / 1024, 1)
+                summary = uf.get("summary", "")
+                blocks.append(f"[File: {name} (Size: {size_kb}KB, Summary: {summary})]\n(Note: This file is large and has been summarized to save context window.)")
+            else:
+                content = uf.get("content", "")
+                blocks.append(f"[File: {name}]\n[Content]:\n{content}\n[End of File: {name}]")
         file_context = "══════════ UPLOADED FILE CONTEXT ══════════\nUse the following user-attached files to answer their query:\n\n" + "\n\n".join(blocks)
 
     rr_patterns = [
@@ -110,79 +112,115 @@ def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> s
         f"Time: {now.strftime('%H:%M')} SAST (UTC+2)"
     )
 
-    parts = [SYSTEM_PROMPT, ""]
-    parts += [
-        "══════════ LIVE SYSTEM INFO ══════════",
-        f"- Current date and time: {live_dt}",
-        "  Use this as the authoritative date/time. Never guess the date.",
-        "",
-        "══════════ PERSISTENT USER MEMORY ══════════",
-        mem_context,
-    ]
+    web_raw_context = web_search(user_message) if should_search(user_message) else ""
 
-    if file_context:
+    # Start with default budget variables
+    verbatim_turns = Config.VERBATIM_TURNS
+    memory_max_results = 5
+    web_length_limit = len(web_raw_context)
+
+    while True:
+        # 1. Compile Memory Context
+        mem_context = memory_to_context(mem, user_message, max_results=memory_max_results)
+        
+        # 2. Compile Web Context
+        web_context = web_raw_context[:web_length_limit] if web_raw_context else ""
+
+        # 3. Assemble parts
+        parts = [SYSTEM_PROMPT, ""]
         parts += [
+            "══════════ LIVE SYSTEM INFO ══════════",
+            f"- Current date and time: {live_dt}",
+            "  Use this as the authoritative date/time. Never guess the date.",
             "",
-            file_context,
+            "══════════ PERSISTENT USER MEMORY ══════════",
+            mem_context,
         ]
 
-    if web_context:
+        if file_context:
+            parts += [
+                "",
+                file_context,
+            ]
+
+        if web_context:
+            parts += [
+                "",
+                "══════════ LIVE WEB SEARCH RESULTS ══════════",
+                "Use these to inform your answer. Weave naturally — do not paste them raw.",
+                web_context,
+            ]
+
+        if is_rr:
+            parts += [
+                "",
+                "══════════ RED ROOMS AD — MANDATORY CHECKLIST ══════════",
+                "You MUST perform your checklist verification and character counting inside `<think>...</think>` tags first.",
+                "1. Title is EXACTLY 60 characters — count every character including spaces",
+                "2. Description is 750–850 characters — rich, full, complete",
+                "3. Written entirely in first person (I / me / my)",
+                "4. Words 'red rooms', 'alex', 'oculus', 'lex digitals' do NOT appear anywhere",
+                "5. Tone is bold, adult, direct",
+                "",
+                "Output format:",
+                "<think>",
+                "[Perform your character counting, checks, and planning here]",
+                "</think>",
+                "**Title:** [exactly 60 chars]",
+                "**Description:** [750–850 chars]",
+            ]
+
         parts += [
             "",
-            "══════════ LIVE WEB SEARCH RESULTS ══════════",
-            "Use these to inform your answer. Weave naturally — do not paste them raw.",
-            web_context,
+            "Follow formatting rules exactly. Blank lines between paragraphs. '- ' for bullets.",
+            "Code always in fenced code blocks with language specified. Never truncate code output.",
+            "Be concise unless depth is needed. Never start a response with the word 'I'.",
+            "When answering, if you reference content from any user-attached files, cite them clearly in the format: 'According to [filename]...'",
+            "",
+            "══════════ CONVERSATION HISTORY ══════════",
         ]
 
-    if is_rr:
+        stored_summary = load_summary(user_id)
+        if stored_summary:
+            parts.append(f"[Earlier summary]: {stored_summary}")
+            parts.append("")
+
+        prior = history[:-1]
+        for msg in prior[-verbatim_turns:]:
+            role    = "User" if msg["role"] == "user" else "Oculus"
+            content = msg.get("text", "").strip()
+            if content:
+                parts.append(f"{role}: {content}")
+
         parts += [
             "",
-            "══════════ RED ROOMS AD — MANDATORY CHECKLIST ══════════",
-            "You MUST perform your checklist verification and character counting inside `<think>...</think>` tags first.",
-            "1. Title is EXACTLY 60 characters — count every character including spaces",
-            "2. Description is 750–850 characters — rich, full, complete",
-            "3. Written entirely in first person (I / me / my)",
-            "4. Words 'red rooms', 'alex', 'oculus', 'lex digitals' do NOT appear anywhere",
-            "5. Tone is bold, adult, direct",
+            "══════════ CURRENT MESSAGE ══════════",
+            f"User: {user_message}",
             "",
-            "Output format:",
-            "<think>",
-            "[Perform your character counting, checks, and planning here]",
-            "</think>",
-            "**Title:** [exactly 60 chars]",
-            "**Description:** [750–850 chars]",
+            "Oculus:",
         ]
 
-    parts += [
-        "",
-        "Follow formatting rules exactly. Blank lines between paragraphs. '- ' for bullets.",
-        "Code always in fenced code blocks with language specified. Never truncate code output.",
-        "Be concise unless depth is needed. Never start a response with the word 'I'.",
-        "",
-        "══════════ CONVERSATION HISTORY ══════════",
-    ]
-
-    stored_summary = load_summary(user_id)
-    if stored_summary:
-        parts.append(f"[Earlier summary]: {stored_summary}")
-        parts.append("")
-
-    prior = history[:-1]
-    for msg in prior[-Config.VERBATIM_TURNS:]:
-        role    = "User" if msg["role"] == "user" else "Oculus"
-        content = msg.get("text", "").strip()
-        if content:
-            parts.append(f"{role}: {content}")
-
-    parts += [
-        "",
-        "══════════ CURRENT MESSAGE ══════════",
-        f"User: {user_message}",
-        "",
-        "Oculus:",
-    ]
-
-    return "\n".join(parts)
+        prompt_str = "\n".join(parts)
+        approx_tokens = len(prompt_str) // 4
+        
+        # Check budget
+        if approx_tokens <= 6000:
+            print(f"[Token Budget] Prompt assembled: {approx_tokens} tokens (approx). Limit: 6000.")
+            return prompt_str
+            
+        # Pruning sequence:
+        if verbatim_turns > 1:
+            verbatim_turns -= 1
+            print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Reducing conversation history turns to {verbatim_turns}...")
+        elif memory_max_results > 1:
+            memory_max_results -= 1
+            print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Reducing memory max_results to {memory_max_results}...")
+        elif web_length_limit > 0:
+            web_length_limit = max(0, web_length_limit - 1000)
+            print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Truncating web search context to {web_length_limit} chars...")
+        else:
+            print(f"[Token Budget Danger] Prompt size {approx_tokens} exceeds 6000 and cannot be pruned further. Returning best effort.")
+            return prompt_str
 
 
 @chat_bp.route("/")

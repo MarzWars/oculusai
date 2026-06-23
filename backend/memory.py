@@ -400,7 +400,53 @@ def extract_memory_async(user_id: str, user_message: str, preferred_model: str =
         print("[Async Memory Error] Failed to process memory asynchronously:", e)
 
 
-def memory_to_context(mem: dict) -> str:
+def rank_memory_items(user_message: str, items: list, max_results: int = 5, key_field: str = None) -> list:
+    if not items:
+        return []
+    if not user_message:
+        return items[-max_results:]
+
+    stop_words = {
+        "the", "a", "an", "is", "for", "to", "and", "of", "in", "on", 
+        "at", "with", "it", "that", "this", "i", "you", "my", "your", 
+        "we", "us", "they", "them", "he", "she", "his", "her", "me", "our"
+    }
+    user_words = re.findall(r"\b\w+\b", user_message.lower())
+    search_tokens = {w for w in user_words if w not in stop_words}
+
+    scored_items = []
+    for idx, item in enumerate(items):
+        score = 0.0
+        if isinstance(item, dict) and key_field:
+            text_content = str(item.get(key_field, ""))
+        else:
+            text_content = str(item)
+
+        # 1. Relevance: token matches
+        item_words = set(re.findall(r"\b\w+\b", text_content.lower()))
+        overlap = search_tokens.intersection(item_words)
+        score += len(overlap) * 2.0
+
+        # 2. Recency: index position or parsed date diff
+        recency_bonus = idx / len(items)
+        if isinstance(item, dict) and "added" in item:
+            try:
+                added_date = datetime.strptime(item["added"], "%Y-%m-%d")
+                days_since = (datetime.now() - added_date).days
+                days_since = max(0, days_since)
+                recency_bonus = 1.0 / (days_since + 1.0)
+            except Exception:
+                pass
+        
+        score += recency_bonus
+        scored_items.append((score, item))
+
+    # Sort scored items by score descending
+    scored_items.sort(key=lambda x: x[0], reverse=True)
+    return [item for score, item in scored_items[:max_results]]
+
+
+def memory_to_context(mem: dict, user_message: str = "", max_results: int = 5) -> str:
     lines = []
     p = mem.get("profile", {})
     if p.get("name"):     lines.append(f"- Name: {p['name']}")
@@ -409,28 +455,43 @@ def memory_to_context(mem: dict) -> str:
     if p.get("location"): lines.append(f"- Location: {p['location']}")
     if p.get("email"):    lines.append(f"- Email: {p['email']}")
     if p.get("phone"):    lines.append(f"- Phone: {p['phone']}")
-    if mem.get("clients"):
-        lines.append(f"- Known clients: {', '.join(mem['clients'][-8:])}")
-    if mem.get("projects"):
-        names = [proj.get("name", "") for proj in mem["projects"][-5:]]
+    
+    clients = rank_memory_items(user_message, mem.get("clients", []), max_results=max_results)
+    if clients:
+        lines.append(f"- Known clients: {', '.join(clients)}")
+        
+    projects = rank_memory_items(user_message, mem.get("projects", []), max_results=max_results, key_field="name")
+    if projects:
+        names = [proj.get("name", "") for proj in projects]
         lines.append(f"- Active/recent projects: {', '.join(names)}")
-    if mem.get("deadlines"):
-        parts = [f"{d.get('date','?')} ({d.get('item','')[:40]})" for d in mem["deadlines"][-3:]]
+        
+    deadlines = rank_memory_items(user_message, mem.get("deadlines", []), max_results=max(1, max_results - 1), key_field="item")
+    if deadlines:
+        parts = [f"{d.get('date','?')} ({d.get('item','')[:40]})" for d in deadlines]
         lines.append(f"- Deadlines: {' | '.join(parts)}")
-    if mem.get("preferences"):
+        
+    preferences = rank_memory_items(user_message, mem.get("preferences", []), max_results=max_results)
+    if preferences:
         lines.append("- User preferences:")
-        for pref in mem["preferences"][-8:]:
+        for pref in preferences:
             lines.append(f"  • {pref}")
-    if mem.get("important_facts"):
+            
+    facts = rank_memory_items(user_message, mem.get("important_facts", []), max_results=max_results)
+    if facts:
         lines.append("- Important facts to remember:")
-        for fact in mem["important_facts"][-10:]:
+        for fact in facts:
             lines.append(f"  • {fact}")
-    if mem.get("ai_notes"):
+            
+    notes = rank_memory_items(user_message, mem.get("ai_notes", []), max_results=max_results)
+    if notes:
         lines.append("- Inferred behavioral observations (ai_notes):")
-        for note in mem["ai_notes"][-10:]:
+        for note in notes:
             lines.append(f"  • {note}")
-    if mem.get("topics_discussed"):
-        lines.append(f"- Topics worked on previously: {', '.join(mem['topics_discussed'][-12:])}")
+            
+    topics = rank_memory_items(user_message, mem.get("topics_discussed", []), max_results=max_results + 1)
+    if topics:
+        lines.append(f"- Topics worked on previously: {', '.join(topics)}")
+        
     sessions = mem.get("session_count", 0)
     messages = mem.get("message_count", 0)
     if messages:

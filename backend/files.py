@@ -15,6 +15,25 @@ ALLOWED_EXTENSIONS = {
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB per file
 
 
+def summarize_long_file(filename: str, content: str) -> str:
+    from backend.models import query_openrouter
+    sample = content[:15000]
+    prompt = (
+        "You are a file summarization assistant. Summarise the following file. "
+        "Provide a concise 2-sentence overview of its purpose, and list up to 5 key config parameters, settings, or quotes. "
+        "Output plain text only, no formatting wrappers.\n\n"
+        f"Filename: {filename}\n"
+        f"Content:\n{sample}\n\n"
+        "Summary:"
+    )
+    try:
+        summary = query_openrouter(prompt)
+        return summary.strip()
+    except Exception as e:
+        print(f"[File Summarization Error] Failed to summarize {filename}: {e}")
+        return "Could not summarize file content automatically."
+
+
 @files_bp.route("/api/upload", methods=["POST"])
 @login_required
 def upload_file_api():
@@ -55,12 +74,20 @@ def upload_file_api():
             except UnicodeDecodeError:
                 content = content_bytes.decode("latin-1")
                 
+            is_long = len(content) > 3000
+            summary_content = ""
+            if is_long:
+                print(f"[Files] {filename} length is {len(content)} chars. Running LLM summarizer...")
+                summary_content = summarize_long_file(filename, content)
+
             # Check if file with same name already uploaded, replace it
             cache = [f for f in cache if f["name"] != filename]
             cache.append({
                 "name": filename,
                 "content": content,
-                "size": len(content_bytes)
+                "size": len(content_bytes),
+                "summary": summary_content,
+                "is_long": is_long
             })
             UPLOADED_FILES_CACHE[uid] = cache
             successes.append(filename)
