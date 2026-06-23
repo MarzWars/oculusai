@@ -49,30 +49,30 @@ function getStageHtml(thoughtText, isClosed) {
   } else if (len >= 120) {
     stage = 2;
   }
-  
+
   const stageLabels = [
     { icon: "🔍", text: "Researching" },
     { icon: "🧠", text: "Analyzing memory" },
     { icon: "📝", text: "Planning response" },
     { icon: "✨", text: "Writing final answer" }
   ];
-  
+
   let currentStatus = stageLabels[stage - 1].text + (isClosed ? "" : "...");
-  
+
   let stagesMarkup = `
     <div class="thinking-stages">
       ${stageLabels.map((sl, idx) => {
-        const stepNum = idx + 1;
-        let stateClass = "pending";
-        if (stepNum < stage) stateClass = "done";
-        else if (stepNum === stage) stateClass = "active";
-        return `
+    const stepNum = idx + 1;
+    let stateClass = "pending";
+    if (stepNum < stage) stateClass = "done";
+    else if (stepNum === stage) stateClass = "active";
+    return `
           <div class="stage-item ${stateClass}">
             <span class="stage-dot"></span>
             <span>${sl.icon} ${sl.text}</span>
           </div>
         `;
-      }).join('')}
+  }).join('')}
     </div>
   `;
   return { markup: stagesMarkup, statusText: currentStatus, stage: stage };
@@ -90,13 +90,13 @@ function renderMarkdown(text) {
     const label = language || 'code';
     const escaped = escapeHtml(code.trimEnd());
     const idx = codeBlocks.length;
-    
+
     // Code block line numbers wrapping
     const lines = escaped.split('\n');
     const numberedCode = lines.map((line, lineIdx) => {
       return `<span class="code-line"><span class="line-num" data-num="${lineIdx + 1}"></span>${line || ' '}</span>`;
     }).join('\n');
-    
+
     const isPreviewable = ['html', 'css', 'javascript', 'js', 'svg', 'xml'].includes(language.toLowerCase());
     const previewBtn = isPreviewable ? `
       <button class="preview-btn" onclick="openSandboxFromCodeBlock(this)" title="Preview in Sandbox" style="display:flex; align-items:center; gap:5px; background:transparent; border:1px solid var(--border); color:var(--text-muted); font-family:var(--font-sans); font-size:11.5px; padding:3px 9px; border-radius:5px; cursor:pointer; transition:all .15s;">
@@ -350,7 +350,7 @@ function renderStreamingHtml(text) {
 
   // Match both <think>...</think> and <thinking>...</thinking>
   const closedRe = /<(?:think|thinking)>([\s\S]*?)<\/(?:think|thinking)>/gi;
-  const openRe   = /<(?:think|thinking)>([\s\S]*)$/i;
+  const openRe = /<(?:think|thinking)>([\s\S]*)$/i;
 
   // 1. Closed (complete) thinking blocks
   const closedBlocks = [];
@@ -497,12 +497,51 @@ async function sendMessage() {
 }
 
 
-// ── Model switcher ────────────────────────
+// ── Left Sidebar ─────────────────────────
+function toggleSidebar() {
+  const sidebar = document.getElementById('leftSidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (!sidebar) return;
+
+  const isOpen = sidebar.classList.contains('open');
+  if (isOpen) {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.add('open');
+    // Load brain when sidebar opens (if not already loaded)
+    const brainContent = document.getElementById('brainDrawerContent');
+    if (brainContent && brainContent.querySelector('.brain-loading')) {
+      loadBrainIntoSidebar();
+    }
+  }
+}
+
+async function loadBrainIntoSidebar() {
+  const content = document.getElementById('brainDrawerContent');
+  if (!content) return;
+  content.innerHTML = '<div class="brain-loading">Loading brain state…</div>';
+  try {
+    const resp = await fetch('/api/memory');
+    if (!resp.ok) throw new Error('Failed to fetch memory');
+    currentBrainMemory = await resp.json();
+    renderBrainIntoEl(content, currentBrainMemory);
+  } catch (err) {
+    content.innerHTML = `<div class="brain-loading" style="color:var(--red)">Error: ${err.message}</div>`;
+  }
+}
+
+// ── Model switcher (card-based) ───────────
 async function setModel(modelId) {
-  const select = document.getElementById('modelSelect');
-  const status = document.getElementById('modelStatus');
-  if (select) select.disabled = true;
-  if (status) { status.textContent = 'Switching…'; status.classList.add('switching'); }
+  const pill = document.getElementById('activeModelPill');
+  const nameEl = document.getElementById('activeModelName');
+
+  // Optimistic UI — mark the card active immediately
+  document.querySelectorAll('.model-card').forEach(c => {
+    c.classList.toggle('active', c.dataset.modelId === modelId);
+  });
+  if (nameEl) nameEl.textContent = '…';
 
   try {
     const resp = await fetch('/set_model', {
@@ -512,15 +551,12 @@ async function setModel(modelId) {
     });
     const data = await resp.json();
     if (data.status === 'ok') {
-      if (status) { status.textContent = data.name; status.classList.remove('switching'); }
+      if (nameEl) nameEl.textContent = data.name;
     } else {
-      if (status) { status.textContent = 'Error'; status.classList.remove('switching'); }
-      if (select) select.value = select.dataset.previous || select.value;
+      if (nameEl) nameEl.textContent = 'Error';
     }
   } catch (err) {
-    if (status) { status.textContent = 'Error'; status.classList.remove('switching'); }
-  } finally {
-    if (select) select.disabled = false;
+    if (nameEl) nameEl.textContent = 'Error';
   }
 }
 
@@ -540,8 +576,11 @@ function fillMsg(el) {
 }
 
 async function clearChat() {
-  await fetch('/clear', { method: 'POST' });
-  location.reload();
+  try {
+    await fetch('/clear', { method: 'POST' });
+  } catch (e) { /* ignore */ }
+  // Force a full network reload, bypassing any service worker cache
+  location.href = location.pathname + '?_=' + Date.now();
 }
 
 
@@ -586,39 +625,18 @@ document.addEventListener('DOMContentLoaded', () => {
 // ─────────────────────────────────────────
 let currentBrainMemory = null;
 
-async function toggleBrain() {
-  const drawer = document.getElementById('brainDrawer');
-  const overlay = document.getElementById('brainOverlay');
-  if (!drawer || !overlay) return;
+// toggleBrain now opens the sidebar (backward compat)
+async function toggleBrain() { toggleSidebar(); }
 
-  const isOpen = drawer.classList.contains('open');
-  if (isOpen) {
-    drawer.classList.remove('open');
-    overlay.classList.remove('open');
-  } else {
-    drawer.classList.add('open');
-    overlay.classList.add('open');
-    await loadBrainMemory();
-  }
-}
-
-async function loadBrainMemory() {
-  const content = document.querySelector('.brain-drawer-content');
-  if (content) content.innerHTML = '<div class="brain-loading">Loading brain state...</div>';
-
-  try {
-    const resp = await fetch('/api/memory');
-    if (!resp.ok) throw new Error("Failed to fetch memory");
-    currentBrainMemory = await resp.json();
-    renderBrain(currentBrainMemory);
-  } catch (err) {
-    if (content) content.innerHTML = `<div class="brain-loading" style="color:var(--red)">Error: ${err.message}</div>`;
-  }
-}
+async function loadBrainMemory() { await loadBrainIntoSidebar(); }
 
 function renderBrain(mem) {
-  const content = document.querySelector('.brain-drawer-content');
+  const content = document.getElementById('brainDrawerContent') || document.querySelector('.brain-drawer-content');
   if (!content) return;
+  renderBrainIntoEl(content, mem);
+}
+
+function renderBrainIntoEl(content, mem) {
 
   const profile = mem.profile || {};
   const clients = mem.clients || [];
@@ -786,14 +804,14 @@ function renderBrainDeadlineItems(deadlines) {
 async function saveBrainProfile() {
   const fields = ["name", "role", "company", "location", "email", "phone"];
   let updatedCount = 0;
-  
+
   for (const field of fields) {
     const el = document.getElementById(`bp-${field}`);
     if (!el) continue;
-    
+
     const newVal = el.value.trim();
     const oldVal = (currentBrainMemory.profile || {})[field] || "";
-    
+
     if (newVal !== oldVal) {
       try {
         const resp = await fetch('/api/memory/update', {
@@ -811,7 +829,7 @@ async function saveBrainProfile() {
       }
     }
   }
-  
+
   if (updatedCount > 0) {
     alert("Profile saved successfully!");
     await loadBrainMemory();
@@ -1085,10 +1103,10 @@ function openSandboxFromCodeBlock(btn) {
   const codeBlock = btn.closest('.code-block');
   const codeElement = codeBlock.querySelector('pre code');
   const rawCode = codeElement.textContent;
-  
+
   const langClass = Array.from(codeElement.classList).find(c => c.startsWith('language-'));
   const lang = langClass ? langClass.replace('language-', '') : 'html';
-  
+
   openSandbox(rawCode, lang);
 }
 
@@ -1097,12 +1115,12 @@ function openSandbox(code, language) {
   const editor = document.getElementById('sandboxEditor');
   const badge = document.getElementById('sandboxLangBadge');
   const pathInput = document.getElementById('sandboxSavePath');
-  
+
   if (!overlay || !editor) return;
-  
+
   badge.textContent = language;
   editor.value = code;
-  
+
   let ext = 'html';
   const l = language.toLowerCase();
   if (l === 'javascript' || l === 'js') ext = 'js';
@@ -1110,7 +1128,7 @@ function openSandbox(code, language) {
   else if (l === 'svg') ext = 'svg';
   else if (l === 'xml') ext = 'xml';
   pathInput.value = `sandbox_file.${ext}`;
-  
+
   overlay.classList.add('open');
   syncSandboxLineNumbers();
   runSandbox();
@@ -1126,10 +1144,10 @@ function runSandbox() {
   const badge = document.getElementById('sandboxLangBadge');
   const iframe = document.getElementById('sandboxPreview');
   if (!editor || !iframe) return;
-  
+
   const code = editor.value;
   const lang = badge.textContent.toLowerCase();
-  
+
   let src = "";
   if (lang === 'html') {
     if (!code.includes('<html') && !code.includes('<body')) {
@@ -1225,7 +1243,7 @@ function runSandbox() {
   } else {
     src = `<!DOCTYPE html><html><body><pre>${escapeHtml(code)}</pre></body></html>`;
   }
-  
+
   iframe.srcdoc = src;
 }
 
@@ -1241,14 +1259,14 @@ async function saveSandboxToProject() {
   const editor = document.getElementById('sandboxEditor');
   const pathInput = document.getElementById('sandboxSavePath');
   if (!editor || !pathInput) return;
-  
+
   const content = editor.value;
   const filename = pathInput.value.trim();
   if (!filename) {
     alert("Filename is required.");
     return;
   }
-  
+
   try {
     const resp = await fetch('/api/sandbox/save', {
       method: 'POST',
@@ -1285,10 +1303,10 @@ function syncSandboxLineNumbers() {
   const textarea = document.getElementById('sandboxEditor');
   const lineNumbers = document.getElementById('sandboxEditorLines');
   if (!textarea || !lineNumbers) return;
-  
+
   const lines = textarea.value.split('\n');
   const lineCount = lines.length;
-  
+
   let markup = '';
   for (let i = 1; i <= lineCount; i++) {
     markup += `<div>${i}</div>`;
@@ -1332,4 +1350,4 @@ window.addEventListener('keydown', (e) => {
       toggleBrain();
     }
   }
-});
+});
