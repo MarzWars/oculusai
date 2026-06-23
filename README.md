@@ -4,8 +4,8 @@
 
 <br><br>
 
-**A custom-built artificial intelligence system for real work.**  
-Code. Copy. Strategy. Memory. Uncensored. All in one.
+**A memory-powered AI workspace for developers, agencies, consultants, and business owners.**  
+Persistent AI Memory • Multi-Model AI • Web Search • File Analysis • Code Assistant
 
 <br>
 
@@ -30,9 +30,45 @@ Code. Copy. Strategy. Memory. Uncensored. All in one.
 
 ## What is Oculus?
 
-Oculus is a custom AI assistant built for running a digital agency — not a generic chatbot wrapper. It's powered by **OpenRouter**, a gateway to multiple large language models, and layered with a persistent memory system, live web search, multi-user authentication, a code sandbox, and a clean dark terminal UI.
+Oculus is a memory-powered AI workspace built with **Flask**, **OpenRouter**, **Supabase**, and **Tavily Search**.
 
-It remembers who you are. It searches the web in real time. It writes code that actually runs. It generates ads, copy, and strategy without filler — and without guardrails blocking legitimate adult ad content.
+Unlike traditional AI chatbots, Oculus combines **persistent AI memory**, **long-term context retention**, **live web search**, **file analysis**, **code assistance**, **multi-model AI routing**, and **project awareness** into a single platform.
+
+It is designed for developers, digital agencies, consultants, marketers, entrepreneurs, and business owners who need an AI assistant that remembers information across sessions and works directly with files, projects, clients, and ongoing conversations.
+
+It remembers who you are. It searches the web in real time. It writes code that actually runs. It analyzes files. It generates ads, copy, and strategy without filler — and without guardrails blocking legitimate adult ad content.
+
+Oculus is not designed to be another chatbot wrapper.
+
+It is designed to become a persistent business assistant that understands your work, remembers important context, and helps execute real tasks.
+
+---
+
+## 🎯 Use Cases
+
+### 👨‍💻 Developers
+
+- Debug applications
+- Analyze codebases
+- Generate scripts
+- Review source code
+- Work with Python, JavaScript, SQL, React, HTML, CSS, and Bash
+
+### 📣 Digital Agencies
+
+- Store client context
+- Generate proposals
+- Create advertising copy
+- Maintain project memory
+- Track deadlines and deliverables
+
+### 🏢 Consultants & Business Owners
+
+- Retain long-term business knowledge
+- Build reusable knowledge bases
+- Conduct research with live web search
+- Analyze files and documentation
+- Manage ongoing projects and workflows
 
 ---
 
