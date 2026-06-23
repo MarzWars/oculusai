@@ -32,6 +32,19 @@ def format_ai_response_filter(s):
         return ""
     return _render_links(_esc(s)).replace('\n', '<br>')
 
+@app.route("/sw.js")
+def service_worker():
+    response = app.send_static_file("sw.js")
+    response.headers["Content-Type"] = "application/javascript"
+    response.headers["Service-Worker-Allowed"] = "/"
+    return response
+
+@app.route("/manifest.json")
+def manifest():
+    response = app.send_static_file("manifest.json")
+    response.headers["Content-Type"] = "application/json"
+    return response
+
 if __name__ == "__main__":
     os.makedirs("static", exist_ok=True)
     app.run(host="0.0.0.0", port=5000, debug=True)

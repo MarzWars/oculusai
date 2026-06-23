@@ -38,6 +38,47 @@ function escapeHtml(str) {
 }
 
 
+// ── Staged Thinking Progress helper ────────
+function getStageHtml(thoughtText, isClosed) {
+  let stage = 1;
+  const len = thoughtText ? thoughtText.trim().length : 0;
+  if (isClosed) {
+    stage = 4;
+  } else if (len >= 350) {
+    stage = 3;
+  } else if (len >= 120) {
+    stage = 2;
+  }
+  
+  const stageLabels = [
+    { icon: "🔍", text: "Researching" },
+    { icon: "🧠", text: "Analyzing memory" },
+    { icon: "📝", text: "Planning response" },
+    { icon: "✨", text: "Writing final answer" }
+  ];
+  
+  let currentStatus = stageLabels[stage - 1].text + (isClosed ? "" : "...");
+  
+  let stagesMarkup = `
+    <div class="thinking-stages">
+      ${stageLabels.map((sl, idx) => {
+        const stepNum = idx + 1;
+        let stateClass = "pending";
+        if (stepNum < stage) stateClass = "done";
+        else if (stepNum === stage) stateClass = "active";
+        return `
+          <div class="stage-item ${stateClass}">
+            <span class="stage-dot"></span>
+            <span>${sl.icon} ${sl.text}</span>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+  return { markup: stagesMarkup, statusText: currentStatus, stage: stage };
+}
+
+
 // ── Markdown renderer ─────────────────────
 function renderMarkdown(text) {
   let html = text;
@@ -49,22 +90,41 @@ function renderMarkdown(text) {
     const label = language || 'code';
     const escaped = escapeHtml(code.trimEnd());
     const idx = codeBlocks.length;
+    
+    // Code block line numbers wrapping
+    const lines = escaped.split('\n');
+    const numberedCode = lines.map((line, lineIdx) => {
+      return `<span class="code-line"><span class="line-num" data-num="${lineIdx + 1}"></span>${line || ' '}</span>`;
+    }).join('\n');
+    
+    const isPreviewable = ['html', 'css', 'javascript', 'js', 'svg', 'xml'].includes(language.toLowerCase());
+    const previewBtn = isPreviewable ? `
+      <button class="preview-btn" onclick="openSandboxFromCodeBlock(this)" title="Preview in Sandbox" style="display:flex; align-items:center; gap:5px; background:transparent; border:1px solid var(--border); color:var(--text-muted); font-family:var(--font-sans); font-size:11.5px; padding:3px 9px; border-radius:5px; cursor:pointer; transition:all .15s;">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px; height:12px; flex-shrink:0;">
+          <polygon points="5 3 19 12 5 21 5 3"/>
+        </svg>
+        <span class="preview-label">Preview</span>
+      </button>` : '';
+
     codeBlocks.push(`
 <div class="code-block">
   <div class="code-header">
     <span class="code-lang">${label}</span>
-    <button class="copy-btn" onclick="copyCode(this)" title="Copy code">
-      <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="9" y="9" width="13" height="13" rx="2"/>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-      </svg>
-      <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none">
-        <polyline points="20 6 9 17 4 12"/>
-      </svg>
-      <span class="copy-label">Copy</span>
-    </button>
+    <div style="display:flex; gap:6px;">
+      ${previewBtn}
+      <button class="copy-btn" onclick="copyCode(this)" title="Copy code">
+        <svg class="icon-copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2"/>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+        </svg>
+        <svg class="icon-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="display:none">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        <span class="copy-label">Copy</span>
+      </button>
+    </div>
   </div>
-  <pre><code class="language-${language}">${escaped}</code></pre>
+  <pre><code class="language-${language}">${numberedCode}</code></pre>
 </div>`);
     return `%%CODE_BLOCK_${idx}%%`;
   });
@@ -75,24 +135,28 @@ function renderMarkdown(text) {
 
   // 1. Closed thinking blocks — <think>…</think> or <thinking>…</thinking>
   html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*?)</(?:${thinkTagPattern})>`, 'gi'), (_, thought) => {
+    const { markup, statusText } = getStageHtml(thought, true);
     return `
 <details class="thinking-block">
   <summary class="thinking-header">
     <span class="thinking-icon">🧠</span>
-    <span class="thinking-title">Thought Process</span>
+    <span class="thinking-title">Thought Process: ${statusText}</span>
   </summary>
+  ${markup}
   <div class="thinking-content">${thought}</div>
 </details>`;
   });
 
   // 2. Open/streaming thinking blocks — tag opened but not yet closed
   html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*)$`, 'gi'), (_, thought) => {
+    const { markup, statusText } = getStageHtml(thought, false);
     return `
 <details class="thinking-block" open>
   <summary class="thinking-header">
     <span class="thinking-icon">🧠</span>
-    <span class="thinking-title">Thought Process</span>
+    <span class="thinking-title">Thought Process: ${statusText}</span>
   </summary>
+  ${markup}
   <div class="thinking-content">${thought}</div>
 </details>`;
   });
@@ -129,6 +193,10 @@ function renderMarkdown(text) {
   html = html.replace(/(?<!["\(])(https?:\/\/[^\s<>")\]]+)/g,
     '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 
+  // 5b. Images — ![alt](url)
+  html = html.replace(/!\[([^\]]*)\]\((https?:\/\/[^\)]+)\)/g,
+    '<img src="$2" alt="$1" class="md-image" loading="lazy">');
+
   // 6. Headings
   html = html.replace(/^### (.+)$/gm, '<h3 class="md-h3">$1</h3>');
   html = html.replace(/^## (.+)$/gm, '<h2 class="md-h2">$1</h2>');
@@ -158,6 +226,7 @@ function renderMarkdown(text) {
 
   return html;
 }
+
 
 function renderLists(html) {
   return html.replace(/((?:^- .+\n?)+)/gm, (block) => {
@@ -195,7 +264,7 @@ function renderParagraphs(html) {
 
 // ── Copy button ───────────────────────────
 function copyCode(btn) {
-  const text = btn.closest('.code-block').querySelector('pre code').innerText;
+  const text = btn.closest('.code-block').querySelector('pre code').textContent;
   navigator.clipboard.writeText(text).then(() => {
     const iconCopy = btn.querySelector('.icon-copy');
     const iconCheck = btn.querySelector('.icon-check');
@@ -290,25 +359,36 @@ function renderStreamingHtml(text) {
     return '';
   });
   for (const thought of closedBlocks) {
-    html += `<div class="live-thinking">
-  <div class="live-thinking-header">
-    <span class="thinking-icon">🧠</span>
-    <span>Thinking...</span>
-  </div>
-  <div class="live-thinking-content">${escapeHtml(thought)}</div>
+    const { markup, statusText } = getStageHtml(thought, true);
+    html += `
+<div class="thinking-block-streaming">
+  ${markup}
+  <details class="thinking-block">
+    <summary class="thinking-header">
+      <span class="thinking-icon">🧠</span>
+      <span class="thinking-title">Raw Thoughts: ${statusText}</span>
+    </summary>
+    <div class="thinking-content">${escapeHtml(thought)}</div>
+  </details>
 </div>`;
   }
 
   // 2. Open (still streaming) thinking block
   const openMatch = remaining.match(openRe);
   if (openMatch) {
+    const thought = openMatch[1];
     remaining = remaining.replace(openRe, '');
-    html += `<div class="live-thinking">
-  <div class="live-thinking-header">
-    <span class="thinking-icon">🧠</span>
-    <span>Thinking...</span>
-  </div>
-  <div class="live-thinking-content">${escapeHtml(openMatch[1])}<span class="stream-cursor"></span></div>
+    const { markup, statusText } = getStageHtml(thought, false);
+    html += `
+<div class="thinking-block-streaming">
+  ${markup}
+  <details class="thinking-block" open>
+    <summary class="thinking-header">
+      <span class="thinking-icon">🧠</span>
+      <span class="thinking-title">Raw Thoughts: ${statusText}</span>
+    </summary>
+    <div class="thinking-content">${escapeHtml(thought)}<span class="stream-cursor"></span></div>
+  </details>
 </div>`;
   }
 
@@ -642,6 +722,18 @@ function renderBrain(mem) {
         <button class="brain-add-btn" onclick="addBrainListItem('clients', 'brain-client-add-input')">Add</button>
       </div>
     </div>
+
+    <!-- AI BEHAVIORAL INFERENCES SECTION -->
+    <div class="brain-section">
+      <div class="brain-section-title">🧠 Style & Behavior Notes</div>
+      <div class="brain-list" id="brain-notes-list">
+        ${renderBrainNotesItems(mem.ai_notes || [])}
+      </div>
+      <div class="brain-add-form">
+        <input type="text" class="brain-add-input" id="brain-note-add-input" placeholder="Add custom behavior note...">
+        <button class="brain-add-btn" onclick="addBrainListItem('ai_notes', 'brain-note-add-input')">Add</button>
+      </div>
+    </div>
   `;
 }
 
@@ -650,7 +742,17 @@ function renderBrainListItems(key, lst) {
   return lst.map(item => `
     <div class="brain-list-item">
       <span class="brain-list-text">${escapeHtml(item)}</span>
-      <button class="brain-delete-btn" onclick="deleteBrainListItem('${key}', \`${escapeHtml(item).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete fact">×</button>
+      <button class="brain-delete-btn" onclick="deleteBrainListItem('${key}', \`${escapeHtml(item).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete item">×</button>
+    </div>
+  `).join('');
+}
+
+function renderBrainNotesItems(lst) {
+  if (!lst || lst.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
+  return lst.map(item => `
+    <div class="brain-notes-card">
+      <span class="brain-list-text">${escapeHtml(item)}</span>
+      <button class="brain-delete-btn" onclick="deleteBrainListItem('ai_notes', \`${escapeHtml(item).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete behavioral note">×</button>
     </div>
   `).join('');
 }
@@ -976,3 +1078,258 @@ window.addEventListener('drop', (e) => {
     uploadFiles(e.dataTransfer.files);
   }
 });
+
+// ── Interactive Sandbox Controllers ───────
+
+function openSandboxFromCodeBlock(btn) {
+  const codeBlock = btn.closest('.code-block');
+  const codeElement = codeBlock.querySelector('pre code');
+  const rawCode = codeElement.textContent;
+  
+  const langClass = Array.from(codeElement.classList).find(c => c.startsWith('language-'));
+  const lang = langClass ? langClass.replace('language-', '') : 'html';
+  
+  openSandbox(rawCode, lang);
+}
+
+function openSandbox(code, language) {
+  const overlay = document.getElementById('sandboxOverlay');
+  const editor = document.getElementById('sandboxEditor');
+  const badge = document.getElementById('sandboxLangBadge');
+  const pathInput = document.getElementById('sandboxSavePath');
+  
+  if (!overlay || !editor) return;
+  
+  badge.textContent = language;
+  editor.value = code;
+  
+  let ext = 'html';
+  const l = language.toLowerCase();
+  if (l === 'javascript' || l === 'js') ext = 'js';
+  else if (l === 'css') ext = 'css';
+  else if (l === 'svg') ext = 'svg';
+  else if (l === 'xml') ext = 'xml';
+  pathInput.value = `sandbox_file.${ext}`;
+  
+  overlay.classList.add('open');
+  syncSandboxLineNumbers();
+  runSandbox();
+}
+
+function closeSandbox() {
+  const overlay = document.getElementById('sandboxOverlay');
+  if (overlay) overlay.classList.remove('open');
+}
+
+function runSandbox() {
+  const editor = document.getElementById('sandboxEditor');
+  const badge = document.getElementById('sandboxLangBadge');
+  const iframe = document.getElementById('sandboxPreview');
+  if (!editor || !iframe) return;
+  
+  const code = editor.value;
+  const lang = badge.textContent.toLowerCase();
+  
+  let src = "";
+  if (lang === 'html') {
+    if (!code.includes('<html') && !code.includes('<body')) {
+      src = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; color: #111; background: #fff; }
+  </style>
+</head>
+<body>
+  ${code}
+</body>
+</html>`;
+    } else {
+      let htmlCode = code;
+      if (!htmlCode.includes('tailwindcss.com')) {
+        if (htmlCode.includes('</head>')) {
+          htmlCode = htmlCode.replace('</head>', '<script src="https://cdn.tailwindcss.com"></script></head>');
+        } else {
+          htmlCode = '<script src="https://cdn.tailwindcss.com"></script>' + htmlCode;
+        }
+      }
+      src = htmlCode;
+    }
+  } else if (lang === 'svg' || lang === 'xml') {
+    src = `<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: #f0f0f3; }
+    svg { max-width: 90vw; max-height: 90vh; }
+  </style>
+</head>
+<body>
+  ${code}
+</body>
+</html>`;
+  } else if (lang === 'css') {
+    src = `<!DOCTYPE html>
+<html>
+<head>
+  <style>${code}</style>
+</head>
+<body>
+  <div style="padding: 20px; font-family:system-ui, sans-serif;">
+    <h1>CSS Preview Pane</h1>
+    <p>Your styles have been injected and applied successfully.</p>
+    <hr style="border:none; border-top:1px solid #ccc; margin:16px 0;">
+    <button style="padding: 8px 12px; border-radius: 4px; border: 1px solid #ccc; background: #f9f9f9; cursor:pointer;">Sample Button</button>
+  </div>
+</body>
+</html>`;
+  } else if (lang === 'javascript' || lang === 'js') {
+    src = `<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: monospace; padding: 20px; background: #121214; color: #a9b7c6; }
+    #console { white-space: pre-wrap; font-size: 13px; line-height: 1.5; }
+  </style>
+  <script>
+    window.console = {
+      log: function(...args) {
+        const div = document.getElementById('console');
+        if (div) {
+          div.textContent += args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : a).join(' ') + '\\n';
+        }
+      },
+      error: function(...args) {
+        const div = document.getElementById('console');
+        if (div) {
+          div.innerHTML += '<span style="color:#f38ba8;">Error: ' + args.join(' ') + '</span>\\n';
+        }
+      }
+    };
+  </script>
+</head>
+<body>
+  <h3 style="margin-top:0; color:#7c6af7;">JavaScript Execution Output:</h3>
+  <div id="console"></div>
+  <script>
+    try {
+      ${code}
+    } catch(err) {
+      console.error(err.message);
+    }
+  </script>
+</body>
+</html>`;
+  } else {
+    src = `<!DOCTYPE html><html><body><pre>${escapeHtml(code)}</pre></body></html>`;
+  }
+  
+  iframe.srcdoc = src;
+}
+
+function copySandboxCode() {
+  const editor = document.getElementById('sandboxEditor');
+  if (!editor) return;
+  navigator.clipboard.writeText(editor.value).then(() => {
+    alert("Code copied to clipboard!");
+  });
+}
+
+async function saveSandboxToProject() {
+  const editor = document.getElementById('sandboxEditor');
+  const pathInput = document.getElementById('sandboxSavePath');
+  if (!editor || !pathInput) return;
+  
+  const content = editor.value;
+  const filename = pathInput.value.trim();
+  if (!filename) {
+    alert("Filename is required.");
+    return;
+  }
+  
+  try {
+    const resp = await fetch('/api/sandbox/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ filename, content })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      alert(`File successfully saved to workspace: ${data.path}`);
+    } else {
+      alert(`Error saving file: ${data.error}`);
+    }
+  } catch (err) {
+    alert(`Failed to save file: ${err.message}`);
+  }
+}
+
+function handleSandboxKeys(event) {
+  const textarea = event.target;
+  if (event.key === 'Tab') {
+    event.preventDefault();
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    textarea.value = textarea.value.substring(0, start) + "  " + textarea.value.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + 2;
+    syncSandboxLineNumbers();
+  } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    runSandbox();
+  }
+}
+
+function syncSandboxLineNumbers() {
+  const textarea = document.getElementById('sandboxEditor');
+  const lineNumbers = document.getElementById('sandboxEditorLines');
+  if (!textarea || !lineNumbers) return;
+  
+  const lines = textarea.value.split('\n');
+  const lineCount = lines.length;
+  
+  let markup = '';
+  for (let i = 1; i <= lineCount; i++) {
+    markup += `<div>${i}</div>`;
+  }
+  lineNumbers.innerHTML = markup;
+  lineNumbers.scrollTop = textarea.scrollTop;
+}
+
+// ── Service worker registration & Scroll Sync ──────────
+document.addEventListener('DOMContentLoaded', () => {
+  const textarea = document.getElementById('sandboxEditor');
+  const lineNumbers = document.getElementById('sandboxEditorLines');
+  if (textarea && lineNumbers) {
+    textarea.addEventListener('scroll', () => {
+      lineNumbers.scrollTop = textarea.scrollTop;
+    });
+  }
+
+  // Register service worker for PWA caching support
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').then(reg => {
+      console.log('ServiceWorker registration successful');
+    }).catch(err => {
+      console.warn('ServiceWorker registration failed: ', err);
+    });
+  }
+});
+
+// ── Global Keyboard Shortcuts ─────────────
+window.addEventListener('keydown', (e) => {
+  // Ctrl + B toggles brain
+  if (e.key === 'b' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault();
+    toggleBrain();
+  }
+  // Esc closes sandbox or brain drawer
+  if (e.key === 'Escape') {
+    closeSandbox();
+    const drawer = document.getElementById('brainDrawer');
+    if (drawer && drawer.classList.contains('open')) {
+      toggleBrain();
+    }
+  }
+});

@@ -120,3 +120,32 @@ def delete_uploaded_file_api():
     cache = UPLOADED_FILES_CACHE.get(uid, [])
     files_list = [{"name": f["name"], "size": f["size"]} for f in cache]
     return jsonify({"status": "ok", "files": files_list})
+
+
+@files_bp.route("/api/sandbox/save", methods=["POST"])
+@login_required
+def save_sandbox_file_api():
+    data = request.get_json() or {}
+    filename = data.get("filename", "").strip()
+    content = data.get("content", "")
+    
+    if not filename:
+        return jsonify({"error": "Filename is required"}), 400
+        
+    # Prevent empty or absolute path traversal escape
+    # The workspace root is c:\Oculusai\oculusai
+    workspace_root = os.path.abspath(os.getcwd())
+    
+    # Normalize path and check directory bounds
+    target_path = os.path.abspath(os.path.join(workspace_root, filename))
+    if not target_path.startswith(workspace_root):
+        return jsonify({"error": "Access denied: cannot write outside workspace"}), 403
+        
+    try:
+        os.makedirs(os.path.dirname(target_path), exist_ok=True)
+        with open(target_path, "w", encoding="utf-8") as f:
+            f.write(content)
+        return jsonify({"status": "ok", "path": filename})
+    except Exception as e:
+        return jsonify({"error": f"Failed to save file: {str(e)}"}), 500
+

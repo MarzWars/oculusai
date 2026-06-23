@@ -8,6 +8,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#0d0d0f">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 <body>
 <div class="drag-overlay" id="dragOverlay">
@@ -143,6 +147,38 @@
     </div>
 </div>
 <div class="brain-overlay" id="brainOverlay" onclick="toggleBrain()"></div>
+
+<!-- Interactive Code Sandbox Overlay -->
+<div class="sandbox-overlay" id="sandboxOverlay">
+    <div class="sandbox-window">
+        <div class="sandbox-header">
+            <div class="sandbox-title-wrap">
+                <span class="sandbox-title-icon">💻</span>
+                <span class="sandbox-title">Interactive Sandbox</span>
+                <span class="sandbox-lang-badge" id="sandboxLangBadge">HTML</span>
+            </div>
+            <div class="sandbox-actions">
+                <button class="sandbox-btn run-btn" onclick="runSandbox()" title="Run Code (Ctrl+Enter)">⚡ Run</button>
+                <button class="sandbox-btn copy-code-btn" onclick="copySandboxCode()" title="Copy Code">📋 Copy</button>
+                <button class="sandbox-btn save-btn" onclick="saveSandboxToProject()" title="Save to Project">💾 Save to Project</button>
+                <button class="sandbox-close-btn" onclick="closeSandbox()" title="Close Sandbox">×</button>
+            </div>
+        </div>
+        <div class="sandbox-path-bar">
+            <span class="path-label">Save Path:</span>
+            <input type="text" id="sandboxSavePath" placeholder="e.g. index.html or static/demo.html" value="index.html">
+        </div>
+        <div class="sandbox-body">
+            <div class="sandbox-editor-pane">
+                <div class="sandbox-editor-lines" id="sandboxEditorLines"></div>
+                <textarea id="sandboxEditor" spellcheck="false" onkeydown="handleSandboxKeys(event)" oninput="syncSandboxLineNumbers()"></textarea>
+            </div>
+            <div class="sandbox-preview-pane">
+                <iframe id="sandboxPreview" sandbox="allow-scripts" title="Code Live Preview"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
 
 <script src="/static/oculus.js"></script>
 </body>
