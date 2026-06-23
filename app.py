@@ -763,16 +763,79 @@ JSON Updates:"""
     return False
 
 
+def consolidate_memory_llm(current_memory: dict, preferred_model: str = None) -> dict:
+    """Uses LLM to clean up redundancies, resolve contradictions, and remove outdated items in memory."""
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    prompt = f"""You are a precise memory consolidation agent for Oculus AI.
+Your job is to review the user's current memory JSON object, clean up redundancies, resolve contradictions, remove outdated deadlines, and return a consolidated JSON object with the exact same keys.
+
+Today's Date: {current_date}
+
+Keys to clean:
+1. `profile`: Keep as is. Do not modify.
+2. `clients`: Remove duplicate or very similar client names.
+3. `projects`: Remove duplicates or obsolete/completed projects if they are explicitly mentioned as finished.
+4. `preferences`: Resolve contradictions (e.g. if a user has "prefers Vue" and "now prefers React", keep "prefers React" and delete the outdated one). Collapse semantically identical preferences into a single clear preference.
+5. `important_facts`: Remove duplicate facts, consolidate related ones, and keep only highly relevant information.
+6. `deadlines`: Remove deadlines that are in the past relative to today's date ({current_date}). Keep upcoming or ongoing ones.
+7. `topics_discussed`: Keep unique, title-cased general topics.
+
+Your output MUST be a single, valid JSON object matching the consolidated memory.
+Do NOT include any explanation, intro, or formatting wrappers like ```json ... ```. Just return the raw JSON string.
+If no consolidation is needed, return the input JSON exactly as is.
+
+Current Memory State:
+{json.dumps(current_memory, indent=2)}
+
+Consolidated JSON:"""
+
+    try:
+        raw_res = query_openrouter_extraction(prompt, preferred_model=preferred_model)
+        cleaned = raw_res.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n", "", cleaned)
+            cleaned = re.sub(r"\n```$", "", cleaned)
+        cleaned = cleaned.strip()
+        
+        consolidated = json.loads(cleaned)
+        if isinstance(consolidated, dict):
+            return consolidated
+    except Exception as e:
+        print(f"[Memory Consolidation Error] LLM consolidation failed: {e}")
+    return current_memory
+
+
 def extract_memory_async(user_id: str, user_message: str, preferred_model: str = None):
-    """Background task to run LLM memory extraction and save to Supabase."""
+    """Background task to run LLM memory extraction, deconfliction, and save to Supabase."""
     try:
         mem = load_memory(user_id)
         changed = extract_memory_llm(user_message, mem, preferred_model=preferred_model)
+        
+        # Consolidate if memory changed AND message count is a multiple of 5 OR list sizes are large
+        should_consolidate = changed and (
+            mem.get("message_count", 0) % 5 == 0 or
+            len(mem.get("preferences", [])) > 10 or
+            len(mem.get("important_facts", [])) > 12
+        )
+        
+        if should_consolidate:
+            print(f"[Async Memory] Running memory consolidation for user: {user_id}")
+            consolidated = consolidate_memory_llm(mem, preferred_model=preferred_model)
+            required_keys = {"profile", "clients", "projects", "preferences", "important_facts", "topics_discussed", "deadlines"}
+            if isinstance(consolidated, dict) and required_keys.issubset(consolidated.keys()):
+                # Preserve stats metadata
+                consolidated["session_count"] = mem.get("session_count", 0)
+                consolidated["message_count"] = mem.get("message_count", 0)
+                consolidated["first_seen"] = mem.get("first_seen", "")
+                consolidated["last_seen"] = mem.get("last_seen", "")
+                mem = consolidated
+                changed = True
+                
         if changed:
             save_memory(user_id, mem)
-            print(f"[Async Memory] Successfully extracted and saved new LLM facts for user: {user_id}")
+            print(f"[Async Memory] Successfully updated and saved memory for user: {user_id}")
     except Exception as e:
-        print("[Async Memory Error] Failed to extract LLM memory:", e)
+        print("[Async Memory Error] Failed to process memory asynchronously:", e)
 
 
 def memory_to_context(mem: dict) -> str:
