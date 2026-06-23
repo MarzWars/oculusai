@@ -182,6 +182,7 @@ Keys to clean:
 5. `important_facts`: Remove duplicate facts, consolidate related ones, and keep only highly relevant information.
 6. `deadlines`: Remove deadlines that are in the past relative to today's date ({current_date}). Keep upcoming or ongoing ones.
 7. `topics_discussed`: Keep unique, title-cased general topics.
+8. `ai_notes`: Remove duplicate or highly redundant style/behavioral notes, resolve direct style contradictions (e.g. if one says 'prefers verbose docstrings' and another says 'prefers minimal comments', keep the most recent or clear one), and keep only clear, unique behavioral guidelines.
 
 Your output MUST be a single, valid JSON object matching the consolidated memory.
 Do NOT include any explanation, intro, or formatting wrappers like ```json ... ```. Just return the raw JSON string.
