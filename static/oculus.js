@@ -338,6 +338,9 @@ async function sendMessage() {
   input.disabled = true;
   sendBtn.disabled = true;
 
+  // Clear uploaded file chips from UI since they are sent with this message
+  clearUploadedChipsUI();
+
   removeEmptyState();
   appendUserBubble(text);
   showTyping();
