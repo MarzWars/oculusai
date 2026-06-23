@@ -372,6 +372,7 @@ MEMORY_DEFAULT = {
     "important_facts": [],
     "topics_discussed":[],
     "deadlines":       [],
+    "ai_notes":        [],
     "first_seen":      "",
     "last_seen":       "",
     "session_count":   0,
@@ -712,6 +713,14 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                 if _add_unique(current_memory["topics_discussed"], topic, max_len=30):
                     changed = True
 
+    # 8. AI Inferences (ai_notes)
+    ai_notes_updates = updates.get("ai_notes", [])
+    if isinstance(ai_notes_updates, list):
+        for note in ai_notes_updates:
+            if isinstance(note, str):
+                if _add_unique(current_memory["ai_notes"], note, max_len=15):
+                    changed = True
+
     return changed
 
 
@@ -733,6 +742,7 @@ Compare the message to the current memory state:
 - "important_facts": List of important facts (e.g., "Alex's business logo is blue"). Only include new facts.
 - "deadlines": List of deadline objects, e.g., {{"item": "Launch website", "date": "by Friday"}}.
 - "topics_discussed": List of general topics mentioned (e.g., "Python", "React", "SEO", "Facebook ads").
+- "ai_notes": List of inferred observations, style guidelines, coding conventions, copy tones, or design preferences they implicitly follow or show (e.g. "prefers descriptive error blocks", "values clean logging", "prefers short function documentation", "writes copy in a bold/direct voice"). Only include new, unique inferences.
 
 Your output MUST be a single, valid JSON object matching the updates.
 Do NOT include any explanation, intro, or formatting wrappers like ```json ... ```. Just return the raw JSON string.
