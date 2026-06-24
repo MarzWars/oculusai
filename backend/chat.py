@@ -311,12 +311,21 @@ def ask():
     history = load_history(wid)
     memory  = load_memory(uid)
 
+    # 1. Run memory extraction and update message count
     extract_memory_regex(user_message, memory)
     memory["message_count"] = memory.get("message_count", 0) + 1
     save_memory(uid, memory)
 
+    # 2. Add user message to history
     history.append({"role": "user", "text": user_message})
     save_history(wid, history)
+
+    # 3. Classify message for potential AI Actions
+    from backend.actions import classify_and_extract_action, log_proposed_action
+    action_data = classify_and_extract_action(user_message, uid, wid)
+    action_id = ""
+    if action_data:
+        action_id = log_proposed_action(uid, wid, action_data["action_type"], action_data["arguments"])
 
     prompt = build_prompt(wid, user_message, memory, history)
     # Clear uploaded files cache immediately
@@ -333,6 +342,13 @@ def ask():
                 yield chunk
             
             full_text = "".join(output_chunks)
+
+            # 4. Stream and append action proposal at the end if detected
+            if action_data and action_id:
+                proposal_block = f"\n\n[[ACTION_PROPOSAL]]: {json.dumps({'action_id': action_id, 'action_type': action_data['action_type'], 'arguments': action_data['arguments']})}"
+                full_text += proposal_block
+                yield proposal_block
+
             history.append({"role": "ai", "text": full_text.strip()})
             save_history(wid, history)
 

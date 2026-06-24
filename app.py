@@ -7,7 +7,7 @@ Memory, chat history, and summaries all stored per-user in Supabase
 import os
 from flask import Flask
 from config import Config
-from backend import auth_bp, memory_bp, files_bp, chat_bp, workspaces_bp
+from backend import auth_bp, memory_bp, files_bp, chat_bp, workspaces_bp, actions_bp
 from backend.utils import _esc, _render_links
 
 app = Flask(__name__)
@@ -19,6 +19,8 @@ app.register_blueprint(memory_bp)
 app.register_blueprint(files_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(workspaces_bp)
+app.register_blueprint(actions_bp)
+
 
 # Register Jinja2 template filters
 @app.template_filter("esc")
@@ -31,7 +33,25 @@ def esc_filter(s):
 def format_ai_response_filter(s):
     if not s:
         return ""
-    return _render_links(_esc(s)).replace('\n', '<br>')
+    import re
+    import json
+    # Match greedily to the end since the action JSON is always appended last
+    proposal_match = re.search(r'\[\[ACTION_PROPOSAL\]\]:\s*(\{.*\})', s)
+    placeholder = ""
+    if proposal_match:
+        raw_json = proposal_match.group(1)
+        s = s.replace(proposal_match.group(0), "")
+        try:
+            data = json.loads(raw_json)
+            # Safely embed JSON string in HTML data attribute
+            placeholder = f'<div class="action-proposal-placeholder" data-proposal="{_esc(json.dumps(data))}"></div>'
+        except Exception:
+            pass
+
+    escaped = _esc(s)
+    rendered = _render_links(escaped).replace('\n', '<br>')
+    return rendered + placeholder
+
 
 @app.route("/sw.js")
 def service_worker():
