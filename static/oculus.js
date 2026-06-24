@@ -1567,6 +1567,28 @@ function hideDeleteWorkspaceModal() {
 }
 
 // Delete Workspace Call
+async function deleteWorkspace() {
+  const idInput = document.getElementById('deleteWorkspaceIdInput');
+  if (!idInput) return;
+  const workspaceId = idInput.value;
+  
+  try {
+    const resp = await fetch('/api/workspaces/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: workspaceId })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      hideDeleteWorkspaceModal();
+      // Reload page (will switch to default workspace or new active one)
+      location.href = location.pathname + '?_ws=' + Date.now();
+    } else {
+      alert(data.error || 'Failed to delete workspace.');
+    }
+  } catch (err) {
+    alert('Error deleting workspace: ' + err.message);
+  }
 }
 
 // ─────────────────────────────────────────
