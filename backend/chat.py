@@ -82,10 +82,10 @@ def maybe_summarise_history(user_id: str, history: list):
         pass
 
 
-def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> str:
+def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list) -> str:
     # Format uploaded files context
     from backend.files import UPLOADED_FILES_CACHE
-    uploaded_files = UPLOADED_FILES_CACHE.get(user_id, [])
+    uploaded_files = UPLOADED_FILES_CACHE.get(workspace_id, [])
     file_context = ""
     if uploaded_files:
         blocks = []
@@ -112,6 +112,15 @@ def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> s
         f"Time: {now.strftime('%H:%M')} SAST (UTC+2)"
     )
 
+    # Load active workspace name
+    workspace_name = "Default Workspace"
+    try:
+        res = supabase.table("oculus_workspaces").select("name").eq("id", workspace_id).execute()
+        if res.data:
+            workspace_name = res.data[0].get("name", "Default Workspace")
+    except Exception as e:
+        print("[Prompt Engine] Error loading workspace name:", e)
+
     web_raw_context = web_search(user_message) if should_search(user_message) else ""
 
     # Start with default budget variables
@@ -132,6 +141,8 @@ def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> s
             "══════════ LIVE SYSTEM INFO ══════════",
             f"- Current date and time: {live_dt}",
             "  Use this as the authoritative date/time. Never guess the date.",
+            f"- Active Workspace: {workspace_name}",
+            f"  You are currently assisting the user in the workspace '{workspace_name}'. All file uploads, project code saving, and chat history are isolated within this context. Focus on topics, clients, and files relative to this workspace.",
             "",
             "══════════ PERSISTENT USER MEMORY ══════════",
             mem_context,
@@ -240,7 +251,7 @@ def home():
         session["current_workspace_id"] = current_wid
 
     chat_history = load_history(current_wid)
-    memory       = load_memory(current_wid, global_user_id=uid)
+    memory       = load_memory(uid)
     mem_name     = memory.get("profile", {}).get("name", "")
     display_name = mem_name or email.split("@")[0]
     greeting     = f"Welcome back, {display_name}." if chat_history else "What are we building today?"
@@ -298,11 +309,11 @@ def ask():
         return Response("No message provided.", mimetype="text/plain")
 
     history = load_history(wid)
-    memory  = load_memory(wid, global_user_id=uid)
+    memory  = load_memory(uid)
 
     extract_memory_regex(user_message, memory)
     memory["message_count"] = memory.get("message_count", 0) + 1
-    save_memory(wid, memory, global_user_id=uid)
+    save_memory(uid, memory)
 
     history.append({"role": "user", "text": user_message})
     save_history(wid, history)
@@ -335,7 +346,7 @@ def ask():
             # Run deep LLM extraction in background
             threading.Thread(
                 target=extract_memory_async,
-                args=(wid, user_message, preferred_model, uid)
+                args=(uid, user_message, preferred_model)
             ).start()
         except Exception as e:
             error = f"\n[Error: {str(e)}]"
