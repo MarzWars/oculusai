@@ -40,6 +40,7 @@ It remembers who you are. It searches the web in real time. It writes code that 
 
 | Capability | Description |
 |---|---|
+| 🏢 **Client Workspaces** | Switch between isolated workspaces. Isolates chat histories, sandbox code files, and active attachments, while maintaining a unified long-term memory across workspaces. |
 | 🔐 **Multi-User Auth** | Register, login, and logout — each user's data is fully isolated in Supabase |
 | 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences, and key facts across sessions. A background LLM pipeline extracts, consolidates, and deconflicts information automatically |
 | 🧠 **Oculus Brain UI** | Sliding side panel with live view of your memory — edit profiles, add facts, manage projects, clients, and deadlines in real time |
@@ -61,7 +62,7 @@ It remembers who you are. It searches the web in real time. It writes code that 
 ```
 Oculus AI
 │
-├── Flask              → Web server, routing, session-based auth
+├── Flask              → Web server, routing, session-based auth, client workspaces
 ├── OpenRouter API     → AI model gateway (OpenAI-compatible)
 │   ├── Nemotron 3 Super 120B       → Primary (Default) — fast, cheap, unmoderated
 │   ├── Llama 3.3 70B               → Fallback 1 — balanced, reliable
@@ -69,9 +70,9 @@ Oculus AI
 │   ├── Dolphin Mistral 24B         → Fallback 3 — uncensored, free tier
 │   └── Free Fallbacks              → (Nemotron 3, Llama 3.3, Hermes 3 405B)
 ├── Supabase Auth      → User registration, login, logout
-├── Supabase DB        → Persistent memory + chat history per user
+├── Supabase DB        → Persistent memory (user-scoped), workspaces config, chat history (workspace-isolated)
 ├── Tavily Search      → Live web search injected into prompt context
-└── Prompt Engine      → Injects memory, search results, and date/time into every request
+└── Prompt Engine      → Injects memory, active workspace context, search results, and date/time into every request
 ```
 
 ### Model Selection & Fallback Chain
@@ -146,18 +147,29 @@ OPENROUTER_API_KEY=your_openrouter_api_key
 Run this in your Supabase SQL editor:
 
 ```sql
--- Per-user memory
+-- Per-user memory (shared globally across workspaces)
 CREATE TABLE oculus_memory (
   user_id UUID PRIMARY KEY,
   memory  JSONB DEFAULT '{}'
 );
 
--- Per-user chat history and summaries
+-- Per-workspace chat history and summaries (workspace-isolated)
+-- Note: 'user_id' column stores the workspace_id for isolated context targeting
 CREATE TABLE oculus_chat (
   user_id  UUID PRIMARY KEY,
   messages JSONB DEFAULT '[]',
   summary  TEXT  DEFAULT ''
 );
+
+-- Workspace lifecycle tracking
+CREATE TABLE oculus_workspaces (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  name TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX idx_oculus_workspaces_user_id ON oculus_workspaces(user_id);
 ```
 
 Then go to **Supabase → Authentication → Settings** and disable **"Enable email confirmations"** so users can log in immediately after registering.
@@ -181,6 +193,7 @@ oculus-ai/
 │   ├── __init__.py         # Exposes all Blueprints from the backend package
 │   ├── extensions.py       # Initialises shared API clients (Supabase, Tavily)
 │   ├── auth.py             # Auth routes, login/register/logout, @login_required decorator
+│   ├── workspaces.py       # Workspaces API lifecycle (create, delete, list, switch)
 │   ├── memory.py           # Memory DB read/write, LLM-based extraction and consolidation
 │   ├── chat.py             # Home route, chat submission, clear, model switching
 │   ├── files.py            # File upload handling, allowed types, prompt injection
@@ -191,6 +204,7 @@ oculus-ai/
 │   ├── index.html          # Main chat interface (Jinja2)
 │   ├── login.html          # Login page
 │   └── register.html       # Registration page
+├── workspaces/             # Local sandbox folders isolated per workspace ID (git-ignored)
 └── static/
     ├── oculus.js           # Frontend — streaming, markdown render, code sandbox, brain UI
     ├── style.css           # Dark terminal theme
@@ -235,7 +249,6 @@ Add credits at: [openrouter.ai → Settings → Credits](https://openrouter.ai/s
 | 🌐 **Smart Search Classifier**      | LLM decides when and how to search the web, generating optimised queries |
 | 🔬 **Multi-Stage Reasoning**        | Structured reasoning pass before final response for better complex task handling |
 | 🖼️ **Image Understanding**         | Upload and analyze screenshots, mockups, and designs |
-| 🏢 **Client Workspaces**            | Fully isolated per-client environments with dedicated memory, files, and projects |
 | 📋 **Project & Deadline Management**| Automatic task/deadline extraction and tracking |
 | 📄 **Advanced RAG & Document Intelligence** | Semantic search over PDFs, DOCX, and other documents with citations |
 | 🔧 **AI Actions Engine**            | Generate proposals, send emails, create tasks, and automate workflows |
