@@ -338,17 +338,15 @@ def _execute_generate_proposal(user_id: str, workspace_id: str, args: dict) -> s
 
 def _execute_send_email(user_id: str, workspace_id: str, args: dict) -> str:
     import os
-    # SMTP is disabled by default. Save a preview file to sandbox instead.
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+    
     to_contact = args.get("to", "Unknown")
     subject = args.get("subject", "No Subject")
     body = args.get("body", "")
     
-    sandbox_dir = os.path.join("workspaces", workspace_id, "emails")
-    os.makedirs(sandbox_dir, exist_ok=True)
-    
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    file_name = f"email_{timestamp}.html"
-    file_path = os.path.join(sandbox_dir, file_name)
+    smtp_enabled = os.environ.get("ENABLE_SMTP_DELIVERY", "false").lower() == "true"
     
     html_content = f"""<!DOCTYPE html>
 <html>
@@ -366,18 +364,59 @@ def _execute_send_email(user_id: str, workspace_id: str, args: dict) -> str:
 <div class="card">
   <div class="header-item"><strong>To:</strong> {to_contact}</div>
   <div class="header-item"><strong>Subject:</strong> {subject}</div>
-  <div class="header-item"><strong>Status:</strong> Draft Saved (SMTP Deferred)</div>
+  <div class="header-item"><strong>Status:</strong> {"Sent via SMTP" if smtp_enabled else "Draft Saved (SMTP Inactive)"}</div>
   <hr>
   <div class="body-content">{body}</div>
 </div>
 </body>
 </html>
 """
+
+    if smtp_enabled:
+        try:
+            smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+            smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+            smtp_user = os.environ.get("SMTP_USER", "")
+            smtp_pass = os.environ.get("SMTP_PASSWORD", "")
+            smtp_sender = os.environ.get("SMTP_SENDER_EMAIL", smtp_user)
+            
+            if not smtp_user or not smtp_pass:
+                raise Exception("SMTP credentials missing from environment.")
+                
+            msg = MIMEMultipart("alternative")
+            msg["Subject"] = subject
+            msg["From"] = smtp_sender
+            msg["To"] = to_contact
+            
+            msg.attach(MIMEText(body, "plain"))
+            msg.attach(MIMEText(html_content, "html"))
+            
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_sender, to_contact, msg.as_string())
+                
+            return f"Email sent successfully to {to_contact}."
+        except Exception as e:
+            print(f"[Actions Engine] SMTP failed, falling back to simulated output: {e}")
+            
+    # Simulated email delivery - save HTML draft in workspace
+    sandbox_dir = os.path.join("workspaces", workspace_id, "emails")
+    os.makedirs(sandbox_dir, exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    file_name = f"email_{timestamp}.html"
+    file_path = os.path.join(sandbox_dir, file_name)
+    
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(html_content)
         
     download_url = f"/api/sandbox/download?path=emails/{file_name}"
-    return f"Email draft preview saved to sandbox as [emails/{file_name}]({download_url})"
+    status_label = "Email draft preview saved to sandbox"
+    if smtp_enabled:
+        status_label += " (SMTP failed, fallback)"
+    return f"{status_label} as [emails/{file_name}]({download_url})"
+
 
 def _undo_file_action(user_id: str, workspace_id: str, action_type: str, args: dict) -> str:
     import os
