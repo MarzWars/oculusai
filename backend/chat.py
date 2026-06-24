@@ -127,6 +127,28 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
     from backend.rag import query_workspace_rag_hybrid
     rag_chunks = query_workspace_rag_hybrid(workspace_id, user_message, match_count=5)
 
+    # Fetch overview list of all documents in this workspace (helps with cross-document reasoning)
+    doc_metadata_context = ""
+    try:
+        res_docs = supabase.table("oculus_documents")\
+            .select("filename", "document_type", "summary")\
+            .eq("workspace_id", workspace_id)\
+            .execute()
+        if res_docs.data:
+            doc_lines = []
+            for d in res_docs.data:
+                fname = d.get("filename", "document")
+                dtype = d.get("document_type", "other")
+                dsummary = d.get("summary") or "No summary available."
+                doc_lines.append(f"- {fname} (Category: {dtype}): {dsummary}")
+            doc_metadata_context = (
+                "Workspace Documents Overview:\n"
+                + "\n".join(doc_lines)
+                + "\n\n"
+            )
+    except Exception as e:
+        print("[Prompt Engine] Error loading doc metadata for context:", e)
+
     # Start with default budget variables
     verbatim_turns = Config.VERBATIM_TURNS
     memory_max_results = 5
@@ -142,18 +164,23 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
 
         # 3. Compile RAG Context
         rag_context = ""
-        if rag_chunks and rag_max_results > 0:
+        if (rag_chunks and rag_max_results > 0) or doc_metadata_context:
             blocks = []
-            for c in rag_chunks[:rag_max_results]:
-                filename = c.get("filename", "document")
-                page = c.get("page_number") or 1
-                section = c.get("section_title") or f"Page {page}"
-                text = c.get("chunk_text", "")
-                blocks.append(f"[Source Document: {filename} | {section}]\n{text}\n[End of chunk]")
+            if rag_chunks and rag_max_results > 0:
+                for c in rag_chunks[:rag_max_results]:
+                    filename = c.get("filename", "document")
+                    page = c.get("page_number") or 1
+                    section = c.get("section_title") or f"Page {page}"
+                    text = c.get("chunk_text", "")
+                    blocks.append(f"[Source Chunk: {filename} | {section}]\n{text}\n[End of chunk]")
+            
             rag_context = (
                 "══════════ WORKSPACE DOCUMENT CONTEXT ══════════\n"
-                "Use the following relevant chunks from the workspace documents to answer the user's query. "
-                "If you use this information, you MUST cite the source precisely in your answer (e.g. 'According to [filename] (Page X)...' or 'Source: [filename], Section: [title]').\n\n"
+                "You have access to the following documents in this workspace:\n"
+                f"{doc_metadata_context}"
+                "Here are relevant chunks matching the user's query. If you use this information, "
+                "you MUST cite the source precisely in your answer (e.g. 'According to [filename] (Page X)...' "
+                "or 'Source: [filename], Section: [title]'):\n\n"
                 + "\n\n".join(blocks)
             )
 

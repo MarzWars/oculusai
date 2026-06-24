@@ -2192,12 +2192,18 @@ async function loadWorkspaceDocuments() {
         if (ext === 'pdf') docIcon = "📕";
         else if (ext === 'docx') docIcon = "📘";
 
+        let typeBadge = '';
+        if (doc.document_type && doc.document_type !== 'other' && doc.document_type !== 'document') {
+          typeBadge = `<span class="doc-type-badge type-${doc.document_type}">${escapeHtml(doc.document_type.replace('_', ' '))}</span>`;
+        }
+
         return `
           <div class="doc-item" data-doc-id="${doc.id}">
             <div class="doc-header-row">
               <div class="doc-name-wrap">
                 <span class="doc-icon">${docIcon}</span>
                 <span class="doc-name" title="${escapeHtml(doc.filename)}">${escapeHtml(doc.filename)}</span>
+                ${typeBadge}
               </div>
               <button class="doc-delete-btn" onclick="deleteWorkspaceDocument('${doc.id}', event)" title="Delete document">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11">

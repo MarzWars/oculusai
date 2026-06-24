@@ -234,13 +234,63 @@ def ingest_document(user_id: str, workspace_id: str, filename: str, file_path: s
     if not chunks:
         return {"status": "error", "message": "No chunks generated from document."}
         
+    # Extract sample text for intelligence extraction (approx 8000 chars)
+    full_sample = []
+    total_chars = 0
+    for item in parsed_items:
+        text = item["text"]
+        full_sample.append(text)
+        total_chars += len(text)
+        if total_chars > 8000:
+            break
+    sample_text = "\n".join(full_sample)[:8000]
+
+    doc_type = "other"
+    doc_summary = "Could not automatically summarize document."
+    try:
+        from backend.models import query_openrouter_extraction
+        analysis_prompt = (
+            "You are a document intelligence assistant. Analyze the following document content sample "
+            "and output a JSON object containing the classification, a brief summary, and key terms.\n\n"
+            "Required JSON Schema:\n"
+            "{\n"
+            "  \"document_type\": \"contract\" | \"invoice\" | \"proposal\" | \"resume\" | \"technical_doc\" | \"other\",\n"
+            "  \"summary\": \"concise 2-sentence summary of the document\",\n"
+            "  \"keywords\": [\"keyword1\", \"keyword2\", \"keyword3\", \"keyword4\", \"keyword5\", \"keyword6\"]\n"
+            "}\n\n"
+            f"Filename: {filename}\n"
+            f"Content Sample:\n{sample_text}\n\n"
+            "Output the raw JSON string only, no formatting wrappers, code blocks, or explanations."
+        )
+        response_text = query_openrouter_extraction(analysis_prompt)
+        
+        # Clean response if LLM wrapped in code blocks
+        clean_json = response_text.strip()
+        if clean_json.startswith("```"):
+            clean_json = re.sub(r"^```(?:json)?\n", "", clean_json)
+            clean_json = re.sub(r"\n```$", "", clean_json)
+            clean_json = clean_json.strip()
+            
+        analysis_data = json.loads(clean_json)
+        doc_type = analysis_data.get("document_type", "other")
+        summary_text = analysis_data.get("summary", "")
+        keywords = analysis_data.get("keywords", [])
+        
+        if keywords:
+            doc_summary = f"{summary_text}\nKeywords: {', '.join(keywords)}"
+        else:
+            doc_summary = summary_text
+    except Exception as e:
+        print("[RAG Ingestion] Document intelligence extraction failed:", e)
+
     # 1. Create document record
     doc_res = supabase.table("oculus_documents").insert({
         "user_id": user_id,
         "workspace_id": workspace_id,
         "filename": filename,
         "file_size": file_size,
-        "document_type": "document"
+        "document_type": doc_type,
+        "summary": doc_summary
     }).execute()
     
     if not doc_res.data:

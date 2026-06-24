@@ -49,6 +49,7 @@ It remembers who you are. It searches the web in real time. It writes code that 
 | 🔬 **Collapsible Thinking** | Internal model reasoning streams live in a greyed-out block, then folds into a collapsible summary when the final response begins. |
 | 🌐 **Live Web Search** | Automatically pulls real-time information via Tavily Search when the query requires current data. |
 | 💻 **Interactive Code Sandbox** | HTML, CSS, JavaScript, and SVG snippets open in a live split-screen iframe sandbox directly in the chat — edit, run, and preview without leaving the app. |
+| 📄 **Advanced RAG & Doc Intel** | Semantic search over PDFs and DOCX files. Ingests, chunks, embeds (via OpenRouter), and indexes documents in Supabase. Classifies documents, auto-summarizes them using OpenRouter, and supports hybrid (vector + full-text search) retrieval with RRF ranking and citations. |
 | 🗂️ **File Upload & Parsing** | Drag-and-drop or select plaintext and code files (.py, .js, .json, .css, etc.). Content is injected into the prompt automatically and cleared after each submit. |
 | ⚙️ **Manual Model Selection** | Pin any supported model via the sidebar panel (e.g. Nemotron 3 Super 120B, Llama 3.3 70B, Hermes 3 405B, Dolphin Mistral 24B). |
 | 🔄 **Model Fallback Chain** | If the pinned model is rate-limited, returns an error, or times out, the system automatically tries the next model in the chain — no failed requests. |
@@ -203,6 +204,9 @@ SMTP_PASSWORD=your_app_password
 Run this in your Supabase SQL editor:
 
 ```sql
+-- Enable vector extension
+CREATE EXTENSION IF NOT EXISTS vector;
+
 -- Per-user memory (shared globally across workspaces)
 CREATE TABLE oculus_memory (
   user_id UUID PRIMARY KEY,
@@ -242,6 +246,122 @@ CREATE TABLE oculus_actions (
 
 CREATE INDEX idx_oculus_actions_user_id ON oculus_actions(user_id);
 CREATE INDEX idx_oculus_actions_workspace_id ON oculus_actions(workspace_id);
+
+-- Document Metadata Table (Phase 2 & 3 RAG)
+CREATE TABLE oculus_documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  workspace_id UUID NOT NULL,
+  filename TEXT NOT NULL,
+  file_size INT NOT NULL,
+  document_type TEXT DEFAULT 'other', -- 'contract', 'invoice', 'proposal', etc.
+  summary TEXT,
+  uploaded_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX idx_oculus_documents_workspace ON oculus_documents(workspace_id);
+
+-- Document Chunks Table (Phase 2 & 3 RAG)
+CREATE TABLE oculus_document_chunks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID NOT NULL REFERENCES oculus_documents(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL,
+  page_number INT,
+  section_title TEXT,
+  chunk_text TEXT NOT NULL,
+  embedding vector(1536), -- 1536 dimensions for text-embedding-3-small
+  fts tsvector, -- Full-text search vector
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
+
+CREATE INDEX idx_chunks_workspace ON oculus_document_chunks(workspace_id);
+CREATE INDEX idx_chunks_embedding ON oculus_document_chunks USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX idx_chunks_fts ON oculus_document_chunks USING gin(fts);
+
+-- Automatically update fts vectors on chunk insert/update
+CREATE OR REPLACE FUNCTION oculus_chunks_fts_trigger() RETURNS trigger AS $$
+BEGIN
+  new.fts := to_tsvector('english', coalesce(new.chunk_text, ''));
+  RETURN new;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_chunks_fts_update
+  BEFORE INSERT OR UPDATE ON oculus_document_chunks
+  FOR EACH ROW EXECUTE FUNCTION oculus_chunks_fts_trigger();
+
+-- Stored procedure for vector similarity matching
+CREATE OR REPLACE FUNCTION match_document_chunks (
+  query_embedding vector(1536),
+  match_threshold float,
+  match_count int,
+  filter_workspace_id uuid
+)
+RETURNS TABLE (
+  chunk_id uuid,
+  document_id uuid,
+  filename text,
+  page_number int,
+  section_title text,
+  chunk_text text,
+  similarity float
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    c.id AS chunk_id,
+    c.document_id,
+    d.filename,
+    c.page_number,
+    c.section_title,
+    c.chunk_text,
+    1 - (c.embedding <=> query_embedding) AS similarity
+  FROM oculus_document_chunks c
+  JOIN oculus_documents d ON c.document_id = d.id
+  WHERE c.workspace_id = filter_workspace_id
+    AND 1 - (c.embedding <=> query_embedding) > match_threshold
+  ORDER BY c.embedding <=> query_embedding
+  LIMIT match_count;
+END;
+$$;
+
+-- Stored procedure for full-text search matching
+CREATE OR REPLACE FUNCTION search_document_chunks_fts (
+  query_text text,
+  match_count int,
+  filter_workspace_id uuid
+)
+RETURNS TABLE (
+  chunk_id uuid,
+  document_id uuid,
+  filename text,
+  page_number int,
+  section_title text,
+  chunk_text text,
+  fts_rank float
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT
+    c.id AS chunk_id,
+    c.document_id,
+    d.filename,
+    c.page_number,
+    c.section_title,
+    c.chunk_text,
+    ts_rank_cd(c.fts, plainto_tsquery('english', query_text)) AS fts_rank
+  FROM oculus_document_chunks c
+  JOIN oculus_documents d ON c.document_id = d.id
+  WHERE c.workspace_id = filter_workspace_id
+    AND c.fts @@ plainto_tsquery('english', query_text)
+  ORDER BY fts_rank DESC
+  LIMIT match_count;
+END;
+$$;
 ```
 
 Then go to **Supabase → Authentication → Settings** and disable **"Enable email confirmations"** so users can log in immediately after registering.
@@ -322,7 +442,6 @@ Add credits at: [openrouter.ai → Settings → Credits](https://openrouter.ai/s
 | 🌐 **Smart Search Classifier**      | LLM decides when and how to search the web, generating optimised queries. |
 | 🔬 **Multi-Stage Reasoning**        | Structured reasoning pass before final response for better complex task handling. |
 | 🖼️ **Image Understanding**         | Upload and analyze screenshots, mockups, and designs. |
-| 📄 **Advanced RAG & Document Intelligence** | Semantic search over PDFs, DOCX, and other documents with citations. |
 | 🔗 **Advanced Multi-Action Workflows** | Chain actions together (e.g. Generate Proposal $\rightarrow$ Draft Email with PDF attached). |
 | 📱 **Enhanced Mobile Experience**   | Full PWA support and optimised Brain UI on mobile. |
 
