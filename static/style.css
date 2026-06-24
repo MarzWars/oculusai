@@ -2791,6 +2791,25 @@ code.inline-code {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.act-log-delete-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+
+.act-log-delete-btn:hover {
+  color: var(--red);
+  background: rgba(243, 139, 168, 0.15);
+}
+
+
 .act-badge {
   font-size: 9px;
   font-weight: 700;

@@ -1889,6 +1889,24 @@ async function loadActionHistoryLog() {
         else if (act.action_type === 'send_email') { icon = "✉️"; label = "Email Sent"; }
 
         let statusBadge = `<span class="act-badge status-${act.status}">${act.status.toUpperCase()}</span>`;
+
+        let deleteBtn = "";
+        if (act.status === 'executed') {
+          let btnTitle = "Undo Action";
+          if (act.action_type === 'create_task') btnTitle = "Delete Task";
+          else if (act.action_type === 'generate_proposal') btnTitle = "Delete Proposal File";
+          else if (act.action_type === 'send_email') btnTitle = "Delete Email File";
+
+          deleteBtn = `
+            <button class="act-log-delete-btn" onclick="deleteActionFromLog('${act.id}', event)" title="${btnTitle}">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          `;
+        }
+
         let timeStr = new Date(act.created_at).toLocaleDateString() + ' ' + new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         // Summarize args
@@ -1899,10 +1917,13 @@ async function loadActionHistoryLog() {
         else if (act.action_type === 'send_email') summaryText = `To: ${args.to || 'Unknown'}`;
 
         html += `
-          <div class="actions-log-item">
+          <div class="actions-log-item" data-action-id="${act.id}">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <span style="font-size:11.5px; color:var(--text-muted); font-weight:500;">${icon} ${label}</span>
-              ${statusBadge}
+              <div style="display:flex; align-items:center; gap:6px;">
+                ${statusBadge}
+                ${deleteBtn}
+              </div>
             </div>
             <div style="font-size:12.5px; color:var(--text); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;">
               ${escapeHtml(summaryText)}
@@ -1918,5 +1939,47 @@ async function loadActionHistoryLog() {
     }
   } catch (err) {
     container.innerHTML = `<div style="font-size:12px; color:var(--red); padding: 4px;">Error: ${err.message}</div>`;
+  }
+}
+
+// Reverts and deletes an action directly from the Action Log history panel
+async function deleteActionFromLog(actionId, event) {
+  if (event) event.stopPropagation();
+
+  if (!confirm("Are you sure you want to delete/revert this action?")) {
+    return;
+  }
+
+  const itemEl = document.querySelector(`.actions-log-item[data-action-id="${actionId}"]`);
+  let originalHtml = "";
+  if (itemEl) {
+    originalHtml = itemEl.innerHTML;
+    itemEl.innerHTML = `
+      <div style="font-size:11.5px; color:var(--text-muted); padding: 4px; display:flex; align-items:center; gap:5px;">
+        <span style="display:inline-block; animation: spin 1s infinite linear;">⏳</span> Reverting...
+      </div>
+    `;
+  }
+
+  try {
+    const resp = await fetch('/api/actions/undo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action_id: actionId })
+    });
+    const result = await resp.json();
+    if (resp.ok && result.status === 'success') {
+      loadBrainIntoSidebar();
+      loadActionHistoryLog();
+      
+      // Also update the chat screen action card status if it's currently loaded
+      updateActionCardStatusFromServer(actionId);
+    } else {
+      alert(result.message || "Failed to revert action");
+      if (itemEl) itemEl.innerHTML = originalHtml;
+    }
+  } catch (err) {
+    alert("Error reverting action: " + err.message);
+    if (itemEl) itemEl.innerHTML = originalHtml;
   }
 }
