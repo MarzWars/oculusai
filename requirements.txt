@@ -6,3 +6,4 @@ supabase
 gunicorn
 gevent
 python-docx
+pypdf

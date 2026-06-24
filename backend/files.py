@@ -10,7 +10,8 @@ UPLOADED_FILES_CACHE = {}
 ALLOWED_EXTENSIONS = {
     ".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".css", ".html", 
     ".md", ".txt", ".csv", ".yml", ".yaml", ".ini", ".cfg", ".xml", 
-    ".svg", ".sql", ".sh", ".bat", ".c", ".cpp", ".h", ".go", ".rs"
+    ".svg", ".sql", ".sh", ".bat", ".c", ".cpp", ".h", ".go", ".rs",
+    ".pdf", ".docx"
 }
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB per file
 
@@ -52,6 +53,7 @@ def upload_file_api():
     cache = UPLOADED_FILES_CACHE[wid]
     errors = []
     successes = []
+    rag_successes = []
     
     for file in uploaded_files:
         filename = file.filename
@@ -70,6 +72,28 @@ def upload_file_api():
                 errors.append(f"{filename}: Exceeds 2MB size limit")
                 continue
                 
+            # If it's a PDF or DOCX, process it through the RAG pipeline
+            if ext in {".pdf", ".docx"}:
+                # Create a temp directory for ingestion processing
+                temp_dir = os.path.join("workspaces", "temp_uploads")
+                os.makedirs(temp_dir, exist_ok=True)
+                temp_path = os.path.join(temp_dir, filename)
+                
+                with open(temp_path, "wb") as f:
+                    f.write(content_bytes)
+                    
+                from backend.rag import ingest_document
+                ingest_res = ingest_document(uid, wid, filename, temp_path, len(content_bytes))
+                
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+                    
+                if ingest_res["status"] == "success":
+                    rag_successes.append(filename)
+                else:
+                    errors.append(f"{filename}: RAG Ingestion failed - {ingest_res.get('message')}")
+                continue
+
             try:
                 content = content_bytes.decode("utf-8")
             except UnicodeDecodeError:
@@ -101,7 +125,8 @@ def upload_file_api():
         "status": "ok" if not errors else "partial",
         "successes": successes,
         "errors": errors,
-        "files": files_list
+        "files": files_list,
+        "rag_ingested": rag_successes
     })
 
 

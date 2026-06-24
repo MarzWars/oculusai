@@ -123,10 +123,15 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
 
     web_raw_context = web_search(user_message) if should_search(user_message) else ""
 
+    # Query workspace documents RAG context
+    from backend.rag import query_workspace_rag
+    rag_chunks = query_workspace_rag(workspace_id, user_message, match_count=5)
+
     # Start with default budget variables
     verbatim_turns = Config.VERBATIM_TURNS
     memory_max_results = 5
     web_length_limit = len(web_raw_context)
+    rag_max_results = len(rag_chunks) if rag_chunks else 0
 
     while True:
         # 1. Compile Memory Context
@@ -135,7 +140,24 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
         # 2. Compile Web Context
         web_context = web_raw_context[:web_length_limit] if web_raw_context else ""
 
-        # 3. Assemble parts
+        # 3. Compile RAG Context
+        rag_context = ""
+        if rag_chunks and rag_max_results > 0:
+            blocks = []
+            for c in rag_chunks[:rag_max_results]:
+                filename = c.get("filename", "document")
+                page = c.get("page_number") or 1
+                section = c.get("section_title") or f"Page {page}"
+                text = c.get("chunk_text", "")
+                blocks.append(f"[Source Document: {filename} | {section}]\n{text}\n[End of chunk]")
+            rag_context = (
+                "══════════ WORKSPACE DOCUMENT CONTEXT ══════════\n"
+                "Use the following relevant chunks from the workspace documents to answer the user's query. "
+                "If you use this information, you MUST cite the source precisely in your answer (e.g. 'According to [filename] (Page X)...' or 'Source: [filename], Section: [title]').\n\n"
+                + "\n\n".join(blocks)
+            )
+
+        # 4. Assemble parts
         parts = [SYSTEM_PROMPT, ""]
         parts += [
             "══════════ LIVE SYSTEM INFO ══════════",
@@ -152,6 +174,12 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
             parts += [
                 "",
                 file_context,
+            ]
+
+        if rag_context:
+            parts += [
+                "",
+                rag_context,
             ]
 
         if web_context:
@@ -223,6 +251,9 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
         if verbatim_turns > 1:
             verbatim_turns -= 1
             print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Reducing conversation history turns to {verbatim_turns}...")
+        elif rag_max_results > 0:
+            rag_max_results -= 1
+            print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Reducing RAG document chunks to {rag_max_results}...")
         elif memory_max_results > 1:
             memory_max_results -= 1
             print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Reducing memory max_results to {memory_max_results}...")

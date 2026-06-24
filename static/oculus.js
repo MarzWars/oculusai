@@ -1066,8 +1066,16 @@ async function uploadFiles(files) {
     const data = await resp.json();
     if (resp.ok || data.status === 'partial') {
       renderUploadedChips(data.files);
+      
+      let msg = "";
+      if (data.rag_ingested && data.rag_ingested.length) {
+        msg += "Successfully ingested to Workspace Knowledge:\n" + data.rag_ingested.join("\n") + "\n\n";
+      }
       if (data.errors && data.errors.length) {
-        alert("Upload warning:\n" + data.errors.join("\n"));
+        msg += "Upload warning:\n" + data.errors.join("\n");
+      }
+      if (msg) {
+        alert(msg);
       }
     } else {
       alert("Upload failed: " + (data.error || "Unknown error"));
