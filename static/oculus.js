@@ -1906,18 +1906,32 @@ async function loadActionHistoryLog() {
 
         let statusBadge = `<span class="act-badge status-${act.status}">${act.status.toUpperCase()}</span>`;
 
-        let deleteBtn = "";
+        let actionBtns = "";
         if (act.status === 'executed') {
           let btnTitle = "Undo Action";
           if (act.action_type === 'create_task') btnTitle = "Delete Task";
           else if (act.action_type === 'generate_proposal') btnTitle = "Delete Proposal File";
           else if (act.action_type === 'send_email') btnTitle = "Delete Email File";
 
-          deleteBtn = `
-            <button class="act-log-delete-btn" onclick="deleteActionFromLog('${act.id}', event)" title="${btnTitle}">
+          actionBtns = `
+            <button class="act-log-action-btn act-log-delete-btn" onclick="deleteActionFromLog('${act.id}', event)" title="${btnTitle}">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11">
                 <polyline points="3 6 5 6 21 6"></polyline>
                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          `;
+        } else if (act.status === 'pending') {
+          actionBtns = `
+            <button class="act-log-action-btn act-log-confirm-btn" onclick="executeActionFromLog('${act.id}', event)" title="Confirm &amp; Execute">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="11" height="11">
+                <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+            </button>
+            <button class="act-log-action-btn act-log-cancel-btn" onclick="cancelActionFromLog('${act.id}', event)" title="Reject &amp; Cancel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
               </svg>
             </button>
           `;
@@ -1938,7 +1952,7 @@ async function loadActionHistoryLog() {
               <span style="font-size:11.5px; color:var(--text-muted); font-weight:500;">${icon} ${label}</span>
               <div style="display:flex; align-items:center; gap:6px;">
                 ${statusBadge}
-                ${deleteBtn}
+                ${actionBtns}
               </div>
             </div>
             <div style="font-size:12.5px; color:var(--text); font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-bottom:2px;">
@@ -1996,6 +2010,85 @@ async function deleteActionFromLog(actionId, event) {
     }
   } catch (err) {
     alert("Error reverting action: " + err.message);
+    if (itemEl) itemEl.innerHTML = originalHtml;
+  }
+}
+
+// Executes a pending action directly from the Action Log history panel
+async function executeActionFromLog(actionId, event) {
+  if (event) event.stopPropagation();
+
+  const itemEl = document.querySelector(`.actions-log-item[data-action-id="${actionId}"]`);
+  let originalHtml = "";
+  if (itemEl) {
+    originalHtml = itemEl.innerHTML;
+    itemEl.innerHTML = `
+      <div style="font-size:11.5px; color:var(--text-muted); padding: 4px; display:flex; align-items:center; gap:5px;">
+        <span style="display:inline-block; animation: spin 1s infinite linear;">⏳</span> Executing...
+      </div>
+    `;
+  }
+
+  try {
+    const resp = await fetch('/api/actions/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action_id: actionId })
+    });
+    const result = await resp.json();
+    if (resp.ok && result.status === 'success') {
+      loadBrainIntoSidebar();
+      loadActionHistoryLog();
+      
+      // Also update chat card if on screen
+      updateActionCardStatusFromServer(actionId);
+    } else {
+      alert(result.message || "Failed to execute action");
+      if (itemEl) itemEl.innerHTML = originalHtml;
+    }
+  } catch (err) {
+    alert("Error executing action: " + err.message);
+    if (itemEl) itemEl.innerHTML = originalHtml;
+  }
+}
+
+// Cancels a pending action directly from the Action Log history panel
+async function cancelActionFromLog(actionId, event) {
+  if (event) event.stopPropagation();
+
+  if (!confirm("Are you sure you want to reject and cancel this action?")) {
+    return;
+  }
+
+  const itemEl = document.querySelector(`.actions-log-item[data-action-id="${actionId}"]`);
+  let originalHtml = "";
+  if (itemEl) {
+    originalHtml = itemEl.innerHTML;
+    itemEl.innerHTML = `
+      <div style="font-size:11.5px; color:var(--text-muted); padding: 4px; display:flex; align-items:center; gap:5px;">
+        <span style="display:inline-block; animation: spin 1s infinite linear;">⏳</span> Cancelling...
+      </div>
+    `;
+  }
+
+  try {
+    const resp = await fetch('/api/actions/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action_id: actionId })
+    });
+    const result = await resp.json();
+    if (resp.ok && result.status === 'success') {
+      loadActionHistoryLog();
+      
+      // Also update chat card if on screen
+      updateActionCardStatusFromServer(actionId);
+    } else {
+      alert(result.message || "Failed to cancel action");
+      if (itemEl) itemEl.innerHTML = originalHtml;
+    }
+  } catch (err) {
+    alert("Error cancelling action: " + err.message);
     if (itemEl) itemEl.innerHTML = originalHtml;
   }
 }

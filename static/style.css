@@ -2791,7 +2791,7 @@ code.inline-code {
   background: rgba(255, 255, 255, 0.04);
 }
 
-.act-log-delete-btn {
+.act-log-action-btn {
   background: transparent;
   border: none;
   color: var(--text-muted);
@@ -2804,11 +2804,16 @@ code.inline-code {
   transition: color 0.15s, background 0.15s;
 }
 
-.act-log-delete-btn:hover {
+.act-log-delete-btn:hover,
+.act-log-cancel-btn:hover {
   color: var(--red);
   background: rgba(243, 139, 168, 0.15);
 }
 
+.act-log-confirm-btn:hover {
+  color: var(--green);
+  background: rgba(166, 227, 161, 0.15);
+}
 
 .act-badge {
   font-size: 9px;
@@ -2848,15 +2853,16 @@ code.inline-code {
 .sandbox-download-btn {
   display: inline-flex;
   align-items: center;
+  vertical-align: middle;
   background: var(--accent-dim);
   border: 1px solid rgba(124, 106, 247, 0.3);
-  color: var(--accent);
+  color: var(--accent) !important;
   text-decoration: none !important;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
-  margin-top: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin: 0 4px;
   transition: all 0.15s ease-in-out;
 }
 
@@ -2864,7 +2870,7 @@ code.inline-code {
   background: var(--accent);
   color: #fff !important;
   border-color: var(--accent);
-  box-shadow: 0 4px 12px var(--accent-glow);
+  box-shadow: 0 2px 6px var(--accent-glow);
 }
 
 /* ── Action card (raw JSON response stopgap) ─ */
