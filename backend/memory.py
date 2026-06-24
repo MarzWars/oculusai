@@ -29,7 +29,18 @@ MEMORY_DEFAULT = {
     "message_count":   0
 }
 
-def load_memory(user_id: str) -> dict:
+def load_default_profile(user_id: str) -> dict:
+    """Loads the profile dictionary from the default workspace memory."""
+    try:
+        res = supabase.table("oculus_memory").select("memory").eq("user_id", user_id).execute()
+        if res.data:
+            default_mem = res.data[0].get("memory", {})
+            return default_mem.get("profile", {})
+    except Exception as e:
+        print("[Memory] Error loading default profile:", e)
+    return {}
+
+def load_memory(user_id: str, global_user_id: str = None) -> dict:
     try:
         res = supabase.table("oculus_memory").select("memory").eq("user_id", user_id).execute()
         mem = res.data[0].get("memory", {}) if res.data else {}
@@ -43,9 +54,16 @@ def load_memory(user_id: str) -> dict:
                 merged[key].update(val)
             else:
                 merged[key] = val
+                
+    # Sync user profile from the default workspace memory
+    if global_user_id and user_id != global_user_id:
+        default_profile = load_default_profile(global_user_id)
+        if default_profile:
+            merged["profile"].update(default_profile)
+            
     return merged
 
-def save_memory(user_id: str, mem: dict):
+def save_memory(user_id: str, mem: dict, global_user_id: str = None):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
     mem["last_seen"] = now
     if not mem.get("first_seen"):
@@ -58,6 +76,19 @@ def save_memory(user_id: str, mem: dict):
         }).execute()
     except Exception as e:
         print("Memory save error:", e)
+        
+    # Sync profile changes back to the default workspace memory
+    if global_user_id and user_id != global_user_id:
+        try:
+            res = supabase.table("oculus_memory").select("memory").eq("user_id", global_user_id).execute()
+            default_mem = res.data[0].get("memory", {}) if res.data else {}
+            default_mem["profile"] = mem.get("profile", {})
+            supabase.table("oculus_memory").upsert({
+                "user_id": global_user_id,
+                "memory":  default_mem
+            }).execute()
+        except Exception as e:
+            print("[Memory] Error syncing profile back to default workspace:", e)
 
 def extract_memory_regex(text: str, mem: dict) -> bool:
     if is_ad_content(text):
@@ -369,10 +400,10 @@ def consolidate_memory_llm(current_memory: dict, preferred_model: str = None) ->
     return current_memory
 
 
-def extract_memory_async(user_id: str, user_message: str, preferred_model: str = None):
+def extract_memory_async(user_id: str, user_message: str, preferred_model: str = None, global_user_id: str = None):
     """Background task to run LLM memory extraction, deconfliction, and save to Supabase."""
     try:
-        mem = load_memory(user_id)
+        mem = load_memory(user_id, global_user_id=global_user_id)
         changed = extract_memory_llm(user_message, mem, preferred_model=preferred_model)
         
         should_consolidate = changed and (
@@ -394,7 +425,7 @@ def extract_memory_async(user_id: str, user_message: str, preferred_model: str =
                 changed = True
                 
         if changed:
-            save_memory(user_id, mem)
+            save_memory(user_id, mem, global_user_id=global_user_id)
             print(f"[Async Memory] Successfully updated and saved memory for user: {user_id}")
     except Exception as e:
         print("[Async Memory Error] Failed to process memory asynchronously:", e)
@@ -506,7 +537,7 @@ def memory_to_context(mem: dict, user_message: str = "", max_results: int = 5) -
 def get_memory_api():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
-    mem = load_memory(wid)
+    mem = load_memory(wid, global_user_id=uid)
     return jsonify(mem)
 
 
@@ -518,7 +549,7 @@ def update_memory_api():
     data = request.get_json() or {}
     update_type = data.get("type")
     
-    mem = load_memory(wid)
+    mem = load_memory(wid, global_user_id=uid)
     changed = False
     
     if update_type == "profile":
@@ -558,7 +589,7 @@ def update_memory_api():
             changed = True
             
     if changed:
-        save_memory(wid, mem)
+        save_memory(wid, mem, global_user_id=uid)
         return jsonify({"status": "ok", "memory": mem})
     return jsonify({"status": "no_change", "error": "Invalid request parameters or duplicate item"}), 400
 
@@ -571,7 +602,7 @@ def delete_memory_api():
     data = request.get_json() or {}
     key = data.get("key")
     
-    mem = load_memory(wid)
+    mem = load_memory(wid, global_user_id=uid)
     changed = False
     
     if key in ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]:
@@ -595,7 +626,7 @@ def delete_memory_api():
             changed = True
             
     if changed:
-        save_memory(wid, mem)
+        save_memory(wid, mem, global_user_id=uid)
         return jsonify({"status": "ok", "memory": mem})
     return jsonify({"status": "no_change", "error": "Item not found"}), 404
 

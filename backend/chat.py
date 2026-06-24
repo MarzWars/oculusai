@@ -240,7 +240,7 @@ def home():
         session["current_workspace_id"] = current_wid
 
     chat_history = load_history(current_wid)
-    memory       = load_memory(current_wid)
+    memory       = load_memory(current_wid, global_user_id=uid)
     mem_name     = memory.get("profile", {}).get("name", "")
     display_name = mem_name or email.split("@")[0]
     greeting     = f"Welcome back, {display_name}." if chat_history else "What are we building today?"
@@ -298,11 +298,11 @@ def ask():
         return Response("No message provided.", mimetype="text/plain")
 
     history = load_history(wid)
-    memory  = load_memory(wid)
+    memory  = load_memory(wid, global_user_id=uid)
 
     extract_memory_regex(user_message, memory)
     memory["message_count"] = memory.get("message_count", 0) + 1
-    save_memory(wid, memory)
+    save_memory(wid, memory, global_user_id=uid)
 
     history.append({"role": "user", "text": user_message})
     save_history(wid, history)
@@ -335,7 +335,7 @@ def ask():
             # Run deep LLM extraction in background
             threading.Thread(
                 target=extract_memory_async,
-                args=(wid, user_message, preferred_model)
+                args=(wid, user_message, preferred_model, uid)
             ).start()
         except Exception as e:
             error = f"\n[Error: {str(e)}]"

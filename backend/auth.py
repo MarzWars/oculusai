@@ -77,9 +77,9 @@ def login():
                     
                     # Increment session count in memory
                     from backend.memory import load_memory, save_memory
-                    mem = load_memory(uid)
+                    mem = load_memory(uid, global_user_id=uid)
                     mem["session_count"] = mem.get("session_count", 0) + 1
-                    save_memory(uid, mem)
+                    save_memory(uid, mem, global_user_id=uid)
                     return redirect("/")
                 else:
                     error = "Invalid email or password."
