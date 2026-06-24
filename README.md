@@ -38,11 +38,11 @@ Oculus is an **AI Knowledge Workspace & Actions Engine** designed specifically f
 
 ### 1. The Context-Switching Tax
 * **The Problem:** In a typical agency, you are constantly swapping between different clients. Chat logs get cluttered, attachment lists get mixed up, and sandbox files overwrite each other.
-* **The Solution:** **Isolated Client Workspaces**. Oculus creates distinct digital sandboxes for every client project. Swapping a workspace switches the active chat history, file uploads, and directory files on the server, keeping Acme Corp's assets completely isolated from Lex Digitals' internals.
+* **The Solution:** **Isolated Client Workspaces**. Oculus creates distinct digital sandboxes for every client project. Swapping a workspace switches the active chat history, file uploads, and directory files on the server, keeping Acme Corp assets completely isolated from Lex Digitals internals.
 
 ### 2. The "Forgetting" Problem
 * **The Problem:** LLM chats have static context windows. If you tell an AI your styling rules, client emails, or task deadlines on Monday, it will forget them by Friday.
-* **The Solution:** **Unified Long-Term Memory (Oculus Brain)**. A background pipeline reads conversations, extracts client profiles, preferences, and deadlines, and consolidates them in Supabase. This compiled "Brain" is injected into every chat request automatically, ensuring Oculus remembers everything that matters across sessions.
+* **The Solution:** **Unified Long-Term Memory (Oculus Brain)**. A background pipeline reads conversations, extracts client profiles, preferences, and deadlines, and consolidates them in Supabase. This compiled Brain is injected into every chat request automatically, ensuring Oculus remembers everything that matters across sessions.
 
 ### 3. Passive Conversation vs. Active Execution
 * **The Problem:** Chatbots only give advice. If you ask them to create a task, draft a proposal, or write an email, they just give you a block of markdown text that you have to copy, paste, and compile yourself.
@@ -79,69 +79,356 @@ Oculus is an **AI Knowledge Workspace & Actions Engine** designed specifically f
 
 ---
 
-## 📖 Feature Usage Guide & Example Prompts
+## 📖 How to Use Oculus — Complete Guide
 
-Here is a quick reference guide on how to trigger and use newly added workspace, document, and action automation features:
+This section covers every major feature in detail. Think of this as a field manual — read it once and you will know exactly how to get full value out of the system.
 
-### 1. Unified Long-Term Memory (Oculus Brain)
-Oculus automatically listens and extracts facts about your projects, preferences, and clients during normal conversation.
-* **Extraction Trigger Prompt:** 
-  > *"My name is Alex, I'm a developer at Lex Digitals and I prefer writing Python code with Flask."*
-* **Client Context Prompt:**
-  > *"Sarah is our main contact at Acme Digital Agency. Their website is acmedigital.com."*
-* **Styling Preference Prompt:**
-  > *"Always use Outfit fonts and a dark terminal aesthetic when writing CSS layouts."*
-* **Manual Management:** Click the hamburger menu toggle button in the header to open the settings sidebar and scroll to **Oculus Brain**. Here you can edit your profile fields directly or manually delete preferences, deadlines, and clients.
+---
 
-### 2. Isolated Workspaces
-Keep chats and sandbox directories segregated.
-* **Switching:** Click the dropdown trigger label (e.g. *Personal Workspace*) in the header next to "Oculus AI". Select a workspace to switch to it.
-* **Creating a Workspace:** Click "Create Workspace" from the selector, name it (e.g. *Acme Corp*), and Oculus will initialize a clean, isolated context.
-* **Deleting a Workspace:** Click the trash icon next to a workspace. This cascades and deletes the workspace entry, isolated chats, cached attachments, and sandbox files on the server.
+### 🧠 Feature 1: Long-Term Memory (Oculus Brain)
 
-### 3. Scheduling Tasks & Deadlines
-Schedule items in the DB by letting Oculus extract dates and names.
-* **Trigger Prompt:** 
-  > *"Add a task to review client mockups with Sarah by next Friday"*
-* **Interactive Confirmation:** An action proposal card will render in the chat feed showing `Task Title` and `Due Date`. You can adjust these values inside the inputs.
-* **Confirm:** Click **Confirm & Execute** $\rightarrow$ the task will be added to memory and display in your sidebar Brain panel.
-* **Reversion / Deletion:** Click **Undo Action** on the confirmation card to revert. Alternatively, click the trash icon next to the task in your sidebar **Action Log** list to delete it at any time.
+Oculus remembers things so you do not have to repeat yourself. Every conversation is passively scanned in the background and key facts — names, preferences, clients, deadlines — are extracted and stored in your **Brain**. This Brain is injected into every future request, so Oculus always knows the full picture.
 
-### 4. Compiling Proposals & Quotes
-Compile formal document structures in the workspace sandbox.
-* **Trigger Prompt:** 
-  > *"Generate a proposal for Acme Corp for a website rebrand costing R 45,000. Under scope of work, list: UI wireframes, contact form script integration, and SEO setups."*
-* **Interactive Confirmation:** Edit fields like client name, budget amount, and details scope directly on the card.
-* **Confirm:** Click **Confirm & Execute** $\rightarrow$ Oculus compiles a formal `.docx` layout (using `python-docx`) and saves it to the sandbox.
-* **Download:** A download link is generated as an elegant inline **Download DOCX** button inside the card. Click it to download the file directly to your system. You can also view/delete this action later from the sidebar **Action Log**.
+**Opening the Brain Panel:**  
+Click the **☰ menu icon** in the top-right header. The settings sidebar will slide out. Scroll down to see **Oculus Brain** — your live memory card. You can edit profile fields directly, delete individual facts, and manage project/client entries in real time.
 
-### 5. Email Drafting & Previews
-Draft emails and review them securely.
-* **Trigger Prompt:** 
-  > *"Draft a check-in email to sarah@acme.com about the rebrand scope approval"*
-* **Interactive Confirmation:** A card displays the recipient, subject line, and a text area containing the full body text. Adjust the text as needed.
-* **Confirm:** Click **Confirm & Execute** $\rightarrow$ Oculus writes a responsive, formatted HTML email container to the workspace sandbox directory. Click the generated inline **Preview HTML** button to open the compiled email in your browser.
-* **SMTP Mode:** If you set the environment variable `ENABLE_SMTP_DELIVERY=true` and configure the SMTP host settings, Oculus will actively send the MIME formatted email to the recipient.
-* **Action Log Sidebar Controls**: If you clear the chat before confirming or rejecting an action, it will appear in your sidebar **Action Log** as `PENDING`. You can click the checkmark button next to it to **Confirm & Execute** directly from the log, or click the cross button to **Reject & Cancel** it.
+**How memory is built — example prompts to teach Oculus about you:**
 
-### 6. Interactive Live Code Sandbox
-Design, test, and save website layouts directly.
-* **Trigger Prompt:** 
-  > *"Write a CSS/HTML landing page layout for our real estate client. Include a glassmorphic navbar and clean search fields."*
-* **Previewing:** When the code block finishes rendering, a **Preview** button will appear in the header of the code block. Click it to open the Sandbox editor and live split-screen preview.
-* **Editing & Saving:** Modify the code in the text editor and click **⚡ Run** (or press `Ctrl+Enter`) to refresh the preview. Type a filename in the path bar (e.g. `index.html`) and click **💾 Save to Project** to write the file directly to your workspace directory.
+> *"My name is Alex. I run Lex Digitals, a digital marketing agency based in South Africa."*
 
-### 7. Advanced RAG & Document Intelligence
-Upload documents for deep analysis, classification, and retrieval.
-* **Opening Documents Sidebar:** Click the **Docs** button in the header. A right-aligned panel will slide into view.
-* **Ingesting files:** Drag a `.pdf` or `.docx` file into the ingestion zone (`doc-upload-area`) or click to select files. The system parses, chunks, generates embeddings, and indexes the document in Supabase.
-* **Document Metadata Card:** Ingested files display a colored semantic tag (e.g. `CONTRACT`, `INVOICE`, `RESUME`) based on automatic classification, alongside a 2-sentence summary and extracted keywords.
-* **Retrieval & Citations Prompt:**
-  > *"What are the retainer billing details mentioned in the Acme SLA contract?"*
-  - Oculus retrieves matching chunks via hybrid search, formats citations in the response, and lists the source file.
-* **Cross-Document Reasoning Prompt:**
-  > *"Summarize all contracts and invoices we have in this workspace and list our active monthly retainer agreements."*
-  - Oculus parses the overview metadata of all ingested documents to describe details, even if specific text chunks are not retrieved in search results.
+> *"Our primary design style is dark-themed glassmorphism with subtle gradients. Use Outfit or Inter fonts in all UI work."*
+
+> *"I always use Flask for Python web apps and prefer PostgreSQL over SQLite."*
+
+> *"My client Sarah runs Acme Digital Agency. Their website is acmedigital.com and she prefers to be contacted via email."*
+
+> *"Red Rooms is our adult entertainment platform client. Always use bold, direct copy for their campaigns."*
+
+**Asking Oculus to recall memory:**
+
+> *"What do you know about my design preferences?"*
+
+> *"Remind me what clients we are currently working with."*
+
+> *"What stack do I usually use for web apps?"*
+
+**Tip:** You never need to explicitly say "remember this." Just mention information naturally in conversation and Oculus will pick it up. Close the chat, come back tomorrow, and Oculus will still know who you are and what you are working on.
+
+---
+
+### 🏢 Feature 2: Client Workspaces
+
+Workspaces are isolated project environments. Each one has its own chat history, sandbox folder, and uploaded file context. Your Brain (memory) is shared globally across all workspaces.
+
+**Creating a workspace:**
+1. Click the workspace name dropdown in the header (e.g. *Personal Workspace*).
+2. Click **+ Create Workspace**.
+3. Name it after your client or project (e.g. `Acme Corp`, `Red Rooms`, `Lex Digitals Internal`).
+4. Click **Create** — Oculus initialises a clean, isolated context instantly.
+
+**Switching workspaces:**
+- Click the workspace dropdown and select any workspace in the list.
+- The chat history, sandbox files, and uploaded document context all switch immediately.
+
+**Deleting a workspace:**
+- Click the **🗑️ trash icon** next to a workspace name.
+- This cascades and removes the workspace entry, chat history, sandbox files, and cached attachments from the server.
+
+**Example workflow:**  
+Create a `Acme Corp` workspace before every client meeting. Drop all their files, ask strategy questions, draft proposals — all isolated. Then switch back to `Lex Digitals Internal` for your own work with no crossover.
+
+---
+
+### ⚡ Feature 3: AI Actions Engine
+
+The Actions Engine turns conversation into execution. When Oculus detects intent to schedule a task, compile a proposal, or draft an email, it generates an interactive **Action Proposal Card** directly in the chat. You review the extracted parameters, make adjustments, and confirm — Oculus does the rest.
+
+#### 3a. Scheduling Tasks & Deadlines
+
+Oculus detects scheduling intent and extracts a task title and due date. An interactive card appears with editable fields.
+
+**Example prompts:**
+
+> *"Add a task: review the Acme Corp homepage mockup with Sarah. Due next Friday."*
+
+> *"Remind me to follow up with Red Rooms about the operator recruitment campaign — deadline end of month."*
+
+> *"Schedule a task: send the revised quote to the client. Due tomorrow."*
+
+> *"Create a deadline for the Lex Digitals SEO audit report — due 30 June."*
+
+> *"Task: prepare the monthly performance report for all clients. Due this Sunday."*
+
+**What happens:**
+1. An action card appears in chat with a `Task Title` input and `Due Date` picker.
+2. Edit either field directly on the card if needed.
+3. Click **✅ Confirm & Execute** — the task is saved to your database and appears in the **Action Log** sidebar.
+4. To undo, click **↩️ Undo Action** on the card, or click the **🗑️ trash icon** next to the entry in your Action Log.
+
+---
+
+#### 3b. Proposals & Quotes
+
+Oculus compiles formal proposal documents and saves them as downloadable `.docx` files to your workspace sandbox.
+
+**Example prompts:**
+
+> *"Generate a proposal for Acme Corp for a full website rebrand. Budget: R45,000. Scope: UI wireframes, contact form integration, mobile responsiveness, SEO setup, and one round of revisions."*
+
+> *"Write a quote for Red Rooms for a 3-month social media management retainer. Monthly fee: R8,500. Include content creation (12 posts/month), story scheduling, and monthly performance reporting."*
+
+> *"Create a proposal for a new client who wants a custom e-commerce platform built in React. Budget R120,000. Scope of work: product catalogue, Stripe integration, admin dashboard, and 6 months of support."*
+
+> *"Draft a retainer agreement proposal for Lex Digitals internal — monthly content calendar management at R5,000/month."*
+
+> *"Write a website maintenance proposal for an existing client. Monthly fee R2,500. Covers: plugin updates, weekly backups, uptime monitoring, and one hour of change requests per month."*
+
+**What happens:**
+1. An action card appears with editable fields: **Client Name**, **Project Title**, **Budget**, and **Scope of Work**.
+2. Edit any field before confirming.
+3. Click **✅ Confirm & Execute** — Oculus uses `python-docx` to compile a formatted `.docx` proposal and saves it to your workspace sandbox.
+4. A **📥 Download DOCX** button appears inline on the card. Click it to download directly.
+5. The action is logged in your **Action Log** sidebar for future reference.
+
+---
+
+#### 3c. Email Drafting & Previews
+
+Oculus drafts formal emails, shows you a preview, and can optionally deliver via SMTP.
+
+**Example prompts:**
+
+> *"Draft a follow-up email to sarah@acmedigital.com about the rebrand proposal I sent last week. Tone should be professional but friendly. Ask if she has had a chance to review."*
+
+> *"Write a cold outreach email to info@realestateco.za introducing Lex Digitals and pitching our website package. Keep it under 200 words."*
+
+> *"Draft an invoice reminder email to john@client.com. Invoice #1042, R12,000, due last Friday."*
+
+> *"Write a project completion email to the Red Rooms team. Confirm the campaign went live, link to the results dashboard, and invite feedback."*
+
+> *"Send a welcome onboarding email to a new client at hello@newclient.com. Explain the project kickoff process, introduce our team, and set the first milestone."*
+
+**What happens:**
+1. An action card appears with fields for **Recipient**, **Subject**, and a **Body** text area.
+2. Edit anything on the card.
+3. Click **✅ Confirm & Execute** — Oculus writes a responsive HTML email container to your workspace sandbox.
+4. A **👁️ Preview HTML** button appears — click it to open the rendered email in your browser.
+5. If `ENABLE_SMTP_DELIVERY=true` is set in your environment, Oculus will also send the email to the recipient directly via SMTP.
+
+---
+
+### 💻 Feature 4: Interactive Live Code Sandbox
+
+When Oculus generates HTML, CSS, JavaScript, or SVG code, a **Preview** button appears on the code block. Click it to open a full split-screen editor and live preview — no copy-pasting required.
+
+**Example prompts to generate sandbox-ready code:**
+
+> *"Build a responsive HTML/CSS landing page for a real estate agency. Include a glassmorphic navbar, a hero section with a property search bar, and a 3-column services section."*
+
+> *"Write a dark-themed pricing table in HTML and CSS with 3 tiers: Starter, Growth, and Enterprise. Highlight the Growth tier."*
+
+> *"Create an animated SVG logo placeholder — use a glowing circle with a pulsing ring animation."*
+
+> *"Build an interactive JavaScript quiz — 5 questions, multiple choice, score counter, and a results screen at the end."*
+
+> *"Write the complete HTML/CSS/JS for a countdown timer widget that counts down to 1 January 2026."*
+
+> *"Design a contact form with name, email, message fields, and a submit button. Style it with a dark glassmorphism card effect."*
+
+> *"Create a JavaScript-powered image gallery with a lightbox popup when you click a thumbnail."*
+
+**Using the Sandbox:**
+1. When the code block finishes rendering, click the **⚡ Preview** button in the code block header.
+2. The Sandbox panel opens — code editor on the left, live rendered output on the right.
+3. Edit the code directly in the editor.
+4. Press **⚡ Run** (or `Ctrl+Enter`) to refresh the live preview.
+5. Type a filename in the path bar (e.g. `index.html` or `landing.css`) and click **💾 Save to Project** to write the file to your workspace server directory.
+6. Previously saved files are listed below the editor — click any to load it back.
+
+---
+
+### 📄 Feature 5: Document Intelligence & RAG
+
+Upload PDFs and DOCX files into a workspace. Oculus parses, chunks, embeds, and indexes them in Supabase. You can then ask questions and get answers with source citations pulled directly from document content.
+
+**Opening the Documents Sidebar:**  
+Click the **📄 Docs** button in the header. A right-aligned slide-in panel will appear.
+
+**Uploading documents:**
+- Drag and drop a `.pdf` or `.docx` file into the upload zone, or click the zone to browse.
+- Oculus parses the file, splits it into chunks, generates embeddings, and indexes everything in Supabase.
+- A document card appears showing: **auto-detected category badge** (e.g. `CONTRACT`, `INVOICE`, `PROPOSAL`, `RESUME`, `REPORT`), a **2-sentence AI summary**, and **extracted keywords**.
+
+**Example documents to upload and queries for each:**
+
+**SLA or Contract:**
+> *"What are the payment terms in the Acme SLA contract?"*
+
+> *"Does the contract include a termination clause? What are the notice requirements?"*
+
+> *"List all deliverables and deadlines mentioned in the contract."*
+
+> *"Is there a penalty clause if we miss a milestone?"*
+
+**Invoice:**
+> *"What is the outstanding balance on the Red Rooms invoice?"*
+
+> *"What services are listed on invoice #1042?"*
+
+> *"Is VAT included in this invoice? What is the VAT amount?"*
+
+> *"What is the payment due date on this invoice?"*
+
+**Proposal:**
+> *"Summarise the scope of work in the submitted proposal."*
+
+> *"What is the timeline breakdown in this proposal?"*
+
+> *"What was the quoted price and what is included at that price?"*
+
+**Resume or CV:**
+> *"What is this candidate's most recent job title and employer?"*
+
+> *"Does this CV show experience with React and TypeScript?"*
+
+> *"Summarise this applicant's skills in two sentences."*
+
+**Multi-document cross-reasoning:**
+> *"Summarise all the documents in this workspace and tell me which clients have active contracts."*
+
+> *"Compare the payment terms across all contracts uploaded. Which gives us the shortest payment window?"*
+
+> *"List all outstanding invoice amounts across every uploaded invoice and give me the total."*
+
+> *"Which proposals have been converted to contracts based on the documents uploaded?"*
+
+> *"Do any of the uploaded contracts have exclusivity clauses that would stop us taking on competing clients?"*
+
+**How retrieval works:**  
+Oculus uses **hybrid search** — combining vector similarity (semantic meaning) with full-text keyword matching — and ranks results using Reciprocal Rank Fusion (RRF). When Oculus cites a source, it will clearly state: *"According to [filename] (Page X)..."* or *"Source: [filename], Section: [title]."*
+
+---
+
+### 🌐 Feature 6: Live Web Search
+
+Oculus automatically detects when a query requires current information and triggers a live web search via Tavily. No setup required — it fires silently in the background.
+
+**Queries that auto-trigger web search:**
+
+> *"What is the current exchange rate from ZAR to USD?"*
+
+> *"What are the latest trends in digital marketing for 2025?"*
+
+> *"What is the going rate for social media management services in South Africa?"*
+
+> *"Find me the latest news about Google's algorithm update."*
+
+> *"What are the best Locanto posting strategies for adult classified ads this year?"*
+
+> *"What is the current CPC for Facebook Ads in the South African market?"*
+
+> *"Are there any new regulations around digital advertising in South Africa?"*
+
+Oculus weaves the live search results naturally into the answer — it will not paste raw URLs or unformatted scrapes.
+
+---
+
+### 🔬 Feature 7: Model Selection & Thinking Mode
+
+Oculus is not locked to one model. You can pin any model for specific tasks.
+
+**Opening Model Settings:**  
+Click the **☰ menu icon** in the header → scroll to **Model** in the sidebar panel → select from the dropdown.
+
+**Model guide:**
+
+| Model | Best for |
+|---|---|
+| **Nemotron 3 Super 120B** | Default. Fast, sharp, uncensored. Great all-rounder. |
+| **Claude Sonnet 4.6 (Thinking)** | Deep reasoning tasks, complex analysis, multi-step logic. Shows live thinking stream. |
+| **Llama 3.3 70B** | Reliable fallback. Fast, balanced. |
+| **Hermes 3 405B** | Very powerful, uncensored. Best for creative or sensitive copy. |
+| **Dolphin Mistral 24B** | Lightest, fastest. Good for quick tasks. |
+
+**Example use cases by model:**
+
+> Switch to **Claude Sonnet Thinking** then ask:  
+> *"Analyse this contract clause and tell me if there are any legal risks or ambiguities."*
+
+> Switch to **Claude Sonnet Thinking** then ask:  
+> *"Plan out the full system architecture for a SaaS platform, including the database schema, API layers, and auth flow."*
+
+> Switch to **Hermes 3 405B** then ask:  
+> *"Write a high-converting Locanto ad for an adult entertainment service. Bold, direct, first-person."*
+
+> Use **Nemotron 120B** (default) for:  
+> *"Write the complete Python backend for a Flask REST API with JWT authentication."*
+
+> Use **Dolphin Mistral 24B** for:  
+> *"Quickly rewrite this paragraph to be more persuasive."*
+
+**Thinking Mode:** When using Claude Sonnet Thinking, you will see a live **🔬 Thinking...** block stream above the response. Once the model produces its answer, the thinking block collapses into a small **▶ Show reasoning** toggle you can expand at any time.
+
+---
+
+### 🗂️ Feature 8: File Uploads (Code & Text Files)
+
+Attach files to your prompt for Oculus to read, analyse, or modify.
+
+**How to upload:**
+- Click the **📎 paperclip icon** in the chat input area, or drag a file directly onto the input.
+- Supported types: `.py`, `.js`, `.ts`, `.json`, `.css`, `.html`, `.txt`, `.md`, `.env.example`, `.csv`, and more.
+- The file content is injected into the next prompt automatically and cleared after you submit.
+
+**Example prompts after uploading a file:**
+
+> *(After uploading `app.py`)*  
+> *"Review this Flask app for security vulnerabilities. Focus on the auth routes."*
+
+> *(After uploading `style.css`)*  
+> *"Refactor this CSS file to use CSS custom properties for all colours and font sizes."*
+
+> *(After uploading `data.json`)*  
+> *"Parse this JSON and write a Python script that reads it and exports a formatted CSV."*
+
+> *(After uploading `requirements.txt`)*  
+> *"Are there any outdated or conflicting dependencies in this requirements file?"*
+
+> *(After uploading `index.html`)*  
+> *"Audit this HTML file for SEO issues — check title tags, meta descriptions, heading hierarchy, and alt text."*
+
+> *(After uploading `campaign_results.csv`)*  
+> *"Analyse this CSV and summarise the top 3 performing ad campaigns by click-through rate."*
+
+---
+
+### 📋 Feature 9: Action Log Sidebar
+
+Every action Oculus proposes — whether confirmed, pending, or cancelled — is logged in the **Action Log**.
+
+**Opening the Action Log:**  
+Click the **⚡ Actions** button in the header. The left sidebar will slide out showing all logged actions grouped by status: `PENDING`, `EXECUTED`, `CANCELLED`, `UNDONE`.
+
+**What you can do in the Action Log:**
+- **Confirm a pending action** that you missed in chat by clicking the **✅ checkmark** button next to it.
+- **Reject a pending action** by clicking the **✗ cross** button.
+- **Delete any action** permanently with the **🗑️ trash** icon.
+- **Download compiled files** (proposals, email drafts) directly from the log entry.
+
+**Tip:** If you navigate away from the chat mid-conversation before confirming an action, it will remain in the Action Log as `PENDING`. You can always come back and execute it from the sidebar without losing any extracted parameters.
+
+---
+
+## 💡 Power User Tips
+
+- **Natural Language Deadlines:** Say "by end of next week" or "before the client call on Thursday" — Oculus extracts the date automatically.
+- **Chain Requests:** After generating a proposal, say *"Now draft the follow-up email to send it to them."* Oculus carries context forward within the same session.
+- **Workspace Naming:** Name workspaces after clients (e.g. `Red Rooms`, `Acme Corp`) so sandbox files and histories are always easy to identify.
+- **Document First:** Before a client call, upload their contract or brief to the workspace Docs panel. Oculus will automatically have it in context and cite it when relevant.
+- **Model Switching Mid-Session:** Switch to Thinking mode for a single deep-reasoning question, then switch back to the default without losing your chat history.
+- **Teach Preferences Once:** Tell Oculus your font preferences, code style, or tone requirements once. It will apply them in every future session without being reminded.
+- **Sandbox as a Sketchpad:** Use the code sandbox as a rapid prototyping tool — generate layouts, iterate on them in the editor, and save the ones you like directly to the project without leaving the app.
+- **Multi-Document Upload:** Upload multiple contracts, invoices, or reports at once. Oculus indexes them all and can reason across the entire set in a single query.
 
 ---
 
