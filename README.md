@@ -4,8 +4,8 @@
 
 <br><br>
 
-**A custom-built artificial intelligence system for real work.**  
-Code. Copy. Strategy. Memory. Workspaces. Actions Engine. All in one.
+**A custom-built artificial intelligence operating system for real work.**  
+Code. Copy. Strategy. Memory. Documents. Actions. All in one.
 
 <br>
 
@@ -30,9 +30,31 @@ Code. Copy. Strategy. Memory. Workspaces. Actions Engine. All in one.
 
 ## What is Oculus?
 
-Oculus is an AI workspace that remembers clients, generates proposals, drafts emails, manages tasks, and executes workflows built for running a digital agency — not a generic chatbot wrapper. It's powered by **OpenRouter**, a gateway to multiple large language models, and layered with a persistent memory system, isolated client workspaces, live web search, a custom-built code sandbox, and an interactive **AI Actions Engine** for automations.
+Oculus is an **AI Knowledge Workspace & Actions Engine** designed specifically for running a digital agency. Unlike generic chat wrappers that forget context, return empty placeholders, or block copy generation for diverse marketing campaigns, Oculus functions as an integrated **AI Operating System**. It layers LLM intelligence directly over client databases, documents, persistent memories, a live browser code sandbox, and an interactive confirmation engine to let you execute actual work.
 
-It remembers who you are. It searches the web in real time. It writes code that actually runs. It generates proposals, drafts emails, schedules tasks, and coordinates workflows without guardrails blocking creative or adult ad campaigns.
+---
+
+## ⚡ The Problems Oculus Solves
+
+### 1. The Context-Switching Tax
+* **The Problem:** In a typical agency, you are constantly swapping between different clients. Chat logs get cluttered, attachment lists get mixed up, and sandbox files overwrite each other.
+* **The Solution:** **Isolated Client Workspaces**. Oculus creates distinct digital sandboxes for every client project. Swapping a workspace switches the active chat history, file uploads, and directory files on the server, keeping Acme Corp's assets completely isolated from Lex Digitals' internals.
+
+### 2. The "Forgetting" Problem
+* **The Problem:** LLM chats have static context windows. If you tell an AI your styling rules, client emails, or task deadlines on Monday, it will forget them by Friday.
+* **The Solution:** **Unified Long-Term Memory (Oculus Brain)**. A background pipeline reads conversations, extracts client profiles, preferences, and deadlines, and consolidates them in Supabase. This compiled "Brain" is injected into every chat request automatically, ensuring Oculus remembers everything that matters across sessions.
+
+### 3. Passive Conversation vs. Active Execution
+* **The Problem:** Chatbots only give advice. If you ask them to create a task, draft a proposal, or write an email, they just give you a block of markdown text that you have to copy, paste, and compile yourself.
+* **The Solution:** **AI Actions Engine**. Oculus classifies intent and renders interactive **action proposal cards** directly in the chat feed. You can review parameters, edit content, and click **Confirm & Execute**. The system compiles standard `.docx` proposals, saves `.html` email draft previews to the sandbox, or writes task deadlines to the database.
+
+### 4. Placeholder Code and "Pseudo-Logic"
+* **The Problem:** AI models frequently write incomplete code, adding comments like `// TODO: Implement styling here` or leaving you to copy-paste scripts into local test files.
+* **The Solution:** **Interactive Live Sandbox**. Oculus intercepts HTML, CSS, JavaScript, and SVG blocks and renders them in a split-screen live preview iframe. You can edit the code, run it, review rendering output in real time, and save the finalized code directly to your server workspace.
+
+### 5. Corporate Censorship and Guardrail Blocks
+* **The Problem:** Commercial AI interfaces (like ChatGPT) block copy generation for adult entertainment marketing, Locanto campaigns, or dating ads.
+* **The Solution:** **OpenRouter Model Gateway**. Bypasses strict filters using unmoderated open models (like Llama 3.3 70B, Nemotron 3 120B, and Dolphin Mistral) to write copy for real clients in high-conversion campaigns (e.g. Red Rooms ads, operator recruitment copies) without blocking.
 
 ---
 
@@ -43,52 +65,52 @@ It remembers who you are. It searches the web in real time. It writes code that 
 | 🏢 **Client Workspaces** | Switch between isolated workspaces. Isolates chat histories, sandbox code files, and active attachments, while maintaining a unified long-term memory across workspaces. |
 | 🔐 **Multi-User Auth** | Register, login, and logout — each user's data is fully isolated in Supabase. |
 | 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences, and key facts across sessions. A background LLM pipeline extracts, consolidates, and deconflicts information automatically. |
-| 🧠 **Oculus Brain UI** | Sliding side panel with live view of your memory — edit profiles, add facts, manage projects, clients, and deadlines in real time. |
+| 🧠 **Oculus Brain UI** | Sliding sidebar drawer panel with live view of your memory — edit profiles, add facts, manage projects, clients, and deadlines in real time. |
 | ⚡ **AI Actions Engine** | Generates proposals, sends emails, schedules tasks, and logs workflow history. Uses low-temperature function extraction with OpenRouter to produce active proposals. Includes interactive sidebar confirmation, cancellation, and deletion controls. |
+| 📄 **Advanced RAG & Doc Intel** | Semantic search over PDFs and DOCX files. Ingests, chunks, embeds (via OpenRouter), and indexes documents in Supabase. Classifies documents, auto-summarizes them using OpenRouter, and supports hybrid (vector + full-text search) retrieval with RRF ranking and citations. |
 | 🔄 **Real-Time Streaming** | Token-by-token streaming so responses appear word-by-word as the model generates. |
 | 🔬 **Collapsible Thinking** | Internal model reasoning streams live in a greyed-out block, then folds into a collapsible summary when the final response begins. |
 | 🌐 **Live Web Search** | Automatically pulls real-time information via Tavily Search when the query requires current data. |
 | 💻 **Interactive Code Sandbox** | HTML, CSS, JavaScript, and SVG snippets open in a live split-screen iframe sandbox directly in the chat — edit, run, and preview without leaving the app. |
-| 📄 **Advanced RAG & Doc Intel** | Semantic search over PDFs and DOCX files. Ingests, chunks, embeds (via OpenRouter), and indexes documents in Supabase. Classifies documents, auto-summarizes them using OpenRouter, and supports hybrid (vector + full-text search) retrieval with RRF ranking and citations. |
 | 🗂️ **File Upload & Parsing** | Drag-and-drop or select plaintext and code files (.py, .js, .json, .css, etc.). Content is injected into the prompt automatically and cleared after each submit. |
 | ⚙️ **Manual Model Selection** | Pin any supported model via the sidebar panel (e.g. Nemotron 3 Super 120B, Llama 3.3 70B, Hermes 3 405B, Dolphin Mistral 24B). |
 | 🔄 **Model Fallback Chain** | If the pinned model is rate-limited, returns an error, or times out, the system automatically tries the next model in the chain — no failed requests. |
 | 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns to stay within model context windows. |
-| 📣 **Marketing Engine** | Ad copy, branding, social strategy, customer replies, and CIPC basics — built into the system prompt. |
-| 👨‍💻 **Developer Assistant** | Full working code, debugging, and explanations across Python, JavaScript, SQL, React, Bash, and more. |
 
 ---
 
-## 📖 Feature Usage Guide
+## 📖 Feature Usage Guide & Example Prompts
 
-Here is a quick reference guide on how to trigger the newly added workspace and action automation features:
+Here is a quick reference guide on how to trigger and use newly added workspace, document, and action automation features:
 
-### 1. Unified Long-Term Memory
+### 1. Unified Long-Term Memory (Oculus Brain)
 Oculus automatically listens and extracts facts about your projects, preferences, and clients during normal conversation.
-* **Extraction Trigger:** 
+* **Extraction Trigger Prompt:** 
   > *"My name is Alex, I'm a developer at Lex Digitals and I prefer writing Python code with Flask."*
-* **Add Clients:**
-  > *"I work with Client Acme Digital Agency. They do real estate branding."*
-* **Manage In Brain UI:** Open the settings sidebar panel (hamburger menu in the top left) to edit your profile, add styling preferences, facts, or deadlines manually.
+* **Client Context Prompt:**
+  > *"Sarah is our main contact at Acme Digital Agency. Their website is acmedigital.com."*
+* **Styling Preference Prompt:**
+  > *"Always use Outfit fonts and a dark terminal aesthetic when writing CSS layouts."*
+* **Manual Management:** Click the hamburger menu toggle button in the header to open the settings sidebar and scroll to **Oculus Brain**. Here you can edit your profile fields directly or manually delete preferences, deadlines, and clients.
 
 ### 2. Isolated Workspaces
-Swap between client or project boundaries.
-* **Switching:** Click the dropdown selector in the header next to "Oculus AI" to swap between projects.
-* **Creating a Workspace:** Click "Create Workspace" from the selector, name it, and Oculus will create a clean context with empty chat history.
+Keep chats and sandbox directories segregated.
+* **Switching:** Click the dropdown trigger label (e.g. *Personal Workspace*) in the header next to "Oculus AI". Select a workspace to switch to it.
+* **Creating a Workspace:** Click "Create Workspace" from the selector, name it (e.g. *Acme Corp*), and Oculus will initialize a clean, isolated context.
 * **Deleting a Workspace:** Click the trash icon next to a workspace. This cascades and deletes the workspace entry, isolated chats, cached attachments, and sandbox files on the server.
 
-### 3. Scheduling Tasks
-Oculus extracts dates and titles to schedule deadlines.
+### 3. Scheduling Tasks & Deadlines
+Schedule items in the DB by letting Oculus extract dates and names.
 * **Trigger Prompt:** 
-  > *"Add a task to review client mockups by Friday"*
-* **Interactive Confirmation:** A glassmorphic card will slide into view showing `Task Title` and `Due Date` fields. You can edit the text inside the inputs.
-* **Confirm:** Click **Confirm & Execute** $\rightarrow$ the card shows a completion log and the deadline appears immediately in your sidebar brain panel.
-* **Undo/Delete**: Click **Undo Action** on the card to remove the task from memory instantly. Alternatively, click the trash can icon next to the task in your sidebar **Action Log** to delete it manually at any time.
+  > *"Add a task to review client mockups with Sarah by next Friday"*
+* **Interactive Confirmation:** An action proposal card will render in the chat feed showing `Task Title` and `Due Date`. You can adjust these values inside the inputs.
+* **Confirm:** Click **Confirm & Execute** $\rightarrow$ the task will be added to memory and display in your sidebar Brain panel.
+* **Reversion / Deletion:** Click **Undo Action** on the confirmation card to revert. Alternatively, click the trash icon next to the task in your sidebar **Action Log** list to delete it at any time.
 
 ### 4. Compiling Proposals & Quotes
-Generate professional documents directly in the workspace sandbox.
+Compile formal document structures in the workspace sandbox.
 * **Trigger Prompt:** 
-  > *"Generate a proposal for Acme Corp for a website rebrand costing R 45,000. Deliverables include UI mockups, contact forms, and SEO setup."*
+  > *"Generate a proposal for Acme Corp for a website rebrand costing R 45,000. Under scope of work, list: UI wireframes, contact form script integration, and SEO setups."*
 * **Interactive Confirmation:** Edit fields like client name, budget amount, and details scope directly on the card.
 * **Confirm:** Click **Confirm & Execute** $\rightarrow$ Oculus compiles a formal `.docx` layout (using `python-docx`) and saves it to the sandbox.
 * **Download:** A download link is generated as an elegant inline **Download DOCX** button inside the card. Click it to download the file directly to your system. You can also view/delete this action later from the sidebar **Action Log**.
@@ -96,12 +118,30 @@ Generate professional documents directly in the workspace sandbox.
 ### 5. Email Drafting & Previews
 Draft emails and review them securely.
 * **Trigger Prompt:** 
-  > *"Draft a check-in email to john@example.com about project deadlines"*
+  > *"Draft a check-in email to sarah@acme.com about the rebrand scope approval"*
 * **Interactive Confirmation:** A card displays the recipient, subject line, and a text area containing the full body text. Adjust the text as needed.
 * **Confirm:** Click **Confirm & Execute** $\rightarrow$ Oculus writes a responsive, formatted HTML email container to the workspace sandbox directory. Click the generated inline **Preview HTML** button to open the compiled email in your browser.
 * **SMTP Mode:** If you set the environment variable `ENABLE_SMTP_DELIVERY=true` and configure the SMTP host settings, Oculus will actively send the MIME formatted email to the recipient.
 * **Action Log Sidebar Controls**: If you clear the chat before confirming or rejecting an action, it will appear in your sidebar **Action Log** as `PENDING`. You can click the checkmark button next to it to **Confirm & Execute** directly from the log, or click the cross button to **Reject & Cancel** it.
 
+### 6. Interactive Live Code Sandbox
+Design, test, and save website layouts directly.
+* **Trigger Prompt:** 
+  > *"Write a CSS/HTML landing page layout for our real estate client. Include a glassmorphic navbar and clean search fields."*
+* **Previewing:** When the code block finishes rendering, a **Preview** button will appear in the header of the code block. Click it to open the Sandbox editor and live split-screen preview.
+* **Editing & Saving:** Modify the code in the text editor and click **⚡ Run** (or press `Ctrl+Enter`) to refresh the preview. Type a filename in the path bar (e.g. `index.html`) and click **💾 Save to Project** to write the file directly to your workspace directory.
+
+### 7. Advanced RAG & Document Intelligence
+Upload documents for deep analysis, classification, and retrieval.
+* **Opening Documents Sidebar:** Click the **Docs** button in the header. A right-aligned panel will slide into view.
+* **Ingesting files:** Drag a `.pdf` or `.docx` file into the ingestion zone (`doc-upload-area`) or click to select files. The system parses, chunks, generates embeddings, and indexes the document in Supabase.
+* **Document Metadata Card:** Ingested files display a colored semantic tag (e.g. `CONTRACT`, `INVOICE`, `RESUME`) based on automatic classification, alongside a 2-sentence summary and extracted keywords.
+* **Retrieval & Citations Prompt:**
+  > *"What are the retainer billing details mentioned in the Acme SLA contract?"*
+  - Oculus retrieves matching chunks via hybrid search, formats citations in the response, and lists the source file.
+* **Cross-Document Reasoning Prompt:**
+  > *"Summarize all contracts and invoices we have in this workspace and list our active monthly retainer agreements."*
+  - Oculus parses the overview metadata of all ingested documents to describe details, even if specific text chunks are not retrieved in search results.
 
 ---
 
@@ -112,6 +152,7 @@ Oculus AI
 │
 ├── Flask              → Web server, routing, session-based auth, client workspaces
 ├── Actions Engine     → Intent classifier (Llama 3.3), execution wrapper, audit logs
+├── RAG Pipeline       → PDF/DOCX extractors, semantic chunker, vector embeddings (OpenRouter)
 ├── OpenRouter API     → AI model gateway (OpenAI-compatible)
 │   ├── Nemotron 3 Super 120B       → Primary (Default) — fast, cheap, unmoderated
 │   ├── Llama 3.3 70B               → Fallback 1 — balanced, reliable
@@ -119,45 +160,9 @@ Oculus AI
 │   ├── Dolphin Mistral 24B         → Fallback 3 / Switcher — uncensored
 │   └── Free Fallbacks              → (Nemotron 3, Llama 3.3, Hermes 3 405B)
 ├── Supabase Auth      → User registration, login, logout
-├── Supabase DB        → Persistent memory (user-scoped), workspaces config, chat history (workspace-isolated), action log audit trail
+├── Supabase DB        → Persistent memory (user-scoped), workspaces config, chat history (workspace-isolated), action log audit trail, document RAG vectors
 ├── Tavily Search      → Live web search injected into prompt context
 └── Prompt Engine      → Injects memory, active workspace context, search results, and date/time into every request
-```
-
-### Model Selection & Fallback Chain
-
-**Manual selection:** Users pin a preferred model from the sidebar panel. The selected model is persisted in the Flask session and used first on every request.
-
-**Automatic fallback:** If a model returns a rate-limit error (429), invalid ID (400), empty response, or times out after 45 seconds, it is skipped and the next model in the chain is tried automatically — guaranteeing a response even when individual models are unavailable.
-
----
-
-## 🧠 Memory Schema
-
-Memory is stored in Supabase and fully isolated per user. It's extracted automatically from natural conversation — no forms, no manual setup.
-
-```json
-{
-  "profile": {
-    "name": "",
-    "role": "",
-    "company": "",
-    "location": "",
-    "email": "",
-    "phone": ""
-  },
-  "clients": [],
-  "projects": [],
-  "preferences": [],
-  "important_facts": [],
-  "topics_discussed": [],
-  "deadlines": [],
-  "ai_notes": [],
-  "session_count": 0,
-  "message_count": 0,
-  "first_seen": "",
-  "last_seen": ""
-}
 ```
 
 ---
@@ -175,7 +180,7 @@ Memory is stored in Supabase and fully isolated per user. It's extracted automat
 ### Install dependencies
 
 ```bash
-pip install flask openai supabase tavily-python requests python-docx
+pip install flask openai supabase tavily-python requests python-docx pypdf
 ```
 
 ### Environment variables
@@ -197,11 +202,9 @@ SMTP_USER=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
 ```
 
-> **Get your OpenRouter key:** [openrouter.ai](https://openrouter.ai) → Settings → API Keys
-
 ### Supabase table setup
 
-Run this in your Supabase SQL editor:
+Run this script in your Supabase SQL editor:
 
 ```sql
 -- Enable vector extension
@@ -383,7 +386,7 @@ oculus-ai/
 ├── requirements.txt        # Python dependencies
 ├── backend/
 │   ├── __init__.py         # Exposes all Blueprints from the backend package
-│   ├── extensions.py       # Initialises shared API clients (Supabase, Tavily)
+│   ├── extensions.py       # Initialises Supabase & Tavily API clients
 │   ├── auth.py             # Auth routes, login/register/logout, @login_required decorator
 │   ├── workspaces.py       # Workspaces API lifecycle (create, delete, list, switch)
 │   ├── memory.py           # Memory DB read/write, LLM-based extraction and consolidation
@@ -392,34 +395,21 @@ oculus-ai/
 │   ├── search.py           # Tavily query refinement and search trigger logic
 │   ├── models.py           # OpenRouter streaming gateway and model fallback chain
 │   ├── actions.py          # AI Actions Engine, classification prompts, execution wrappers
-│   └── prompts.py          # System prompt construction, memory injection, search formatting
+│   └── rag.py              # PDF/DOCX extractors, chunkers, embeds, hybrid rankers
 ├── templates/
 │   ├── index.html          # Main chat interface (Jinja2)
 │   ├── login.html          # Login page
 │   └── register.html       # Registration page
 ├── workspaces/             # Local sandbox folders isolated per workspace ID (git-ignored)
 └── static/
-    ├── oculus.js           # Frontend — streaming, markdown render, code sandbox, brain UI, action cards
-    ├── style.css           # Dark terminal theme
+    ├── oculus.js           # Frontend — streaming, markdown render, code sandbox, sidebars, action cards
+    ├── style.css           # Dark terminal theme, animations, badge states
     ├── oculus_logo.svg     # Full logo with wordmark
     ├── oculus_avatar.svg   # Avatar / chat bubble icon
     ├── manifest.json       # PWA manifest
     ├── sw.js               # Service worker — static asset caching
     └── favicon.ico         # Browser tab icon
 ```
-
----
-
-## 💸 OpenRouter Costs & Speed
-
-| Setup | Response Time | Rate Limits |
-|---|---|---|
-| **Free tier** | 30 sec – 2+ min | Shared pool across all users |
-| **With credits ($5–$10)** | **5 – 15 seconds** | Your own dedicated quota |
-
-At roughly **$0.20 per million tokens**, a typical message (system prompt + request + response ≈ 2,500 tokens) costs around **0.05 US cents**. A $5 top-up covers approximately **1,500+ messages**.
-
-Add credits at: [openrouter.ai → Settings → Credits](https://openrouter.ai/settings/credits)
 
 ---
 
@@ -432,18 +422,6 @@ Add credits at: [openrouter.ai → Settings → Credits](https://openrouter.ai/s
 - **Private by design** — every user's data is fully isolated, no crossover.
 - **Uncensored by design** — models chosen specifically for minimal guardrails on adult and creative content.
 - **Premium UX** — real-time word-by-word streaming, animated reasoning blocks, live code sandbox.
-
----
-
-## 🚀 Coming Soon
-
-| Capability                          | Description |
-|-------------------------------------|-----------|
-| 🌐 **Smart Search Classifier**      | LLM decides when and how to search the web, generating optimised queries. |
-| 🔬 **Multi-Stage Reasoning**        | Structured reasoning pass before final response for better complex task handling. |
-| 🖼️ **Image Understanding**         | Upload and analyze screenshots, mockups, and designs. |
-| 🔗 **Advanced Multi-Action Workflows** | Chain actions together (e.g. Generate Proposal $\rightarrow$ Draft Email with PDF attached). |
-| 📱 **Enhanced Mobile Experience**   | Full PWA support and optimised Brain UI on mobile. |
 
 ---
 
