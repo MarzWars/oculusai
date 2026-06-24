@@ -302,3 +302,94 @@ def query_workspace_rag(workspace_id: str, query_text: str, match_count: int = 5
     except Exception as e:
         print("[RAG] Vector match error:", e)
     return []
+
+def query_workspace_rag_hybrid(workspace_id: str, query_text: str, match_count: int = 5) -> list:
+    """Perform hybrid search (Vector + Full-Text Search) and rank using Reciprocal Rank Fusion (RRF)."""
+    try:
+        # 1. Fetch vector search results
+        vector_results = query_workspace_rag(workspace_id, query_text, match_count=match_count * 2) or []
+        
+        # 2. Fetch FTS results
+        fts_results = []
+        try:
+            res_fts = supabase.rpc("search_document_chunks_fts", {
+                "query_text": query_text,
+                "match_count": match_count * 2,
+                "filter_workspace_id": workspace_id
+            }).execute()
+            if res_fts.data:
+                fts_results = res_fts.data
+        except Exception as e:
+            print("[RAG] FTS search error:", e)
+
+        # 3. Perform Reciprocal Rank Fusion (RRF)
+        rrf_map = {}
+        chunk_details = {}
+        
+        for rank, item in enumerate(vector_results, 1):
+            cid = item["chunk_id"]
+            chunk_details[cid] = item
+            rrf_map[cid] = rrf_map.get(cid, 0.0) + (1.0 / (60.0 + rank))
+            
+        for rank, item in enumerate(fts_results, 1):
+            cid = item["chunk_id"]
+            chunk_details[cid] = item
+            rrf_map[cid] = rrf_map.get(cid, 0.0) + (1.0 / (60.0 + rank))
+            
+        # Sort by RRF score descending
+        sorted_cids = sorted(rrf_map.items(), key=lambda x: x[1], reverse=True)
+        
+        final_results = []
+        for cid, score in sorted_cids[:match_count]:
+            final_results.append(chunk_details[cid])
+            
+        return final_results
+    except Exception as e:
+        print("[RAG] Hybrid search error:", e)
+        return []
+
+# ----------------- Flask Blueprint & Endpoints -----------------
+from flask import Blueprint, request, jsonify, session
+from backend.auth import login_required, current_user_id
+
+rag_bp = Blueprint("rag", __name__)
+
+@rag_bp.route("/api/documents", methods=["GET"])
+@login_required
+def list_documents():
+    uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
+    try:
+        res = supabase.table("oculus_documents")\
+            .select("*")\
+            .eq("workspace_id", wid)\
+            .order("uploaded_at", desc=True)\
+            .execute()
+        return jsonify({"status": "success", "documents": res.data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@rag_bp.route("/api/documents/delete", methods=["POST"])
+@login_required
+def delete_document():
+    uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
+    data = request.get_json() or {}
+    doc_id = data.get("document_id")
+    if not doc_id:
+        return jsonify({"error": "document_id is required"}), 400
+    try:
+        # Verify document belongs to workspace
+        res_check = supabase.table("oculus_documents")\
+            .select("id")\
+            .eq("workspace_id", wid)\
+            .eq("id", doc_id)\
+            .execute()
+        if not res_check.data:
+            return jsonify({"error": "Document not found or access denied."}), 404
+            
+        supabase.table("oculus_documents").delete().eq("id", doc_id).execute()
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+

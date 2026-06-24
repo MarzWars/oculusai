@@ -7,7 +7,7 @@ Memory, chat history, and summaries all stored per-user in Supabase
 import os
 from flask import Flask
 from config import Config
-from backend import auth_bp, memory_bp, files_bp, chat_bp, workspaces_bp, actions_bp
+from backend import auth_bp, memory_bp, files_bp, chat_bp, workspaces_bp, actions_bp, rag_bp
 from backend.utils import _esc, _render_links
 
 app = Flask(__name__)
@@ -20,6 +20,8 @@ app.register_blueprint(files_bp)
 app.register_blueprint(chat_bp)
 app.register_blueprint(workspaces_bp)
 app.register_blueprint(actions_bp)
+app.register_blueprint(rag_bp)
+
 
 
 # Register Jinja2 template filters

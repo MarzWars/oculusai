@@ -5,5 +5,7 @@ from backend.files import files_bp
 from backend.chat import chat_bp
 from backend.workspaces import workspaces_bp
 from backend.actions import actions_bp
+from backend.rag import rag_bp
+
 
 
