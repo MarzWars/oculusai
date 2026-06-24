@@ -224,14 +224,7 @@ function renderMarkdown(text) {
       if (ext.startsWith('docx')) btnLabel = "Download DOCX";
       else if (ext.startsWith('html')) btnLabel = "Preview HTML";
 
-      return `<a href="${url}" class="sandbox-download-btn" target="_blank" rel="noopener noreferrer">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="margin-right:5px; flex-shrink:0; display:inline-block; vertical-align:middle;">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-          <polyline points="7 10 12 15 17 10"></polyline>
-          <line x1="12" y1="15" x2="12" y2="3"></line>
-        </svg>
-        <span>${btnLabel}</span>
-      </a>`;
+      return `<a href="${url}" class="sandbox-download-btn" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>${btnLabel}</span></a>`;
     }
     return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
   });
