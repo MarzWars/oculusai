@@ -505,7 +505,8 @@ def memory_to_context(mem: dict, user_message: str = "", max_results: int = 5) -
 @login_required
 def get_memory_api():
     uid = current_user_id()
-    mem = load_memory(uid)
+    wid = session.get("current_workspace_id", uid)
+    mem = load_memory(wid)
     return jsonify(mem)
 
 
@@ -513,10 +514,11 @@ def get_memory_api():
 @login_required
 def update_memory_api():
     uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
     data = request.get_json() or {}
     update_type = data.get("type")
     
-    mem = load_memory(uid)
+    mem = load_memory(wid)
     changed = False
     
     if update_type == "profile":
@@ -556,7 +558,7 @@ def update_memory_api():
             changed = True
             
     if changed:
-        save_memory(uid, mem)
+        save_memory(wid, mem)
         return jsonify({"status": "ok", "memory": mem})
     return jsonify({"status": "no_change", "error": "Invalid request parameters or duplicate item"}), 400
 
@@ -565,10 +567,11 @@ def update_memory_api():
 @login_required
 def delete_memory_api():
     uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
     data = request.get_json() or {}
     key = data.get("key")
     
-    mem = load_memory(uid)
+    mem = load_memory(wid)
     changed = False
     
     if key in ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]:
@@ -592,7 +595,7 @@ def delete_memory_api():
             changed = True
             
     if changed:
-        save_memory(uid, mem)
+        save_memory(wid, mem)
         return jsonify({"status": "ok", "memory": mem})
     return jsonify({"status": "no_change", "error": "Item not found"}), 404
 

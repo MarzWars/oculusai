@@ -228,8 +228,19 @@ def build_prompt(user_id: str, user_message: str, mem: dict, history: list) -> s
 def home():
     uid          = current_user_id()
     email        = current_email()
-    chat_history = load_history(uid)
-    memory       = load_memory(uid)
+    
+    # Ensure default workspace exists and load user workspaces
+    from backend.workspaces import get_workspaces_for_user
+    workspaces = get_workspaces_for_user(uid)
+    
+    current_wid = session.get("current_workspace_id")
+    valid_ids = {w["id"] for w in workspaces}
+    if not current_wid or current_wid not in valid_ids:
+        current_wid = uid
+        session["current_workspace_id"] = current_wid
+
+    chat_history = load_history(current_wid)
+    memory       = load_memory(current_wid)
     mem_name     = memory.get("profile", {}).get("name", "")
     display_name = mem_name or email.split("@")[0]
     greeting     = f"Welcome back, {display_name}." if chat_history else "What are we building today?"
@@ -264,9 +275,10 @@ def set_model():
 @login_required
 def clear():
     uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
     try:
         supabase.table("oculus_chat").upsert({
-            "user_id":  uid,
+            "user_id":  wid,
             "messages": [],
             "summary":  ""
         }).execute()
@@ -279,25 +291,26 @@ def clear():
 @login_required
 def ask():
     uid          = current_user_id()
+    wid          = session.get("current_workspace_id", uid)
     data         = request.get_json()
     user_message = (data.get("message") or "").strip()
     if not user_message:
         return Response("No message provided.", mimetype="text/plain")
 
-    history = load_history(uid)
-    memory  = load_memory(uid)
+    history = load_history(wid)
+    memory  = load_memory(wid)
 
     extract_memory_regex(user_message, memory)
     memory["message_count"] = memory.get("message_count", 0) + 1
-    save_memory(uid, memory)
+    save_memory(wid, memory)
 
     history.append({"role": "user", "text": user_message})
-    save_history(uid, history)
+    save_history(wid, history)
 
-    prompt = build_prompt(uid, user_message, memory, history)
+    prompt = build_prompt(wid, user_message, memory, history)
     # Clear uploaded files cache immediately
     from backend.files import UPLOADED_FILES_CACHE
-    UPLOADED_FILES_CACHE.pop(uid, None)
+    UPLOADED_FILES_CACHE.pop(wid, None)
     
     preferred_model = session.get("selected_model", Config.DEFAULT_MODEL)
 
@@ -310,25 +323,25 @@ def ask():
             
             full_text = "".join(output_chunks)
             history.append({"role": "ai", "text": full_text.strip()})
-            save_history(uid, history)
+            save_history(wid, history)
 
             # Summarise in background after responding and saving
             import threading
             threading.Thread(
                 target=maybe_summarise_history,
-                args=(uid, history.copy())
+                args=(wid, history.copy())
             ).start()
 
             # Run deep LLM extraction in background
             threading.Thread(
                 target=extract_memory_async,
-                args=(uid, user_message, preferred_model)
+                args=(wid, user_message, preferred_model)
             ).start()
         except Exception as e:
             error = f"\n[Error: {str(e)}]"
             print("[ASK ERROR]", error)
             yield error
             history.append({"role": "ai", "text": error})
-            save_history(uid, history)
+            save_history(wid, history)
 
     return Response(generate(), mimetype="text/event-stream")

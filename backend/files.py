@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 from backend.auth import login_required, current_user_id
 
 files_bp = Blueprint("files", __name__)
@@ -38,6 +38,7 @@ def summarize_long_file(filename: str, content: str) -> str:
 @login_required
 def upload_file_api():
     uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
     if "files" not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
         
@@ -45,10 +46,10 @@ def upload_file_api():
     if not uploaded_files or (len(uploaded_files) == 1 and uploaded_files[0].filename == ""):
         return jsonify({"error": "No files selected"}), 400
         
-    if uid not in UPLOADED_FILES_CACHE:
-        UPLOADED_FILES_CACHE[uid] = []
+    if wid not in UPLOADED_FILES_CACHE:
+        UPLOADED_FILES_CACHE[wid] = []
         
-    cache = UPLOADED_FILES_CACHE[uid]
+    cache = UPLOADED_FILES_CACHE[wid]
     errors = []
     successes = []
     
@@ -89,7 +90,7 @@ def upload_file_api():
                 "summary": summary_content,
                 "is_long": is_long
             })
-            UPLOADED_FILES_CACHE[uid] = cache
+            UPLOADED_FILES_CACHE[wid] = cache
             successes.append(filename)
         except Exception as e:
             errors.append(f"{filename}: Error reading file ({type(e).__name__})")
@@ -108,16 +109,17 @@ def upload_file_api():
 @login_required
 def delete_uploaded_file_api():
     uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
     data = request.get_json() or {}
     filename = data.get("name")
     
     if not filename:
         return jsonify({"error": "Filename is required"}), 400
         
-    if uid in UPLOADED_FILES_CACHE:
-        UPLOADED_FILES_CACHE[uid] = [f for f in UPLOADED_FILES_CACHE[uid] if f["name"] != filename]
+    if wid in UPLOADED_FILES_CACHE:
+        UPLOADED_FILES_CACHE[wid] = [f for f in UPLOADED_FILES_CACHE[wid] if f["name"] != filename]
         
-    cache = UPLOADED_FILES_CACHE.get(uid, [])
+    cache = UPLOADED_FILES_CACHE.get(wid, [])
     files_list = [{"name": f["name"], "size": f["size"]} for f in cache]
     return jsonify({"status": "ok", "files": files_list})
 
@@ -125,6 +127,8 @@ def delete_uploaded_file_api():
 @files_bp.route("/api/sandbox/save", methods=["POST"])
 @login_required
 def save_sandbox_file_api():
+    uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
     data = request.get_json() or {}
     filename = data.get("filename", "").strip()
     content = data.get("content", "")
@@ -133,8 +137,8 @@ def save_sandbox_file_api():
         return jsonify({"error": "Filename is required"}), 400
         
     # Prevent empty or absolute path traversal escape
-    # The workspace root is c:\Oculusai\oculusai
-    workspace_root = os.path.abspath(os.getcwd())
+    # Normalize path under workspaces/<workspace_id>/
+    workspace_root = os.path.abspath(os.path.join(os.getcwd(), "workspaces", wid))
     
     # Normalize path and check directory bounds
     target_path = os.path.abspath(os.path.join(workspace_root, filename))

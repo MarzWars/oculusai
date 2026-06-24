@@ -66,13 +66,20 @@ def login():
             try:
                 res = supabase.auth.sign_in_with_password({"email": email, "password": password})
                 if res.user:
-                    session["user_id"] = str(res.user.id)
+                    uid = str(res.user.id)
+                    session["user_id"] = uid
                     session["email"] = email
+                    
+                    # Ensure default workspace exists and initialize active workspace ID in session
+                    from backend.workspaces import ensure_default_workspace
+                    ensure_default_workspace(uid)
+                    session["current_workspace_id"] = uid
+                    
                     # Increment session count in memory
                     from backend.memory import load_memory, save_memory
-                    mem = load_memory(str(res.user.id))
+                    mem = load_memory(uid)
                     mem["session_count"] = mem.get("session_count", 0) + 1
-                    save_memory(str(res.user.id), mem)
+                    save_memory(uid, mem)
                     return redirect("/")
                 else:
                     error = "Invalid email or password."
