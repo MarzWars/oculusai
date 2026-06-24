@@ -2845,6 +2845,28 @@ code.inline-code {
   }
 }
 
+.sandbox-download-btn {
+  display: inline-flex;
+  align-items: center;
+  background: var(--accent-dim);
+  border: 1px solid rgba(124, 106, 247, 0.3);
+  color: var(--accent);
+  text-decoration: none !important;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+  transition: all 0.15s ease-in-out;
+}
+
+.sandbox-download-btn:hover {
+  background: var(--accent);
+  color: #fff !important;
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px var(--accent-glow);
+}
+
 /* ── Action card (raw JSON response stopgap) ─ */
 .action-card {
   display: flex;

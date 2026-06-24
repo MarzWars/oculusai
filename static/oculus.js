@@ -217,8 +217,24 @@ function renderMarkdown(text) {
   html = html.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
 
   // 5. Links — [text](url) and bare https:// URLs
-  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g,
-    '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+|\/[^\s\)]+)\)/g, (match, text, url) => {
+    if (url.includes('/api/sandbox/download')) {
+      const ext = url.split('.').pop().toLowerCase();
+      let btnLabel = "Download File";
+      if (ext.startsWith('docx')) btnLabel = "Download DOCX";
+      else if (ext.startsWith('html')) btnLabel = "Preview HTML";
+
+      return `<a href="${url}" class="sandbox-download-btn" target="_blank" rel="noopener noreferrer">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="13" height="13" style="margin-right:5px; flex-shrink:0; display:inline-block; vertical-align:middle;">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+          <polyline points="7 10 12 15 17 10"></polyline>
+          <line x1="12" y1="15" x2="12" y2="3"></line>
+        </svg>
+        <span>${btnLabel}</span>
+      </a>`;
+    }
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
+  });
   html = html.replace(/(?<!["\(])(https?:\/\/[^\s<>")\]]+)/g,
     '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 
