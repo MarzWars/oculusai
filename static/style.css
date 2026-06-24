@@ -2560,4 +2560,256 @@ code.inline-code {
 
 .modal-card.delete-card {
   border-color: rgba(243, 139, 168, 0.3);
-}
+}
+
+/* ─────────────────────────────────────────
+   ⚡ AI ACTIONS ENGINE STYLE SYSTEM
+   ───────────────────────────────────────── */
+
+/* Premium Glassmorphic Action Card Container */
+.action-proposal-card {
+  margin: 16px 0;
+  padding: 16px 20px;
+  background: rgba(22, 22, 28, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  max-width: 100%;
+}
+
+.action-proposal-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--border-light);
+}
+
+/* Accent borders per action type */
+.action-proposal-card.action-card-task {
+  border-left: 4px solid #89dceb; /* Cyan accent */
+}
+.action-proposal-card.action-card-proposal {
+  border-left: 4px solid #f9e2af; /* Gold/Amber accent */
+}
+.action-proposal-card.action-card-email {
+  border-left: 4px solid #cba6f7; /* Mauve/Purple accent */
+}
+.action-proposal-card.action-card-generic {
+  border-left: 4px solid var(--accent);
+}
+
+/* Header */
+.action-card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-sans);
+  color: var(--text);
+  font-size: 14.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 8px;
+}
+
+.action-card-icon {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+}
+
+/* Form Fields */
+.action-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.action-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.action-field label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.action-field input,
+.action-field textarea {
+  background: rgba(13, 13, 15, 0.6);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  color: var(--text);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  outline: none;
+  transition: all 0.15s ease;
+}
+
+.action-field input:focus,
+.action-field textarea:focus {
+  border-color: var(--accent);
+  background: rgba(13, 13, 15, 0.85);
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.action-field input:disabled,
+.action-field textarea:disabled {
+  background: rgba(20, 20, 25, 0.3);
+  color: var(--text-faint);
+  border-color: rgba(255, 255, 255, 0.03);
+  cursor: not-allowed;
+}
+
+/* Status Log area */
+.action-card-status {
+  font-size: 12.5px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  display: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-card-status:not(:empty) {
+  display: flex;
+}
+
+.action-card-status.running {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.action-card-status.success {
+  background: rgba(166, 227, 161, 0.08);
+  color: #a6e3a1; /* Green */
+  border: 1px solid rgba(166, 227, 161, 0.2);
+}
+
+.action-card-status.success a {
+  color: #cba6f7;
+  text-decoration: underline;
+}
+
+.action-card-status.failed {
+  background: rgba(243, 139, 168, 0.08);
+  color: #f38ba8; /* Red/Pink */
+  border: 1px solid rgba(243, 139, 168, 0.2);
+}
+
+.action-card-status.cancelled,
+.action-card-status.undone {
+  background: rgba(255, 255, 255, 0.01);
+  color: var(--text-muted);
+  border: 1px dashed var(--border);
+  font-style: italic;
+}
+
+/* Actions Button Group */
+.action-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.action-card-btn {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  font-family: var(--font-sans);
+}
+
+.action-card-btn.reject-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.action-card-btn.reject-btn:hover {
+  background: rgba(243, 139, 168, 0.1);
+  color: #f38ba8;
+  border-color: rgba(243, 139, 168, 0.3);
+}
+
+.action-card-btn.execute-btn {
+  background: var(--accent);
+  color: #fff;
+}
+
+.action-card-btn.execute-btn:hover {
+  background: #6c59e0;
+}
+
+.action-card-btn.undo-btn {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+}
+
+.action-card-btn.undo-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--text);
+}
+
+/* Sidebar Action History Item */
+.actions-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.actions-log-item {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  transition: background 0.15s;
+}
+
+.actions-log-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.act-badge {
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 20px;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+.act-badge.status-pending {
+  background: rgba(249, 226, 175, 0.1);
+  color: #f9e2af;
+}
+
+.act-badge.status-executed {
+  background: rgba(166, 227, 161, 0.1);
+  color: #a6e3a1;
+}
+
+.act-badge.status-cancelled,
+.act-badge.status-undone {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-faint);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+

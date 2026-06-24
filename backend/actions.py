@@ -453,6 +453,18 @@ def api_execute_action():
         return jsonify(result), 400
     return jsonify(result)
 
+@actions_bp.route("/api/actions/cancel", methods=["POST"])
+@login_required
+def api_cancel_action():
+    data = request.get_json() or {}
+    action_id = data.get("action_id")
+    if not action_id:
+        return jsonify({"error": "action_id is required"}), 400
+    result = cancel_action(action_id)
+    if result["status"] == "error":
+        return jsonify(result), 400
+    return jsonify(result)
+
 @actions_bp.route("/api/actions/undo", methods=["POST"])
 @login_required
 def api_undo_action():
@@ -485,4 +497,16 @@ def api_action_history():
         return jsonify({"status": "success", "history": res.data})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@actions_bp.route("/api/actions/status/<action_id>", methods=["GET"])
+@login_required
+def api_action_status(action_id):
+    try:
+        res = supabase.table("oculus_actions").select("*").eq("id", action_id).execute()
+        if res.data:
+            return jsonify({"status": "success", "action": res.data[0]})
+        return jsonify({"error": "Action not found"}), 404
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
