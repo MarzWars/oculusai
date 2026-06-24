@@ -1117,9 +1117,9 @@ code.inline-code {
   box-shadow: 0 0 10px rgba(243,139,168,0.08);
 }
 
-/* ── Thinking Blocks ──────────────────── */
+/* ── Thinking Blocks (stages only — no raw content shown) ── */
 .thinking-block {
-  margin: 14px 0;
+  margin: 12px 0;
   border-radius: var(--radius);
   border: 1px solid rgba(124,106,247,0.2);
   background: rgba(20,20,28,0.7);
@@ -1133,68 +1133,19 @@ code.inline-code {
   border-color: rgba(124,106,247,0.35);
 }
 
-.thinking-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: rgba(124,106,247,0.05);
-  cursor: pointer;
-  user-select: none;
-  font-weight: 500;
-  color: var(--text-muted);
-  transition: background 0.15s ease;
-}
-
-.thinking-header:hover {
-  background: rgba(124,106,247,0.09);
-}
-
-/* Hide default details arrow */
-.thinking-block summary {
-  list-style: none;
-}
-
-.thinking-block summary::-webkit-details-marker {
-  display: none;
-}
-
-.thinking-header::after {
-  content: "▾";
-  margin-left: auto;
-  transition: transform 0.2s ease;
-  color: var(--text-faint);
-  font-size: 11px;
-}
-
-.thinking-block[open] .thinking-header::after {
-  transform: rotate(180deg);
-}
-
-.thinking-content {
-  padding: 12px 14px;
-  color: var(--text-muted);
-  border-top: 1px solid var(--border);
-  white-space: pre-wrap;
-  font-style: italic;
-  line-height: 1.6;
-}
-
 /* ── Thinking Stages (Premium Progress) ── */
 .thinking-stages {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.01);
-  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  padding: 14px 16px;
 }
 
 .stage-item {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 500;
   transition: all 0.25s ease;
 }
@@ -1213,11 +1164,11 @@ code.inline-code {
 
 .stage-item.pending .stage-dot {
   background: var(--bg-4);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-light);
 }
 
 .stage-item.active {
-  color: var(--accent);
+  color: var(--accent-bright);
   font-weight: 600;
 }
 
@@ -1228,7 +1179,7 @@ code.inline-code {
 }
 
 .stage-item.done {
-  color: var(--green);
+  color: var(--text-muted);
 }
 
 .stage-item.done .stage-dot {
@@ -1237,35 +1188,24 @@ code.inline-code {
 }
 
 @keyframes pulse-active {
-
-  0%,
-  100% {
+  0%, 100% {
     opacity: 1;
     transform: scale(1);
   }
-
   50% {
     opacity: 0.6;
-    transform: scale(1.15);
+    transform: scale(1.2);
   }
 }
 
+/* Streaming variant — same as static now */
 .thinking-block-streaming {
   margin: 12px 0;
   border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--bg-3);
+  border: 1px solid rgba(124,106,247,0.2);
+  background: rgba(20,20,28,0.7);
   overflow: hidden;
-}
-
-.thinking-block-streaming .thinking-block {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-}
-
-.thinking-block-streaming .thinking-stages {
-  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(4px);
 }
 
 

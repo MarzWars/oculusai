@@ -163,31 +163,15 @@ function renderMarkdown(text) {
   const thinkTagPattern = 'think(?:ing)?';
 
   // 1. Closed thinking blocks — <think>…</think> or <thinking>…</thinking>
-  html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*?)</(?:${thinkTagPattern})>`, 'gi'), (_, thought) => {
-    const { markup, statusText } = getStageHtml(thought, true);
-    return `
-<details class="thinking-block">
-  <summary class="thinking-header">
-    <span class="thinking-icon">🧠</span>
-    <span class="thinking-title">Thought Process: ${statusText}</span>
-  </summary>
-  ${markup}
-  <div class="thinking-content">${thought}</div>
-</details>`;
+  html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*?)<\\/(?:${thinkTagPattern})>`, 'gi'), (_, thought) => {
+    const { markup } = getStageHtml(thought, true);
+    return `<div class="thinking-block">${markup}</div>`;
   });
 
   // 2. Open/streaming thinking blocks — tag opened but not yet closed
   html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*)$`, 'gi'), (_, thought) => {
-    const { markup, statusText } = getStageHtml(thought, false);
-    return `
-<details class="thinking-block" open>
-  <summary class="thinking-header">
-    <span class="thinking-icon">🧠</span>
-    <span class="thinking-title">Thought Process: ${statusText}</span>
-  </summary>
-  ${markup}
-  <div class="thinking-content">${thought}</div>
-</details>`;
+    const { markup } = getStageHtml(thought, false);
+    return `<div class="thinking-block">${markup}</div>`;
   });
 
   // 1b. Protect details blocks
@@ -411,18 +395,8 @@ function renderStreamingHtml(text) {
     return '';
   });
   for (const thought of closedBlocks) {
-    const { markup, statusText } = getStageHtml(thought, true);
-    html += `
-<div class="thinking-block-streaming">
-  ${markup}
-  <details class="thinking-block">
-    <summary class="thinking-header">
-      <span class="thinking-icon">🧠</span>
-      <span class="thinking-title">Raw Thoughts: ${statusText}</span>
-    </summary>
-    <div class="thinking-content">${escapeHtml(thought)}</div>
-  </details>
-</div>`;
+    const { markup } = getStageHtml(thought, true);
+    html += `<div class="thinking-block-streaming">${markup}</div>`;
   }
 
   // 2. Open (still streaming) thinking block
@@ -430,18 +404,8 @@ function renderStreamingHtml(text) {
   if (openMatch) {
     const thought = openMatch[1];
     remaining = remaining.replace(openRe, '');
-    const { markup, statusText } = getStageHtml(thought, false);
-    html += `
-<div class="thinking-block-streaming">
-  ${markup}
-  <details class="thinking-block" open>
-    <summary class="thinking-header">
-      <span class="thinking-icon">🧠</span>
-      <span class="thinking-title">Raw Thoughts: ${statusText}</span>
-    </summary>
-    <div class="thinking-content">${escapeHtml(thought)}<span class="stream-cursor"></span></div>
-  </details>
-</div>`;
+    const { markup } = getStageHtml(thought, false);
+    html += `<div class="thinking-block-streaming">${markup}</div>`;
   }
 
   // 3. Main response text (everything outside thinking tags)
