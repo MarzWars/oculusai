@@ -44,7 +44,7 @@ It remembers who you are. It searches the web in real time. It writes code that 
 | 🔐 **Multi-User Auth** | Register, login, and logout — each user's data is fully isolated in Supabase. |
 | 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences, and key facts across sessions. A background LLM pipeline extracts, consolidates, and deconflicts information automatically. |
 | 🧠 **Oculus Brain UI** | Sliding side panel with live view of your memory — edit profiles, add facts, manage projects, clients, and deadlines in real time. |
-| ⚡ **AI Actions Engine** | Generates proposals, sends emails, schedules tasks, and logs workflow history. Uses low-temperature function extraction with OpenRouter to produce active proposals. |
+| ⚡ **AI Actions Engine** | Generates proposals, sends emails, schedules tasks, and logs workflow history. Uses low-temperature function extraction with OpenRouter to produce active proposals. Includes interactive sidebar confirmation, cancellation, and deletion controls. |
 | 🔄 **Real-Time Streaming** | Token-by-token streaming so responses appear word-by-word as the model generates. |
 | 🔬 **Collapsible Thinking** | Internal model reasoning streams live in a greyed-out block, then folds into a collapsible summary when the final response begins. |
 | 🌐 **Live Web Search** | Automatically pulls real-time information via Tavily Search when the query requires current data. |
@@ -82,7 +82,7 @@ Oculus extracts dates and titles to schedule deadlines.
   > *"Add a task to review client mockups by Friday"*
 * **Interactive Confirmation:** A glassmorphic card will slide into view showing `Task Title` and `Due Date` fields. You can edit the text inside the inputs.
 * **Confirm:** Click **Confirm & Execute** $\rightarrow$ the card shows a completion log and the deadline appears immediately in your sidebar brain panel.
-* **Undo:** Click **Undo Action** to remove the task from memory instantly.
+* **Undo/Delete**: Click **Undo Action** on the card to remove the task from memory instantly. Alternatively, click the trash can icon next to the task in your sidebar **Action Log** to delete it manually at any time.
 
 ### 4. Compiling Proposals & Quotes
 Generate professional documents directly in the workspace sandbox.
@@ -90,15 +90,17 @@ Generate professional documents directly in the workspace sandbox.
   > *"Generate a proposal for Acme Corp for a website rebrand costing R 45,000. Deliverables include UI mockups, contact forms, and SEO setup."*
 * **Interactive Confirmation:** Edit fields like client name, budget amount, and details scope directly on the card.
 * **Confirm:** Click **Confirm & Execute** $\rightarrow$ Oculus compiles a formal `.docx` layout (using `python-docx`) and saves it to the sandbox.
-* **Download:** A download link is generated (`[proposals/proposal_Acme_Corp_timestamp.docx]`). Click to download the file directly to your system.
+* **Download:** A download link is generated as an elegant inline **Download DOCX** button inside the card. Click it to download the file directly to your system. You can also view/delete this action later from the sidebar **Action Log**.
 
 ### 5. Email Drafting & Previews
 Draft emails and review them securely.
 * **Trigger Prompt:** 
   > *"Draft a check-in email to john@example.com about project deadlines"*
 * **Interactive Confirmation:** A card displays the recipient, subject line, and a text area containing the full body text. Adjust the text as needed.
-* **Confirm:** Click **Confirm & Execute** $\rightarrow$ Oculus writes a responsive, formatted HTML email container to the workspace sandbox directory. Click the generated link to preview the compiled email in your browser.
+* **Confirm:** Click **Confirm & Execute** $\rightarrow$ Oculus writes a responsive, formatted HTML email container to the workspace sandbox directory. Click the generated inline **Preview HTML** button to open the compiled email in your browser.
 * **SMTP Mode:** If you set the environment variable `ENABLE_SMTP_DELIVERY=true` and configure the SMTP host settings, Oculus will actively send the MIME formatted email to the recipient.
+* **Action Log Sidebar Controls**: If you clear the chat before confirming or rejecting an action, it will appear in your sidebar **Action Log** as `PENDING`. You can click the checkmark button next to it to **Confirm & Execute** directly from the log, or click the cross button to **Reject & Cancel** it.
+
 
 ---
 
