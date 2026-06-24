@@ -30,7 +30,7 @@ Code. Copy. Strategy. Memory. Workspaces. Actions Engine. All in one.
 
 ## What is Oculus?
 
-Oculus is a custom AI assistant built for running a digital agency — not a generic chatbot wrapper. It's powered by **OpenRouter**, a gateway to multiple large language models, and layered with a persistent memory system, isolated client workspaces, live web search, a custom-built code sandbox, and an interactive **AI Actions Engine** for automations.
+Oculus is an AI workspace that remembers clients, generates proposals, drafts emails, manages tasks, and executes workflows built for running a digital agency — not a generic chatbot wrapper. It's powered by **OpenRouter**, a gateway to multiple large language models, and layered with a persistent memory system, isolated client workspaces, live web search, a custom-built code sandbox, and an interactive **AI Actions Engine** for automations.
 
 It remembers who you are. It searches the web in real time. It writes code that actually runs. It generates proposals, drafts emails, schedules tasks, and coordinates workflows without guardrails blocking creative or adult ad campaigns.
 
