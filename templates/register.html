@@ -3,37 +3,231 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Register — Oculus AI</title>
+  <title>Create Account — Oculus AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    body{background:#0d0d0f;color:#e8e8f0;font-family:'DM Sans',system-ui,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}
-    .card{background:#141417;border:1px solid #2a2a32;border-radius:16px;padding:40px;width:100%;max-width:400px}
-    .logo{text-align:center;margin-bottom:32px}
-    .logo-icon{width:48px;height:48px;border-radius:12px;background:linear-gradient(135deg,#7c6af7,#9d78ff);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:22px;color:#fff;margin:0 auto 12px;box-shadow:0 0 20px rgba(124,106,247,.3)}
-    .logo h1{font-size:20px;font-weight:700;color:#e8e8f0}
-    .logo p{font-size:13px;color:#8888a0;margin-top:4px}
-    .field{margin-bottom:16px}
-    label{display:block;font-size:13px;color:#8888a0;margin-bottom:6px}
-    input{width:100%;padding:11px 14px;background:#1c1c21;border:1px solid #2a2a32;border-radius:10px;color:#e8e8f0;font-size:14px;outline:none;transition:border-color .15s}
-    input:focus{border-color:#7c6af7;box-shadow:0 0 0 3px rgba(124,106,247,.1)}
-    .btn{width:100%;padding:12px;background:#7c6af7;border:none;border-radius:10px;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:background .15s;margin-top:8px}
-    .btn:hover{background:#8f7af9}
-    .error{background:rgba(243,139,168,.1);border:1px solid rgba(243,139,168,.3);color:#f38ba8;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
-    .success{background:rgba(166,227,161,.1);border:1px solid rgba(166,227,161,.3);color:#a6e3a1;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px}
-    .switch{text-align:center;margin-top:20px;font-size:13px;color:#8888a0}
-    .switch a{color:#7c6af7;text-decoration:none}
-    .switch a:hover{text-decoration:underline}
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #09090c;
+      color: #ebebf5;
+      font-family: 'DM Sans', system-ui, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(124,106,247,0.12) 0%, transparent 70%);
+      top: -150px;
+      left: 50%;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    body::after {
+      content: '';
+      position: fixed;
+      width: 400px;
+      height: 400px;
+      border-radius: 50%;
+      background: radial-gradient(ellipse, rgba(100,80,240,0.06) 0%, transparent 70%);
+      bottom: -100px;
+      right: -50px;
+      pointer-events: none;
+    }
+
+    .card {
+      background: rgba(16, 16, 20, 0.85);
+      backdrop-filter: blur(24px) saturate(1.3);
+      -webkit-backdrop-filter: blur(24px) saturate(1.3);
+      border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 20px;
+      padding: 44px 40px 40px;
+      width: 100%;
+      max-width: 400px;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,106,247,0.08) inset;
+      animation: cardIn 0.45s cubic-bezier(0.16,1,0.3,1);
+    }
+
+    @keyframes cardIn {
+      from { opacity: 0; transform: translateY(16px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .logo-icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 16px;
+      background: linear-gradient(135deg, rgba(124,106,247,0.22) 0%, rgba(100,80,230,0.1) 100%);
+      border: 1px solid rgba(124,106,247,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 16px;
+      box-shadow: 0 0 28px rgba(124,106,247,0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+      animation: logoFloat 4s ease-in-out infinite;
+    }
+
+    @keyframes logoFloat {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-4px); }
+    }
+
+    .logo h1 {
+      font-family: 'Syne', system-ui, sans-serif;
+      font-size: 22px;
+      font-weight: 700;
+      color: #ebebf5;
+      letter-spacing: -0.02em;
+    }
+
+    .logo p {
+      font-size: 13.5px;
+      color: #8080a0;
+      margin-top: 5px;
+      font-weight: 400;
+    }
+
+    .field { margin-bottom: 18px; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: #8080a0;
+      margin-bottom: 7px;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="text"] {
+      width: 100%;
+      padding: 12px 15px;
+      background: rgba(25,25,32,0.8);
+      border: 1px solid #252530;
+      border-radius: 11px;
+      color: #ebebf5;
+      font-size: 14.5px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .2s ease, box-shadow .2s ease;
+    }
+
+    input:focus {
+      border-color: rgba(124,106,247,0.6);
+      box-shadow: 0 0 0 3px rgba(124,106,247,0.1), 0 0 16px rgba(124,106,247,0.08);
+    }
+
+    input::placeholder { color: #4a4a62; }
+
+    .btn {
+      width: 100%;
+      padding: 13px;
+      background: linear-gradient(135deg, #7c6af7 0%, #9d7af9 100%);
+      border: none;
+      border-radius: 11px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all .2s cubic-bezier(0.16,1,0.3,1);
+      margin-top: 8px;
+      box-shadow: 0 4px 16px rgba(124,106,247,0.35), inset 0 1px 0 rgba(255,255,255,0.12);
+      position: relative;
+      overflow: hidden;
+      letter-spacing: 0.01em;
+    }
+
+    .btn::after {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+      border-radius: inherit;
+      pointer-events: none;
+    }
+
+    .btn:hover {
+      background: linear-gradient(135deg, #8f7af9 0%, #b08bff 100%);
+      transform: translateY(-1px);
+      box-shadow: 0 6px 24px rgba(124,106,247,0.5);
+    }
+
+    .btn:active { transform: translateY(0) scale(0.98); }
+
+    .error {
+      background: rgba(243,139,168,.08);
+      border: 1px solid rgba(243,139,168,.25);
+      color: #f38ba8;
+      padding: 11px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
+
+    .success {
+      background: rgba(166,227,161,.08);
+      border: 1px solid rgba(166,227,161,.25);
+      color: #a6e3a1;
+      padding: 11px 14px;
+      border-radius: 10px;
+      font-size: 13px;
+      margin-bottom: 18px;
+    }
+
+    .switch {
+      text-align: center;
+      margin-top: 22px;
+      font-size: 13px;
+      color: #8080a0;
+    }
+
+    .switch a {
+      color: #9d8dff;
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.15s;
+    }
+
+    .switch a:hover { color: #c4b8ff; text-decoration: underline; }
+
+    .divider {
+      height: 1px;
+      background: linear-gradient(to right, transparent, rgba(255,255,255,0.07), transparent);
+      margin: 24px 0;
+    }
   </style>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
 <body>
 <div class="card">
   <div class="logo">
     <div class="logo-icon">
-      <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+      <img src="/static/oculus_avatar.svg" width="28" height="28" alt="Oculus">
     </div>
     <h1>Create Account</h1>
-    <p>Join Oculus AI</p>
+    <p>Join Oculus AI — your intelligent workspace</p>
   </div>
   {% if error %}
     <div class="error">{{ error }}</div>
@@ -41,21 +235,22 @@
   {% if success %}
     <div class="success">{{ success }}</div>
   {% endif %}
-  <form method="POST">
+  <form method="POST" autocomplete="on">
     <div class="field">
-      <label>Email</label>
-      <input type="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
     </div>
     <div class="field">
-      <label>Password</label>
-      <input type="password" name="password" placeholder="Min. 6 characters" required>
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" placeholder="Min. 6 characters" required autocomplete="new-password">
     </div>
     <div class="field">
-      <label>Confirm Password</label>
-      <input type="password" name="confirm" placeholder="Repeat password" required>
+      <label for="confirm">Confirm Password</label>
+      <input type="password" id="confirm" name="confirm" placeholder="Repeat password" required autocomplete="new-password">
     </div>
-    <button class="btn" type="submit">Create Account</button>
+    <button class="btn" type="submit">Create Account →</button>
   </form>
+  <div class="divider"></div>
   <div class="switch">Already have an account? <a href="/login">Sign in</a></div>
 </div>
 </body>
