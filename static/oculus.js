@@ -606,6 +606,9 @@ document.addEventListener('DOMContentLoaded', () => {
   scrollToBottom();
   const input = document.getElementById('msgInput');
   if (input) input.focus();
+
+  // Load user workspaces
+  loadWorkspaces();
 });
 
 // ── Auto-grow textarea ────────────────────
@@ -1325,6 +1328,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Load Workspaces
+  loadWorkspaces();
+
   // Register service worker for PWA caching support
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js').then(reg => {
@@ -1351,3 +1357,208 @@ window.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// ─────────────────────────────────────────
+// 🏢 CLIENT WORKSPACES CONTROLLER
+// ─────────────────────────────────────────
+let userWorkspaces = [];
+let activeWorkspaceId = null;
+
+// Toggle workspace dropdown menu
+function toggleWorkspaceDropdown(event) {
+  if (event) event.stopPropagation();
+  const dropdown = document.getElementById('workspaceDropdown');
+  if (!dropdown) return;
+  dropdown.classList.toggle('open');
+}
+
+// Close dropdown on clicking outside
+document.addEventListener('click', (e) => {
+  const dropdown = document.getElementById('workspaceDropdown');
+  const trigger = document.getElementById('workspaceTrigger');
+  if (dropdown && dropdown.classList.contains('open')) {
+    if (!dropdown.contains(e.target) && !trigger.contains(e.target)) {
+      dropdown.classList.remove('open');
+    }
+  }
+});
+
+// Load workspaces from backend
+async function loadWorkspaces() {
+  try {
+    const resp = await fetch('/api/workspaces');
+    if (!resp.ok) throw new Error('Failed to fetch workspaces');
+    const data = await resp.json();
+    userWorkspaces = data.workspaces;
+    activeWorkspaceId = data.current_workspace_id;
+    
+    // Update the trigger label
+    const activeWs = userWorkspaces.find(w => w.id === activeWorkspaceId);
+    const nameEl = document.getElementById('currentWorkspaceName');
+    if (nameEl && activeWs) {
+      nameEl.textContent = activeWs.name;
+    }
+    
+    // Render the dropdown list
+    renderWorkspacesList();
+  } catch (err) {
+    console.error('[Workspaces] Error loading:', err);
+  }
+}
+
+// Render the list of workspaces inside the dropdown
+function renderWorkspacesList() {
+  const listEl = document.getElementById('workspaceList');
+  if (!listEl) return;
+  
+  if (userWorkspaces.length === 0) {
+    listEl.innerHTML = '<div class="workspace-empty">No workspaces found</div>';
+    return;
+  }
+  
+  listEl.innerHTML = userWorkspaces.map(ws => {
+    const isActive = ws.id === activeWorkspaceId;
+    const activeClass = isActive ? 'active' : '';
+    // Backwards compatibility check: default workspace (id == user_id) cannot be deleted.
+    const isDefault = ws.id === ws.user_id;
+    const deleteBtn = isDefault ? '' : `
+      <button class="ws-delete-btn" onclick="confirmDeleteWorkspace(event, '${ws.id}', \`${escapeHtml(ws.name).replace(/'/g, "\\'")}\`)" title="Delete workspace">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="12" height="12">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+        </svg>
+      </button>
+    `;
+    
+    return `
+      <div class="workspace-item ${activeClass}" onclick="switchWorkspace('${ws.id}')">
+        <div class="workspace-item-content">
+          <span class="workspace-item-dot"></span>
+          <span class="workspace-item-name" title="${escapeHtml(ws.name)}">${escapeHtml(ws.name)}</span>
+        </div>
+        ${deleteBtn}
+      </div>
+    `;
+  }).join('');
+}
+
+// Switch active workspace
+async function switchWorkspace(workspaceId) {
+  if (workspaceId === activeWorkspaceId) return;
+  
+  try {
+    const resp = await fetch('/api/workspaces/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: workspaceId })
+    });
+    if (resp.ok) {
+      // Force a full reload to reload memory, chat history, elements, etc.
+      location.href = location.pathname + '?_ws=' + Date.now();
+    } else {
+      const err = await resp.json();
+      alert(err.error || 'Failed to switch workspace.');
+    }
+  } catch (err) {
+    alert('Error switching workspace: ' + err.message);
+  }
+}
+
+// Show Create Workspace Modal
+function showCreateWorkspaceModal(event) {
+  if (event) event.stopPropagation();
+  // Close dropdown first
+  const dropdown = document.getElementById('workspaceDropdown');
+  if (dropdown) dropdown.classList.remove('open');
+  
+  const modal = document.getElementById('workspaceModalOverlay');
+  const input = document.getElementById('newWorkspaceName');
+  if (modal) {
+    modal.classList.add('open');
+    if (input) {
+      input.value = '';
+      setTimeout(() => input.focus(), 150);
+    }
+  }
+}
+
+// Hide Create Workspace Modal
+function hideCreateWorkspaceModal() {
+  const modal = document.getElementById('workspaceModalOverlay');
+  if (modal) modal.classList.remove('open');
+}
+
+// Create Workspace Call
+async function createWorkspace() {
+  const input = document.getElementById('newWorkspaceName');
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) {
+    alert('Workspace name is required.');
+    return;
+  }
+  
+  try {
+    const resp = await fetch('/api/workspaces/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      hideCreateWorkspaceModal();
+      // Reload page to enter new workspace
+      location.href = location.pathname + '?_ws=' + Date.now();
+    } else {
+      alert(data.error || 'Failed to create workspace.');
+    }
+  } catch (err) {
+    alert('Error creating workspace: ' + err.message);
+  }
+}
+
+// Confirm delete workspace
+function confirmDeleteWorkspace(event, id, name) {
+  if (event) event.stopPropagation();
+  
+  const modal = document.getElementById('deleteWorkspaceModalOverlay');
+  const nameSpan = document.getElementById('deleteWorkspaceNameSpan');
+  const idInput = document.getElementById('deleteWorkspaceIdInput');
+  
+  if (modal) {
+    if (nameSpan) nameSpan.textContent = name;
+    if (idInput) idInput.value = id;
+    modal.classList.add('open');
+  }
+}
+
+// Hide Delete Workspace Modal
+function hideDeleteWorkspaceModal() {
+  const modal = document.getElementById('deleteWorkspaceModalOverlay');
+  if (modal) modal.classList.remove('open');
+}
+
+// Delete Workspace Call
+async function deleteWorkspace() {
+  const idInput = document.getElementById('deleteWorkspaceIdInput');
+  if (!idInput) return;
+  const workspaceId = idInput.value;
+  
+  try {
+    const resp = await fetch('/api/workspaces/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspace_id: workspaceId })
+    });
+    const data = await resp.json();
+    if (resp.ok) {
+      hideDeleteWorkspaceModal();
+      // Reload page (will switch to default workspace or new active one)
+      location.href = location.pathname + '?_ws=' + Date.now();
+    } else {
+      alert(data.error || 'Failed to delete workspace.');
+    }
+  } catch (err) {
+    alert('Error deleting workspace: ' + err.message);
+  }
+}

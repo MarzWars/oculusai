@@ -90,9 +90,31 @@
                     <div class="logo-icon">
                         <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
                     </div>
-                    <div class="logo-text">
+                    <div class="logo-text" style="position: relative;">
                         <strong>Oculus AI</strong>
-                        <span>Lex Digitals</span>
+                        <div class="workspace-trigger-container">
+                            <span class="workspace-selector-trigger" id="workspaceTrigger" onclick="toggleWorkspaceDropdown(event)">
+                                <span id="currentWorkspaceName">Personal Workspace</span>
+                                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="10" height="10">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </span>
+                            <!-- Dropdown Menu -->
+                            <div class="workspace-dropdown" id="workspaceDropdown">
+                                <div class="workspace-dropdown-header">SWITCH WORKSPACE</div>
+                                <div class="workspace-list" id="workspaceList"></div>
+                                <div class="workspace-dropdown-divider"></div>
+                                <div class="workspace-create-btn-wrap">
+                                    <button class="workspace-dropdown-btn add-ws-btn" onclick="showCreateWorkspaceModal(event)">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" style="margin-right: 5px;">
+                                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                                        </svg>
+                                        Create Workspace
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -234,6 +256,52 @@
                 <div class="sandbox-preview-pane">
                     <iframe id="sandboxPreview" sandbox="allow-scripts" title="Code Live Preview"></iframe>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Workspace Modal -->
+    <div class="modal-overlay" id="workspaceModalOverlay">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Create New Workspace</h3>
+                <button class="modal-close-btn" onclick="hideCreateWorkspaceModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                    Workspaces are fully isolated environments with dedicated memory, profiles, chat history, and saved sandbox files.
+                </p>
+                <div class="modal-input-group">
+                    <label for="newWorkspaceName">Workspace Name</label>
+                    <input type="text" id="newWorkspaceName" placeholder="e.g. Acme Corp, Personal Project" autocomplete="off">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel-btn" onclick="hideCreateWorkspaceModal()">Cancel</button>
+                <button class="modal-btn confirm-btn" onclick="createWorkspace()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Workspace Confirmation Modal -->
+    <div class="modal-overlay" id="deleteWorkspaceModalOverlay">
+        <div class="modal-card delete-card">
+            <div class="modal-header">
+                <h3>Delete Workspace</h3>
+                <button class="modal-close-btn" onclick="hideDeleteWorkspaceModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <p style="color: var(--text); font-size: 14px; margin-bottom: 10px;">
+                    Are you sure you want to delete <strong id="deleteWorkspaceNameSpan"></strong>?
+                </p>
+                <p style="color: var(--red); font-size: 12px; font-weight: 500;">
+                    WARNING: This will permanently delete all chat history, memory states, configurations, and saved sandbox files for this workspace. This action cannot be undone.
+                </p>
+                <input type="hidden" id="deleteWorkspaceIdInput">
+            </div>
+            <div class="modal-actions">
+                <button class="modal-btn cancel-btn" onclick="hideDeleteWorkspaceModal()">Cancel</button>
+                <button class="modal-btn delete-btn" onclick="deleteWorkspace()">Delete Workspace</button>
             </div>
         </div>
     </div>
