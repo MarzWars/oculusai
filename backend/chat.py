@@ -191,7 +191,7 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
             "══════════ CONVERSATION HISTORY ══════════",
         ]
 
-        stored_summary = load_summary(user_id)
+        stored_summary = load_summary(workspace_id)
         if stored_summary:
             parts.append(f"[Earlier summary]: {stored_summary}")
             parts.append("")

@@ -80,6 +80,25 @@ function getStageHtml(thoughtText, isClosed) {
 
 
 function renderMarkdown(text) {
+  // ── Stopgap: catch raw-JSON-only responses from backend action system ──
+  // If the entire response is bare JSON (no user-facing text), render a
+  // readable action card instead of showing nothing or raw braces.
+  const trimmed = text.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}') && trimmed.length > 2) {
+    try {
+      const obj = JSON.parse(trimmed);
+      const actionType = obj.action_type || obj.type || null;
+      if (actionType) {
+        const args = JSON.stringify(obj.arguments || obj.params || {}, null, 2);
+        return `<div class="action-card"><span class="action-card-icon">⚡</span><div class="action-card-body"><div class="action-card-title">${escapeHtml(actionType.replace(/_/g, ' '))}</div><pre class="action-card-args">${escapeHtml(args)}</pre></div></div>`;
+      }
+      if (Object.keys(obj).length === 0) {
+        // Empty {} — model returned no action and no text. Show nothing graceful.
+        return '<p class="text-faint" style="font-style:italic;color:var(--text-faint)">_(No response — try rephrasing your message.)_</p>';
+      }
+    } catch (e) { /* not valid JSON, fall through to normal markdown */ }
+  }
+
   let html = text;
   let actionProposalData = null;
   const proposalIdx = html.indexOf('[[ACTION_PROPOSAL]]:');
@@ -88,7 +107,7 @@ function renderMarkdown(text) {
     html = html.substring(0, proposalIdx);
     try {
       actionProposalData = JSON.parse(rawProposal);
-    } catch(e) {
+    } catch (e) {
       console.error("Failed to parse action proposal in renderMarkdown:", e);
     }
   }
@@ -633,7 +652,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load user workspaces
   loadWorkspaces();
-  
+
   // Initialize AI Action Engine hooks
   activateHistoricalProposals();
   loadActionHistoryLog();
@@ -1419,14 +1438,14 @@ async function loadWorkspaces() {
     const data = await resp.json();
     userWorkspaces = data.workspaces;
     activeWorkspaceId = data.current_workspace_id;
-    
+
     // Update the trigger label
     const activeWs = userWorkspaces.find(w => w.id === activeWorkspaceId);
     const nameEl = document.getElementById('currentWorkspaceName');
     if (nameEl && activeWs) {
       nameEl.textContent = activeWs.name;
     }
-    
+
     // Render the dropdown list
     renderWorkspacesList();
   } catch (err) {
@@ -1438,12 +1457,12 @@ async function loadWorkspaces() {
 function renderWorkspacesList() {
   const listEl = document.getElementById('workspaceList');
   if (!listEl) return;
-  
+
   if (userWorkspaces.length === 0) {
     listEl.innerHTML = '<div class="workspace-empty">No workspaces found</div>';
     return;
   }
-  
+
   listEl.innerHTML = userWorkspaces.map(ws => {
     const isActive = ws.id === activeWorkspaceId;
     const activeClass = isActive ? 'active' : '';
@@ -1457,7 +1476,7 @@ function renderWorkspacesList() {
         </svg>
       </button>
     `;
-    
+
     return `
       <div class="workspace-item ${activeClass}" onclick="switchWorkspace('${ws.id}')">
         <div class="workspace-item-content">
@@ -1473,7 +1492,7 @@ function renderWorkspacesList() {
 // Switch active workspace
 async function switchWorkspace(workspaceId) {
   if (workspaceId === activeWorkspaceId) return;
-  
+
   try {
     const resp = await fetch('/api/workspaces/switch', {
       method: 'POST',
@@ -1498,7 +1517,7 @@ function showCreateWorkspaceModal(event) {
   // Close dropdown first
   const dropdown = document.getElementById('workspaceDropdown');
   if (dropdown) dropdown.classList.remove('open');
-  
+
   const modal = document.getElementById('workspaceModalOverlay');
   const input = document.getElementById('newWorkspaceName');
   if (modal) {
@@ -1525,7 +1544,7 @@ async function createWorkspace() {
     alert('Workspace name is required.');
     return;
   }
-  
+
   try {
     const resp = await fetch('/api/workspaces/create', {
       method: 'POST',
@@ -1548,11 +1567,11 @@ async function createWorkspace() {
 // Confirm delete workspace
 function confirmDeleteWorkspace(event, id, name) {
   if (event) event.stopPropagation();
-  
+
   const modal = document.getElementById('deleteWorkspaceModalOverlay');
   const nameSpan = document.getElementById('deleteWorkspaceNameSpan');
   const idInput = document.getElementById('deleteWorkspaceIdInput');
-  
+
   if (modal) {
     if (nameSpan) nameSpan.textContent = name;
     if (idInput) idInput.value = id;
@@ -1571,7 +1590,7 @@ async function deleteWorkspace() {
   const idInput = document.getElementById('deleteWorkspaceIdInput');
   if (!idInput) return;
   const workspaceId = idInput.value;
-  
+
   try {
     const resp = await fetch('/api/workspaces/delete', {
       method: 'POST',
@@ -1600,12 +1619,12 @@ function renderActionCard(data) {
   const actionId = data.action_id;
   const type = data.action_type;
   const args = data.arguments || {};
-  
+
   let icon = "⚡";
   let title = "Proposed Action";
   let accentClass = "action-card-generic";
   let formFields = "";
-  
+
   if (type === "create_task") {
     icon = "📅";
     title = "Create Task / Deadline";
@@ -1661,7 +1680,7 @@ function renderActionCard(data) {
       </div>
     `;
   }
-  
+
   return `
     <div class="action-proposal-card ${accentClass}" id="action-card-${actionId}" data-action-id="${actionId}" data-action-type="${type}">
       <div class="action-card-header">
@@ -1690,7 +1709,7 @@ function activateHistoricalProposals() {
         el.outerHTML = renderActionCard(data);
         updateActionCardStatusFromServer(data.action_id);
       }
-    } catch(e) {
+    } catch (e) {
       console.error("Error activating proposal:", e);
     }
   });
@@ -1702,7 +1721,7 @@ async function updateActionCardStatusFromServer(actionId) {
   if (!card) return;
   const statusEl = document.getElementById(`action-status-${actionId}`);
   const btnEl = document.getElementById(`action-btns-${actionId}`);
-  
+
   try {
     const resp = await fetch(`/api/actions/status/${actionId}`);
     if (!resp.ok) return;
@@ -1710,7 +1729,7 @@ async function updateActionCardStatusFromServer(actionId) {
     if (result.status === 'success' && result.action) {
       const action = result.action;
       const state = action.status;
-      
+
       if (state === 'executed') {
         statusEl.className = "action-card-status success";
         statusEl.innerHTML = `✨ <strong>Completed:</strong> ${renderMarkdown(action.outcome || '')}`;
@@ -1735,7 +1754,7 @@ async function updateActionCardStatusFromServer(actionId) {
         btnEl.style.display = 'flex';
       }
     }
-  } catch(err) {
+  } catch (err) {
     console.error("Error updating action card status:", err);
   }
 }
@@ -1744,19 +1763,19 @@ async function updateActionCardStatusFromServer(actionId) {
 async function executeProposedAction(actionId) {
   const card = document.getElementById(`action-card-${actionId}`);
   if (!card) return;
-  
+
   const overrides = {};
   card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => {
     overrides[el.dataset.key] = el.value;
   });
-  
+
   const statusEl = document.getElementById(`action-status-${actionId}`);
   const btnEl = document.getElementById(`action-btns-${actionId}`);
-  
+
   statusEl.className = "action-card-status running";
   statusEl.innerHTML = '<span style="display:inline-block; animation: spin 1s infinite linear; margin-right:5px;">⏳</span> Executing action...';
   btnEl.style.display = 'none';
-  
+
   try {
     const resp = await fetch('/api/actions/execute', {
       method: 'POST',
@@ -1769,10 +1788,10 @@ async function executeProposedAction(actionId) {
       statusEl.innerHTML = `✨ <strong>Completed:</strong> ${renderMarkdown(result.outcome)}`;
       btnEl.style.display = 'flex';
       btnEl.innerHTML = `<button class="action-card-btn undo-btn" onclick="undoExecutedAction('${actionId}')">Undo Action</button>`;
-      
+
       // Disable inputs
       card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => el.disabled = true);
-      
+
       // Sync UI components
       loadBrainIntoSidebar();
       loadActionHistoryLog();
@@ -1781,7 +1800,7 @@ async function executeProposedAction(actionId) {
       statusEl.textContent = `❌ Failed: ${result.error || result.message || 'Execution error'}`;
       btnEl.style.display = 'flex';
     }
-  } catch(err) {
+  } catch (err) {
     statusEl.className = "action-card-status failed";
     statusEl.textContent = `❌ Error: ${err.message}`;
     btnEl.style.display = 'flex';
@@ -1794,7 +1813,7 @@ async function cancelProposedAction(actionId) {
   if (!card) return;
   const statusEl = document.getElementById(`action-status-${actionId}`);
   const btnEl = document.getElementById(`action-btns-${actionId}`);
-  
+
   try {
     const resp = await fetch('/api/actions/cancel', {
       method: 'POST',
@@ -1808,7 +1827,7 @@ async function cancelProposedAction(actionId) {
       card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => el.disabled = true);
       loadActionHistoryLog();
     }
-  } catch(err) {
+  } catch (err) {
     console.error("Cancel action error:", err);
   }
 }
@@ -1819,11 +1838,11 @@ async function undoExecutedAction(actionId) {
   if (!card) return;
   const statusEl = document.getElementById(`action-status-${actionId}`);
   const btnEl = document.getElementById(`action-btns-${actionId}`);
-  
+
   statusEl.className = "action-card-status running";
   statusEl.innerHTML = '<span style="display:inline-block; animation: spin 1s infinite linear; margin-right:5px;">⏳</span> Reverting action...';
   btnEl.style.display = 'none';
-  
+
   try {
     const resp = await fetch('/api/actions/undo', {
       method: 'POST',
@@ -1835,7 +1854,7 @@ async function undoExecutedAction(actionId) {
       statusEl.className = "action-card-status undone";
       statusEl.textContent = "↩️ Action Reverted / Undone";
       btnEl.style.display = 'none';
-      
+
       loadBrainIntoSidebar();
       loadActionHistoryLog();
     } else {
@@ -1843,7 +1862,7 @@ async function undoExecutedAction(actionId) {
       statusEl.textContent = `❌ Undo failed: ${result.message}`;
       btnEl.style.display = 'flex';
     }
-  } catch(err) {
+  } catch (err) {
     statusEl.className = "action-card-status failed";
     statusEl.textContent = `❌ Error: ${err.message}`;
     btnEl.style.display = 'flex';
@@ -1854,12 +1873,12 @@ async function undoExecutedAction(actionId) {
 async function loadActionHistoryLog() {
   const container = document.getElementById('actionsLogContent');
   if (!container) return;
-  
+
   try {
     const resp = await fetch('/api/actions/history');
     if (!resp.ok) throw new Error("Failed to load actions history");
     const data = await resp.json();
-    
+
     if (data.status === 'success' && data.history && data.history.length > 0) {
       let html = '<div class="actions-history-list">';
       data.history.forEach(act => {
@@ -1868,17 +1887,17 @@ async function loadActionHistoryLog() {
         if (act.action_type === 'create_task') { icon = "📅"; label = "Task Details"; }
         else if (act.action_type === 'generate_proposal') { icon = "📝"; label = "Proposal Draft"; }
         else if (act.action_type === 'send_email') { icon = "✉️"; label = "Email Sent"; }
-        
+
         let statusBadge = `<span class="act-badge status-${act.status}">${act.status.toUpperCase()}</span>`;
-        let timeStr = new Date(act.created_at).toLocaleDateString() + ' ' + new Date(act.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-        
+        let timeStr = new Date(act.created_at).toLocaleDateString() + ' ' + new Date(act.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
         // Summarize args
         let summaryText = "";
         const args = act.arguments || {};
         if (act.action_type === 'create_task') summaryText = args.title || "New Task";
         else if (act.action_type === 'generate_proposal') summaryText = `Client: ${args.client_name || 'Unknown'}`;
         else if (act.action_type === 'send_email') summaryText = `To: ${args.to || 'Unknown'}`;
-        
+
         html += `
           <div class="actions-log-item">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
@@ -1897,7 +1916,7 @@ async function loadActionHistoryLog() {
     } else {
       container.innerHTML = '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">No actions recorded yet.</div>';
     }
-  } catch(err) {
+  } catch (err) {
     container.innerHTML = `<div style="font-size:12px; color:var(--red); padding: 4px;">Error: ${err.message}</div>`;
   }
-}
+}

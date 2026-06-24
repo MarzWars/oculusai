@@ -122,7 +122,7 @@ header {
   line-height: 1.1;
 }
 
-.logo-text > span {
+.logo-text>span {
   font-size: 11px;
   color: var(--text-faint);
   letter-spacing: 0.5px;
@@ -2589,14 +2589,20 @@ code.inline-code {
 
 /* Accent borders per action type */
 .action-proposal-card.action-card-task {
-  border-left: 4px solid #89dceb; /* Cyan accent */
+  border-left: 4px solid #89dceb;
+  /* Cyan accent */
 }
+
 .action-proposal-card.action-card-proposal {
-  border-left: 4px solid #f9e2af; /* Gold/Amber accent */
+  border-left: 4px solid #f9e2af;
+  /* Gold/Amber accent */
 }
+
 .action-proposal-card.action-card-email {
-  border-left: 4px solid #cba6f7; /* Mauve/Purple accent */
+  border-left: 4px solid #cba6f7;
+  /* Mauve/Purple accent */
 }
+
 .action-proposal-card.action-card-generic {
   border-left: 4px solid var(--accent);
 }
@@ -2690,7 +2696,8 @@ code.inline-code {
 
 .action-card-status.success {
   background: rgba(166, 227, 161, 0.08);
-  color: #a6e3a1; /* Green */
+  color: #a6e3a1;
+  /* Green */
   border: 1px solid rgba(166, 227, 161, 0.2);
 }
 
@@ -2701,7 +2708,8 @@ code.inline-code {
 
 .action-card-status.failed {
   background: rgba(243, 139, 168, 0.08);
-  color: #f38ba8; /* Red/Pink */
+  color: #f38ba8;
+  /* Red/Pink */
   border: 1px solid rgba(243, 139, 168, 0.2);
 }
 
@@ -2809,7 +2817,54 @@ code.inline-code {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
-
+
+/* ── Action card (raw JSON response stopgap) ─ */
+.action-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: rgba(124, 106, 247, .07);
+  border: 1px solid rgba(124, 106, 247, .25);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 4px 0;
+}
+
+.action-card-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  line-height: 1;
+  margin-top: 1px;
+}
+
+.action-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.action-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  text-transform: capitalize;
+  margin-bottom: 6px;
+}
+
+.action-card-args {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-muted);
+  background: transparent;
+  margin: 0;
+  padding: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
