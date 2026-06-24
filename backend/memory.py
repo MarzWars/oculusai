@@ -1,7 +1,7 @@
 import re
 import json
 from datetime import datetime
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, session
 from config import Config
 from backend.extensions import supabase
 from backend.utils import is_ad_content, _add_unique
