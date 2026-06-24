@@ -153,3 +153,26 @@ def save_sandbox_file_api():
     except Exception as e:
         return jsonify({"error": f"Failed to save file: {str(e)}"}), 500
 
+@files_bp.route("/api/sandbox/download", methods=["GET"])
+@login_required
+def download_sandbox_file_api():
+    uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
+    file_path_param = request.args.get("path", "").strip()
+    if not file_path_param:
+        return jsonify({"error": "Path parameter is required"}), 400
+        
+    workspace_root = os.path.abspath(os.path.join(os.getcwd(), "workspaces", wid))
+    target_path = os.path.abspath(os.path.join(workspace_root, file_path_param))
+    
+    # Path traversal protection
+    if not target_path.startswith(workspace_root):
+        return jsonify({"error": "Access denied: outside workspace sandbox"}), 403
+        
+    if not os.path.exists(target_path) or os.path.isdir(target_path):
+        return jsonify({"error": "File not found"}), 404
+        
+    from flask import send_file
+    return send_file(target_path, as_attachment=True)
+
+

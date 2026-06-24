@@ -229,9 +229,101 @@ def _undo_create_task(user_id: str, workspace_id: str, args: dict) -> str:
 
 def _execute_generate_proposal(user_id: str, workspace_id: str, args: dict) -> str:
     import os
-    client_name = args.get("client_name", "Unknown Client").replace("/", "_").replace("\\", "_")
-    proposal_title = args.get("proposal_title", "Proposal").replace("/", "_").replace("\\", "_")
+    from docx import Document
+    from docx.shared import Inches, Pt, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
     
+    client_name = args.get("client_name", "Unknown_Client").replace("/", "_").replace("\\", "_").replace(" ", "_")
+    proposal_title = args.get("proposal_title", "Proposal").replace("/", "_").replace("\\", "_").replace(" ", "_")
+    amount = args.get("amount") or "TBD"
+    details = args.get("details") or "Details to be finalized."
+    
+    doc = Document()
+    
+    # Elegant Color Palette
+    PRIMARY_COLOR = RGBColor(41, 128, 185)   # Elegant Blue
+    TEXT_COLOR = RGBColor(44, 62, 80)        # Dark Charcoal
+    MUTED_COLOR = RGBColor(127, 140, 141)    # Gray
+    
+    # Title
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_title = p_title.add_run(proposal_title.upper())
+    run_title.font.name = "Arial"
+    run_title.font.size = Pt(22)
+    run_title.font.bold = True
+    run_title.font.color.rgb = PRIMARY_COLOR
+    
+    # Prepared for metadata
+    p_meta = doc.add_paragraph()
+    p_meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_meta = p_meta.add_run(f"Project Proposal & Scope of Work\n\nPrepared For: {client_name}\nDate: {datetime.now().strftime('%d %B %Y')}")
+    run_meta.font.name = "Arial"
+    run_meta.font.size = Pt(11)
+    run_meta.font.italic = True
+    run_meta.font.color.rgb = TEXT_COLOR
+    
+    doc.add_paragraph("\n") # Spacer
+    
+    # Section 1: Introduction
+    p_s1 = doc.add_paragraph()
+    run_s1 = p_s1.add_run("1. Executive Summary")
+    run_s1.font.name = "Arial"
+    run_s1.font.size = Pt(14)
+    run_s1.font.bold = True
+    run_s1.font.color.rgb = PRIMARY_COLOR
+    
+    p_intro = doc.add_paragraph(
+        f"This project proposal has been generated dynamically by Oculus AI for {client_name}. "
+        "The purpose of this document is to define the scope of deliverables, client requirements, "
+        "and pricing breakdown for this engagement."
+    )
+    p_intro.style.font.name = "Arial"
+    p_intro.style.font.size = Pt(11)
+    
+    # Section 2: Details/Scope
+    p_s2 = doc.add_paragraph()
+    run_s2 = p_s2.add_run("2. Proposed Scope & Description")
+    run_s2.font.name = "Arial"
+    run_s2.font.size = Pt(14)
+    run_s2.font.bold = True
+    run_s2.font.color.rgb = PRIMARY_COLOR
+    
+    p_desc = doc.add_paragraph(details)
+    p_desc.style.font.name = "Arial"
+    p_desc.style.font.size = Pt(11)
+    
+    # Section 3: Investment
+    p_s3 = doc.add_paragraph()
+    run_s3 = p_s3.add_run("3. Investment & Pricing")
+    run_s3.font.name = "Arial"
+    run_s3.font.size = Pt(14)
+    run_s3.font.bold = True
+    run_s3.font.color.rgb = PRIMARY_COLOR
+    
+    # Investment Table
+    table = doc.add_table(rows=2, cols=2)
+    table.style = 'Light Shading Accent 1'
+    
+    hdr_cells = table.rows[0].cells
+    hdr_cells[0].text = 'Deliverables & Description'
+    hdr_cells[1].text = 'Estimated Cost'
+    
+    row_cells = table.rows[1].cells
+    row_cells[0].text = f"Development & Delivery of: {proposal_title}"
+    row_cells[1].text = amount
+    
+    doc.add_paragraph("\n") # Spacer
+    
+    # Legal / SLA Footer Notes
+    p_footer = doc.add_paragraph()
+    run_foot = p_footer.add_run("Disclaimer: This document is a draft proposal. It is subject to formal contract signing and SLA approval.")
+    run_foot.font.name = "Arial"
+    run_foot.font.size = Pt(9)
+    run_foot.font.italic = True
+    run_foot.font.color.rgb = MUTED_COLOR
+    
+    # Directory setup and save
     sandbox_dir = os.path.join("workspaces", workspace_id, "proposals")
     os.makedirs(sandbox_dir, exist_ok=True)
     
@@ -239,10 +331,8 @@ def _execute_generate_proposal(user_id: str, workspace_id: str, args: dict) -> s
     file_name = f"proposal_{client_name}_{timestamp}.docx"
     file_path = os.path.join(sandbox_dir, file_name)
     
-    # Create an empty placeholder file for verification
-    with open(file_path, "w") as f:
-        f.write(f"Draft Proposal for {client_name}\nTitle: {proposal_title}\nAmount: {args.get('amount')}\nDetails: {args.get('details')}")
-        
+    doc.save(file_path)
+    
     download_url = f"/api/sandbox/download?path=proposals/{file_name}"
     return f"Proposal saved to sandbox as [proposals/{file_name}]({download_url})"
 
