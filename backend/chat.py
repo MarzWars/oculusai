@@ -124,8 +124,8 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
     web_raw_context = web_search(user_message) if should_search(user_message) else ""
 
     # Query workspace documents RAG context
-    from backend.rag import query_workspace_rag
-    rag_chunks = query_workspace_rag(workspace_id, user_message, match_count=5)
+    from backend.rag import query_workspace_rag_hybrid
+    rag_chunks = query_workspace_rag_hybrid(workspace_id, user_message, match_count=5)
 
     # Start with default budget variables
     verbatim_turns = Config.VERBATIM_TURNS

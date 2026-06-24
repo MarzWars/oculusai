@@ -669,9 +669,47 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load user workspaces
   loadWorkspaces();
 
+  // Load workspace documents for the active workspace
+  loadWorkspaceDocuments();
+
   // Initialize AI Action Engine hooks
   activateHistoricalProposals();
   loadActionHistoryLog();
+
+  // Initialize drag & drop for documents panel upload zone
+  const docUploadArea = document.getElementById('docUploadArea');
+  if (docUploadArea) {
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      docUploadArea.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+      docUploadArea.addEventListener(eventName, () => docUploadArea.classList.add('dragover'), false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      docUploadArea.addEventListener(eventName, () => docUploadArea.classList.remove('dragover'), false);
+    });
+
+    docUploadArea.addEventListener('drop', (e) => {
+      const dt = e.dataTransfer;
+      const files = dt.files;
+      if (files && files.length > 0) {
+        const docFiles = Array.from(files).filter(f => {
+          const ext = f.name.split('.').pop().toLowerCase();
+          return ext === 'pdf' || ext === 'docx';
+        });
+        if (docFiles.length > 0) {
+          uploadDocFiles(docFiles);
+        } else {
+          alert("Only PDF and DOCX files are allowed in this document workspace.");
+        }
+      }
+    }, false);
+  }
 });
 
 // ── Auto-grow textarea ────────────────────
@@ -2097,6 +2135,198 @@ async function cancelActionFromLog(actionId, event) {
     }
   } catch (err) {
     alert("Error cancelling action: " + err.message);
+    if (itemEl) itemEl.innerHTML = originalHtml;
+  }
+}
+
+// ─────────────────────────────────────────
+// 📂 WORKSPACE DOCUMENTS CONTROLLER
+// ─────────────────────────────────────────
+
+// Toggle Right Sidebar (Workspace Documents Browser)
+function toggleRightSidebar() {
+  const sidebar = document.getElementById('rightSidebar');
+  const overlay = document.getElementById('rightSidebarOverlay');
+  if (!sidebar) return;
+
+  const isOpen = sidebar.classList.contains('open');
+  if (isOpen) {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('open');
+  } else {
+    sidebar.classList.add('open');
+    overlay.classList.add('open');
+    // Load documents when sidebar opens
+    loadWorkspaceDocuments();
+  }
+}
+
+// Load workspace documents from backend
+async function loadWorkspaceDocuments() {
+  const container = document.getElementById('documentsListContent');
+  if (!container) return;
+
+  container.innerHTML = '<div class="docs-loading" style="font-size:12.5px; color:var(--text-muted); padding: 4px;">Loading workspace documents…</div>';
+
+  try {
+    const resp = await fetch('/api/documents');
+    if (!resp.ok) throw new Error('Failed to fetch documents');
+    const data = await resp.json();
+
+    if (data.status === 'success' && data.documents && data.documents.length > 0) {
+      container.innerHTML = data.documents.map(doc => {
+        // Human readable file size
+        const sizeKB = (doc.file_size / 1024).toFixed(1);
+        const uploadedDate = new Date(doc.uploaded_at).toLocaleDateString() + ' ' + 
+          new Date(doc.uploaded_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          
+        let summaryHtml = '';
+        if (doc.summary) {
+          summaryHtml = `<div class="doc-summary">${escapeHtml(doc.summary)}</div>`;
+        } else {
+          summaryHtml = `<div class="doc-summary" style="border-left-color: var(--border); color: var(--text-faint); font-style: italic;">No summary available.</div>`;
+        }
+
+        const ext = doc.filename.split('.').pop().toLowerCase();
+        let docIcon = "📄";
+        if (ext === 'pdf') docIcon = "📕";
+        else if (ext === 'docx') docIcon = "📘";
+
+        return `
+          <div class="doc-item" data-doc-id="${doc.id}">
+            <div class="doc-header-row">
+              <div class="doc-name-wrap">
+                <span class="doc-icon">${docIcon}</span>
+                <span class="doc-name" title="${escapeHtml(doc.filename)}">${escapeHtml(doc.filename)}</span>
+              </div>
+              <button class="doc-delete-btn" onclick="deleteWorkspaceDocument('${doc.id}', event)" title="Delete document">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="11" height="11">
+                  <polyline points="3 6 5 6 21 6"></polyline>
+                  <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+            <div class="doc-meta">
+              <span class="doc-size">${sizeKB} KB</span>
+              <span class="doc-date">${uploadedDate}</span>
+            </div>
+            ${summaryHtml}
+          </div>
+        `;
+      }).join('');
+    } else {
+      container.innerHTML = `
+        <div style="font-size:12.5px; color:var(--text-faint); padding: 20px 0; text-align: center;">
+          No documents uploaded yet.
+        </div>`;
+    }
+  } catch (err) {
+    container.innerHTML = `<div class="docs-loading" style="color:var(--red); padding: 4px;">Error: ${err.message}</div>`;
+  }
+}
+
+// Trigger file input click for document ingestion
+function triggerDocSelect() {
+  const fileInput = document.getElementById('docFileInput');
+  if (fileInput) fileInput.click();
+}
+
+// Handle file selection from input
+function handleDocSelect(event) {
+  const files = event.target.files;
+  if (files && files.length > 0) {
+    uploadDocFiles(files);
+  }
+  // Clear the input so selecting the same file again triggers change
+  event.target.value = '';
+}
+
+// Upload documents to backend
+async function uploadDocFiles(files) {
+  const uploadArea = document.getElementById('docUploadArea');
+  const uploadText = uploadArea ? uploadArea.querySelector('.doc-upload-text') : null;
+  const originalText = uploadText ? uploadText.textContent : 'Click or drag PDF/DOCX here to ingest';
+
+  if (uploadText) {
+    uploadText.innerHTML = '<span style="display:inline-block; animation: spin 1s infinite linear; margin-right:5px;">⏳</span> Ingesting...';
+  }
+  if (uploadArea) {
+    uploadArea.style.pointerEvents = 'none';
+    uploadArea.style.opacity = '0.7';
+  }
+
+  const formData = new FormData();
+  for (let i = 0; i < files.length; i++) {
+    formData.append('files', files[i]);
+  }
+
+  try {
+    const resp = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    });
+    if (!resp.ok) throw new Error(`Upload failed: ${resp.status}`);
+    
+    const result = await resp.json();
+    
+    // Check results
+    if (result.status === 'ok' || result.status === 'partial') {
+      if (result.errors && result.errors.length > 0) {
+        alert("Some uploads failed:\n" + result.errors.join("\n"));
+      }
+    } else {
+      alert("Ingestion failed: " + (result.error || result.errors.join("\n")));
+    }
+  } catch (err) {
+    alert("Upload error: " + err.message);
+  } finally {
+    if (uploadText) {
+      uploadText.textContent = originalText;
+    }
+    if (uploadArea) {
+      uploadArea.style.pointerEvents = 'auto';
+      uploadArea.style.opacity = '1';
+    }
+    // Refresh document list
+    loadWorkspaceDocuments();
+  }
+}
+
+// Delete document call
+async function deleteWorkspaceDocument(docId, event) {
+  if (event) event.stopPropagation();
+
+  if (!confirm("Are you sure you want to permanently delete this document and all its embedded text chunks? This cannot be undone.")) {
+    return;
+  }
+
+  const itemEl = document.querySelector(`.doc-item[data-doc-id="${docId}"]`);
+  let originalHtml = "";
+  if (itemEl) {
+    originalHtml = itemEl.innerHTML;
+    itemEl.innerHTML = `
+      <div style="font-size:11.5px; color:var(--text-muted); padding: 4px; display:flex; align-items:center; gap:5px;">
+        <span style="display:inline-block; animation: spin 1s infinite linear;">⏳</span> Deleting...
+      </div>
+    `;
+  }
+
+  try {
+    const resp = await fetch('/api/documents/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ document_id: docId })
+    });
+    const result = await resp.json();
+    if (resp.ok && result.status === 'success') {
+      // Refresh list
+      loadWorkspaceDocuments();
+    } else {
+      alert(result.error || "Failed to delete document");
+      if (itemEl) itemEl.innerHTML = originalHtml;
+    }
+  } catch (err) {
+    alert("Error deleting document: " + err.message);
     if (itemEl) itemEl.innerHTML = originalHtml;
   }
 }
