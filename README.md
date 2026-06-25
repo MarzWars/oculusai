@@ -18,7 +18,7 @@ Code. Copy. Strategy. Memory. Documents. Actions. All in one.
 
 <br>
 
-### 🚀 [Try it live → oculusai.onrender.com](https://oculusai.lexdigitals.co.za/)
+### 🚀 [Try it live → oculusai.lexdigitals.co.za](https://oculusai.lexdigitals.co.za/)
 
 <br>
 
