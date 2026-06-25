@@ -8,4 +8,6 @@ gevent
 python-docx
 pypdf
 docx2pdf
+reportlab
+
 
