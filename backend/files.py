@@ -90,6 +90,18 @@ def upload_file_api():
                     
                 if ingest_res["status"] == "success":
                     rag_successes.append(filename)
+                    # Add a metadata-only entry to the upload cache so the
+                    # frontend can display a chip for this RAG-ingested file.
+                    cache = [f for f in cache if f["name"] != filename]
+                    cache.append({
+                        "name": filename,
+                        "content": "",
+                        "size": len(content_bytes),
+                        "summary": "",
+                        "is_long": False,
+                        "is_rag": True          # flag so frontend can badge it
+                    })
+                    UPLOADED_FILES_CACHE[wid] = cache
                 else:
                     errors.append(f"{filename}: RAG Ingestion failed - {ingest_res.get('message')}")
                 continue
@@ -119,7 +131,7 @@ def upload_file_api():
         except Exception as e:
             errors.append(f"{filename}: Error reading file ({type(e).__name__})")
             
-    files_list = [{"name": f["name"], "size": f["size"]} for f in cache]
+    files_list = [{"name": f["name"], "size": f["size"], "is_rag": f.get("is_rag", False)} for f in cache]
     
     return jsonify({
         "status": "ok" if not errors else "partial",
@@ -145,7 +157,18 @@ def delete_uploaded_file_api():
         UPLOADED_FILES_CACHE[wid] = [f for f in UPLOADED_FILES_CACHE[wid] if f["name"] != filename]
         
     cache = UPLOADED_FILES_CACHE.get(wid, [])
-    files_list = [{"name": f["name"], "size": f["size"]} for f in cache]
+    files_list = [{"name": f["name"], "size": f["size"], "is_rag": f.get("is_rag", False)} for f in cache]
+    return jsonify({"status": "ok", "files": files_list})
+
+
+@files_bp.route("/api/upload/list", methods=["GET"])
+@login_required
+def list_uploaded_files_api():
+    """Return the current session's in-memory uploaded files list for the active workspace."""
+    uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
+    cache = UPLOADED_FILES_CACHE.get(wid, [])
+    files_list = [{"name": f["name"], "size": f["size"], "is_rag": f.get("is_rag", False)} for f in cache]
     return jsonify({"status": "ok", "files": files_list})
 
 

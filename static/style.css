@@ -1962,6 +1962,29 @@ code.inline-code {
   background: rgba(245, 158, 11, 0.15);
 }
 
+.upload-chip.rag-chip {
+  background: rgba(45, 212, 191, 0.1);
+  border-color: rgba(45, 212, 191, 0.25);
+}
+
+.upload-chip.rag-chip:hover {
+  background: rgba(45, 212, 191, 0.18);
+  border-color: #2dd4bf;
+}
+
+.chip-rag-badge {
+  background: rgba(45, 212, 191, 0.2);
+  color: #2dd4bf;
+  font-size: 9px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+
 /* ── Interactive Code Sandbox ────────── */
 .sandbox-overlay {
   position: fixed;

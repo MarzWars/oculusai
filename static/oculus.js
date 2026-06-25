@@ -1059,18 +1059,35 @@ async function uploadFiles(files) {
       body: formData
     });
     const data = await resp.json();
+
     if (resp.ok || data.status === 'partial') {
-      renderUploadedChips(data.files);
-      
+      // Always fetch the authoritative list from the server so that
+      // RAG-ingested PDFs/DOCXs (which don't go into data.files) also appear.
+      let fileList = data.files || [];
+      try {
+        const listResp = await fetch('/api/upload/list');
+        if (listResp.ok) {
+          const listData = await listResp.json();
+          if (listData.files && listData.files.length > 0) {
+            fileList = listData.files;
+          }
+        }
+      } catch (listErr) {
+        console.warn('[Upload] Could not fetch file list:', listErr);
+      }
+
+      renderUploadedChips(fileList);
+
+      // Show informative messages only
       let msg = "";
       if (data.rag_ingested && data.rag_ingested.length) {
-        msg += "Successfully ingested to Workspace Knowledge:\n" + data.rag_ingested.join("\n") + "\n\n";
+        msg += "✅ Ingested to Workspace Knowledge:\n" + data.rag_ingested.join("\n") + "\n\n";
       }
       if (data.errors && data.errors.length) {
-        msg += "Upload warning:\n" + data.errors.join("\n");
+        msg += "⚠️ Upload warning:\n" + data.errors.join("\n");
       }
       if (msg) {
-        alert(msg);
+        alert(msg.trim());
       }
     } else {
       alert("Upload failed: " + (data.error || "Unknown error"));
@@ -1091,18 +1108,34 @@ function renderUploadedChips(files) {
     return;
   }
 
+  // Helper: pick the right icon for the file extension
+  function fileIcon(name, isRag) {
+    const ext = (name || '').split('.').pop().toLowerCase();
+    if (ext === 'pdf')  return '📕';
+    if (ext === 'docx') return '📘';
+    if (ext === 'py' || ext === 'js' || ext === 'ts' || ext === 'jsx' || ext === 'tsx') return '💻';
+    if (ext === 'csv' || ext === 'json') return '📊';
+    if (ext === 'md')   return '📝';
+    return '📄';
+  }
+
   container.innerHTML = files.map(file => {
-    // Label warning for files larger than 500KB (512,000 bytes)
     const isLarge = file.size > 512000;
+    const isRag   = !!file.is_rag;
     const warningClass = isLarge ? 'warning' : '';
-    const displaySize = (file.size / 1024).toFixed(1) + ' KB';
-    const warningTitle = isLarge ? 'title="Large file - may consume substantial context limit"' : '';
+    const ragClass     = isRag   ? 'rag-chip' : '';
+    const displaySize  = (file.size / 1024).toFixed(1) + ' KB';
+    const warningTitle = isLarge ? 'title="Large file — may consume substantial context window"' : '';
+    const ragBadge     = isRag
+      ? '<span class="chip-rag-badge" title="Ingested into Workspace Knowledge">⚡ Knowledge</span>'
+      : '';
 
     return `
-      <div class="upload-chip ${warningClass}" ${warningTitle}>
-        <span class="chip-icon">📄</span>
+      <div class="upload-chip ${warningClass} ${ragClass}" ${warningTitle}>
+        <span class="chip-icon">${fileIcon(file.name, isRag)}</span>
         <span class="chip-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</span>
         <span class="chip-size">(${displaySize})</span>
+        ${ragBadge}
         <span class="chip-delete" onclick="deleteUploadedFile('${escapeHtml(file.name)}')">×</span>
       </div>
     `;
@@ -1698,6 +1731,33 @@ function renderActionCard(data) {
         <textarea data-key="body" rows="4">${escapeHtml(args.body || '')}</textarea>
       </div>
     `;
+  } else if (type === "generate_document") {
+    icon = "📂";
+    title = "Generate & Export Document";
+    accentClass = "action-card-generic";
+    const fmt = (args.format || 'docx').toLowerCase();
+    formFields = `
+      <div class="action-field">
+        <label>Filename</label>
+        <input type="text" data-key="filename" value="${escapeHtml(args.filename || '')}">
+      </div>
+      <div class="action-field">
+        <label>Format</label>
+        <select data-key="format" style="width:100%; background:var(--bg-3); color:var(--text); border:1px solid var(--border); border-radius:4px; padding:6px; font-size:13px;">
+          <option value="docx" ${fmt === 'docx' ? 'selected' : ''}>DOCX (Word Document)</option>
+          <option value="pdf" ${fmt === 'pdf' ? 'selected' : ''}>PDF (Portable Document)</option>
+          <option value="txt" ${fmt === 'txt' ? 'selected' : ''}>TXT (Plain Text)</option>
+        </select>
+      </div>
+      <div class="action-field">
+        <label>Document Title</label>
+        <input type="text" data-key="title" value="${escapeHtml(args.title || '')}">
+      </div>
+      <div class="action-field">
+        <label>Document Content</label>
+        <textarea data-key="content" rows="5">${escapeHtml(args.content || '')}</textarea>
+      </div>
+    `;
   }
 
   return `
@@ -1755,17 +1815,17 @@ async function updateActionCardStatusFromServer(actionId) {
         btnEl.style.display = 'flex';
         btnEl.innerHTML = `<button class="action-card-btn undo-btn" onclick="undoExecutedAction('${actionId}')">Undo Action</button>`;
         // Disable fields
-        card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => el.disabled = true);
+        card.querySelectorAll('.action-card-body input, .action-card-body textarea, .action-card-body select').forEach(el => el.disabled = true);
       } else if (state === 'cancelled') {
         statusEl.className = "action-card-status cancelled";
         statusEl.textContent = "🚫 Action Rejected / Cancelled";
         btnEl.style.display = 'none';
-        card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => el.disabled = true);
+        card.querySelectorAll('.action-card-body input, .action-card-body textarea, .action-card-body select').forEach(el => el.disabled = true);
       } else if (state === 'undone') {
         statusEl.className = "action-card-status undone";
         statusEl.textContent = "↩️ Action Reverted / Undone";
         btnEl.style.display = 'none';
-        card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => el.disabled = true);
+        card.querySelectorAll('.action-card-body input, .action-card-body textarea, .action-card-body select').forEach(el => el.disabled = true);
       } else {
         // Pending
         statusEl.className = "action-card-status pending";
@@ -1784,7 +1844,7 @@ async function executeProposedAction(actionId) {
   if (!card) return;
 
   const overrides = {};
-  card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => {
+  card.querySelectorAll('.action-card-body input, .action-card-body textarea, .action-card-body select').forEach(el => {
     overrides[el.dataset.key] = el.value;
   });
 
@@ -1809,7 +1869,7 @@ async function executeProposedAction(actionId) {
       btnEl.innerHTML = `<button class="action-card-btn undo-btn" onclick="undoExecutedAction('${actionId}')">Undo Action</button>`;
 
       // Disable inputs
-      card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => el.disabled = true);
+      card.querySelectorAll('.action-card-body input, .action-card-body textarea, .action-card-body select').forEach(el => el.disabled = true);
 
       // Sync UI components
       loadBrainIntoSidebar();
@@ -1843,7 +1903,7 @@ async function cancelProposedAction(actionId) {
       statusEl.className = "action-card-status cancelled";
       statusEl.textContent = "🚫 Action Rejected / Cancelled";
       btnEl.style.display = 'none';
-      card.querySelectorAll('.action-card-body input, .action-card-body textarea').forEach(el => el.disabled = true);
+      card.querySelectorAll('.action-card-body input, .action-card-body textarea, .action-card-body select').forEach(el => el.disabled = true);
       loadActionHistoryLog();
     }
   } catch (err) {
@@ -1906,6 +1966,7 @@ async function loadActionHistoryLog() {
         if (act.action_type === 'create_task') { icon = "📅"; label = "Task Details"; }
         else if (act.action_type === 'generate_proposal') { icon = "📝"; label = "Proposal Draft"; }
         else if (act.action_type === 'send_email') { icon = "✉️"; label = "Email Sent"; }
+        else if (act.action_type === 'generate_document') { icon = "📂"; label = "Document Generated"; }
 
         let statusBadge = `<span class="act-badge status-${act.status}">${act.status.toUpperCase()}</span>`;
 
@@ -1915,6 +1976,7 @@ async function loadActionHistoryLog() {
           if (act.action_type === 'create_task') btnTitle = "Delete Task";
           else if (act.action_type === 'generate_proposal') btnTitle = "Delete Proposal File";
           else if (act.action_type === 'send_email') btnTitle = "Delete Email File";
+          else if (act.action_type === 'generate_document') btnTitle = "Delete Document File";
 
           actionBtns = `
             <button class="act-log-action-btn act-log-delete-btn" onclick="deleteActionFromLog('${act.id}', event)" title="${btnTitle}">
@@ -1948,6 +2010,7 @@ async function loadActionHistoryLog() {
         if (act.action_type === 'create_task') summaryText = args.title || "New Task";
         else if (act.action_type === 'generate_proposal') summaryText = `Client: ${args.client_name || 'Unknown'}`;
         else if (act.action_type === 'send_email') summaryText = `To: ${args.to || 'Unknown'}`;
+        else if (act.action_type === 'generate_document') summaryText = `${args.filename || 'document.docx'} (${(args.format || 'docx').toUpperCase()})`;
 
         html += `
           <div class="actions-log-item" data-action-id="${act.id}">
