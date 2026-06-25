@@ -66,7 +66,7 @@ Oculus is an **AI Knowledge Workspace & Actions Engine** designed specifically f
 | 🔐 **Multi-User Auth** | Register, login, and logout — each user's data is fully isolated in Supabase. |
 | 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences, and key facts across sessions. A background LLM pipeline extracts, consolidates, and deconflicts information automatically. |
 | 🧠 **Oculus Brain UI** | Sliding sidebar drawer panel with live view of your memory — edit profiles, add facts, manage projects, clients, and deadlines in real time. |
-| ⚡ **AI Actions Engine** | Generates proposals, sends emails, schedules tasks, and logs workflow history. Uses low-temperature function extraction with OpenRouter to produce active proposals. Includes interactive sidebar confirmation, cancellation, and deletion controls. |
+| ⚡ **AI Actions Engine** | Generates proposals, exports documents (DOCX, PDF, TXT), sends emails, schedules tasks, and logs workflow history. Uses low-temperature function extraction with OpenRouter to produce active proposals. Includes interactive sidebar confirmation, cancellation, and deletion controls. |
 | 📄 **Advanced RAG & Doc Intel** | Semantic search over PDFs and DOCX files. Ingests, chunks, embeds (via OpenRouter), and indexes documents in Supabase. Classifies documents, auto-summarizes them using OpenRouter, and supports hybrid (vector + full-text search) retrieval with RRF ranking and citations. |
 | 🔄 **Real-Time Streaming** | Token-by-token streaming so responses appear word-by-word as the model generates. |
 | 🔬 **Collapsible Thinking** | Internal model reasoning streams live in a greyed-out block, then folds into a collapsible summary when the final response begins. |
@@ -214,6 +214,32 @@ Oculus drafts formal emails, shows you a preview, and can optionally deliver via
 3. Click **✅ Confirm & Execute** — Oculus writes a responsive HTML email container to your workspace sandbox.
 4. A **👁️ Preview HTML** button appears — click it to open the rendered email in your browser.
 5. If `ENABLE_SMTP_DELIVERY=true` is set in your environment, Oculus will also send the email to the recipient directly via SMTP.
+
+---
+
+#### 3d. Document Generation & Export (On-Demand)
+
+Oculus can generate arbitrary documents in `.docx`, `.pdf`, or `.txt` formats on-demand. When you ask Oculus to generate or export a document, it extracts the content and creates a document generation action card.
+
+**Example prompts:**
+
+> *"Generate a DOCX containing our notes from today's meeting."*
+
+> *"Export this strategy summary as a PDF file."*
+
+> *"Give me the final copy of this ad block in .txt format so I can download it."*
+
+> *"Save this project outline as a file I can download."*
+
+**What happens:**
+1. An action card appears in the chat with editable fields: **Filename**, **Format (DOCX, PDF, or TXT)**, **Document Title**, and **Document Content**.
+2. Select the format or edit the title/content directly on the card.
+3. Click **✅ Confirm & Execute** — Oculus generates the file:
+   - **DOCX:** Generates a styled Microsoft Word document.
+   - **TXT:** Saves a plain text file.
+   - **PDF:** Generates a crimson-accented PDF document (utilizes `docx2pdf` on Windows if Word is installed, falling back gracefully to pure Python `reportlab` PDF rendering for cross-platform Linux support).
+4. Click the download link generated on the card to download it.
+5. All generated documents can be undone/removed via the **↩️ Undo Action** button or the settings Action Log.
 
 ---
 
@@ -467,7 +493,7 @@ Oculus AI
 ### Install dependencies
 
 ```bash
-pip install flask openai supabase tavily-python requests python-docx pypdf
+pip install flask openai supabase tavily-python requests python-docx pypdf docx2pdf reportlab
 ```
 
 ### Environment variables
