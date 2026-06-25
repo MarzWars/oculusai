@@ -716,7 +716,7 @@ oculus-ai/
 
 <img src="static/oculus_avatar.svg" alt="Oculus Avatar" width="64"/>
 
-### 🚀 [oculusai.onrender.com](https://oculusai.onrender.com/)
+### 🚀 [oculusai.lexdigitals.co.za](https://oculusai.lexdigitals.co.za/)
 
 <sub>Built with 🖤 by Alex · Lex Digitals</sub>
 
