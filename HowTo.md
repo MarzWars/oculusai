@@ -1,3 +1,9 @@
+# How to Use Oculus AI
+
+**Complete Field Manual & User Guide**
+
+This is the detailed guide for using Oculus.
+
 # 📖 Oculus AI — User Guides & Prompt Testing Manual
 
 Welcome to the Oculus AI User Guides and Prompt Testing Manual. This document provides step-by-step guides, example workflows, and prompt scenarios to help you test and utilize every capability of Oculus.
