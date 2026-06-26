@@ -143,6 +143,18 @@
                             Enables a 2-pass reflection step to audit memory alignment, accuracy, and tone consistency.
                         </div>
                     </div>
+                    <div class="settings-toggle-card"
+                        style="background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; transition: border-color 0.2s ease;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 13px; font-weight: 500; color: var(--text);">Memory Token Budget</span>
+                            <input type="number" id="memoryBudgetInput" onchange="updateMemoryTokenBudget(this)"
+                                style="width: 70px; background: var(--bg-3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 6px; font-size: 12px; text-align: center;"
+                                min="100" max="10000" step="50">
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.45;">
+                            Limits injected memory context (default 1500 tokens). Compresses older facts when exceeded.
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 3. Oculus Brain View -->
@@ -151,6 +163,15 @@
                     <div class="brain-drawer-content" id="brainDrawerContent"
                         style="padding:0; max-height:none; flex:none;">
                         <div class="brain-loading">Loading brain state…</div>
+                    </div>
+                    <!-- Debug Panel -->
+                    <div class="brain-debug-toggle-container" style="margin-top: 15px; border-top: 1px dashed var(--border); padding-top: 10px;">
+                        <button class="brain-debug-toggle-btn" onclick="toggleBrainDebugView()" style="background:none; border:none; color:var(--text-muted); font-size:11px; cursor:pointer; text-decoration:underline; display:flex; align-items:center; gap:4px; padding:0;">
+                            ⚙️ Toggle Context Ranking Debug Info
+                        </button>
+                        <div id="brainDebugContainer" style="display:none; margin-top:10px; background:var(--bg-3); border:1px solid var(--border); border-radius:6px; padding:8px; font-size:11px; max-height:350px; overflow-y:auto; font-family:var(--font-mono); color:var(--text-muted); line-height:1.4;">
+                            No debug info loaded. Ask Oculus something to generate context rankings.
+                        </div>
                     </div>
                 </div>
 

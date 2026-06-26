@@ -1829,6 +1829,35 @@ code.inline-code {
   color: var(--text);
 }
 
+.brain-list-item.pinned {
+  border-color: rgba(249, 226, 175, 0.45) !important;
+  background: rgba(249, 226, 175, 0.05) !important;
+  color: var(--text) !important;
+}
+
+.brain-pin-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  transition: transform 0.15s, color 0.15s;
+}
+
+.brain-pin-btn:hover {
+  color: #f9e2af;
+  transform: scale(1.15);
+}
+
+.brain-pin-btn.pinned {
+  color: #f9e2af;
+  filter: drop-shadow(0 0 2px rgba(249, 226, 175, 0.5));
+}
+
 .brain-list-text {
   flex: 1;
   word-break: break-word;
@@ -2365,6 +2394,12 @@ code.inline-code {
   border-color: var(--accent);
   background: rgba(124, 106, 247, 0.06);
   box-shadow: 0 0 10px rgba(124, 106, 247, 0.05);
+}
+
+.brain-notes-card.pinned {
+  border-color: rgba(249, 226, 175, 0.45) !important;
+  background: rgba(249, 226, 175, 0.05) !important;
+  color: var(--text) !important;
 }
 
 /* ── Responsive Overrides & Mobile Experience ── */

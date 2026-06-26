@@ -974,84 +974,144 @@ def extract_memory_async(user_id: str, user_message: str, history: list = None, 
     except Exception as e:
         print("[Async Memory Error] Failed to process memory asynchronously:", e)
 
-def rank_memory_items(user_message: str, items: list, max_results: int = 5, key_field: str = None) -> list:
+EMBEDDING_CACHE = {}
+
+def cosine_similarity(v1, v2) -> float:
+    if not v1 or not v2:
+        return 0.0
+    import math
+    dot_product = sum(x * y for x, y in zip(v1, v2))
+    norm_v1 = math.sqrt(sum(x * x for x in v1))
+    norm_v2 = math.sqrt(sum(x * x for x in v2))
+    if not norm_v1 or not norm_v2:
+        return 0.0
+    return dot_product / (norm_v1 * norm_v2)
+
+def get_embeddings_cached(texts: list) -> list:
+    results = [None] * len(texts)
+    missing_texts = []
+    missing_indices = []
+    
+    for i, text in enumerate(texts):
+        if text in EMBEDDING_CACHE:
+            results[i] = EMBEDDING_CACHE[text]
+        else:
+            missing_texts.append(text)
+            missing_indices.append(i)
+            
+    if missing_texts:
+        try:
+            from backend.rag import generate_embeddings
+            embedded = generate_embeddings(missing_texts)
+            for text, emb in zip(missing_texts, embedded):
+                EMBEDDING_CACHE[text] = emb
+            for idx, emb in zip(missing_indices, embedded):
+                results[idx] = emb
+        except Exception as e:
+            print("[Embedding Cache Error] Failed to generate embeddings:", e)
+            
+    return results
+
+def rank_memory_items(user_message: str, items: list, max_results: int = 5, key_field: str = None, return_details: bool = False) -> list:
     if not items:
         return []
-    if not user_message:
-        # Sort by confidence * recency descending
-        scored_items = []
-        for item in items:
-            conf = 1.0
-            if isinstance(item, dict) and "confidence" in item:
-                conf = float(item["confidence"])
-            
-            recency = 0.5
-            if isinstance(item, dict):
-                date_str = item.get("last_seen") or item.get("added")
-                if date_str:
-                    try:
-                        added_date = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
-                        days_since = (datetime.now() - added_date).days
-                        recency = 1.0 / (max(0, days_since) + 1.0)
-                    except Exception:
-                        pass
-            scored_items.append((conf * recency, item))
-        scored_items.sort(key=lambda x: x[0], reverse=True)
-        return [item for score, item in scored_items[:max_results]]
 
-    stop_words = {
-        "the", "a", "an", "is", "for", "to", "and", "of", "in", "on", 
-        "at", "with", "it", "that", "this", "i", "you", "my", "your", 
-        "we", "us", "they", "them", "he", "she", "his", "her", "me", "our"
-    }
-    user_words = re.findall(r"\b\w+\b", user_message.lower())
-    search_tokens = {w for w in user_words if w not in stop_words}
+    # Prepare text representation for each item to embed
+    item_texts = []
+    for item in items:
+        if isinstance(item, dict):
+            if key_field and key_field in item:
+                val = item[key_field]
+            else:
+                val = item.get("value") or item.get("name") or item.get("item") or ""
+            item_texts.append(str(val))
+        else:
+            item_texts.append(str(item))
+
+    # Fetch embeddings
+    query_emb = None
+    if user_message:
+        query_embs = get_embeddings_cached([user_message])
+        if query_embs:
+            query_emb = query_embs[0]
+
+    item_embs = get_embeddings_cached(item_texts)
 
     scored_items = []
+    now = datetime.now()
+
     for idx, item in enumerate(items):
-        text_content = ""
-        if isinstance(item, dict):
-            text_content = str(item.get("value") or item.get("name") or item.get("item") or "")
-        else:
-            text_content = str(item)
+        # 1. Relevance: cosine similarity of embeddings (or 0.5 if query is empty)
+        relevance = 0.5
+        if user_message and query_emb and idx < len(item_embs) and item_embs[idx]:
+            relevance = cosine_similarity(query_emb, item_embs[idx])
+            relevance = max(0.0, relevance)
 
-        # 1. Relevance: token matches
-        item_words = set(re.findall(r"\b\w+\b", text_content.lower()))
-        overlap = search_tokens.intersection(item_words)
-        relevance = 1.0 + len(overlap) * 2.0
+        # 2. Confidence: between 0.0 and 1.0
+        confidence = 0.85
+        if isinstance(item, dict) and "confidence" in item:
+            try:
+                confidence = float(item["confidence"])
+            except Exception:
+                pass
 
-        # 2. Recency: index position or parsed date diff
+        # 3. Recency: parsed date diff
         recency = 0.5
         if isinstance(item, dict):
-            date_str = item.get("last_seen") or item.get("added")
+            date_str = item.get("last_reinforced") or item.get("last_seen") or item.get("added")
             if date_str:
                 try:
                     added_date = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
-                    days_since = (datetime.now() - added_date).days
+                    days_since = (now - added_date).days
                     recency = 1.0 / (max(0, days_since) + 1.0)
                 except Exception:
                     pass
 
-        # 3. Confidence
-        confidence = 1.0
-        if isinstance(item, dict) and "confidence" in item:
-            confidence = float(item["confidence"])
-        
-        score = confidence * recency * relevance
-        scored_items.append((score, item))
+        # 4. Importance: 1.0 if pinned or explicit, 0.0 otherwise
+        importance = 0.0
+        is_pinned = isinstance(item, dict) and (item.get("pinned") is True or item.get("is_pinned") is True)
+        is_explicit = isinstance(item, dict) and item.get("source_type") == "user_explicit"
+        if is_pinned or is_explicit:
+            importance = 1.0
 
-    scored_items.sort(key=lambda x: x[0], reverse=True)
-    return [item for score, item in scored_items[:max_results]]
+        # Weighted score: (relevance * 0.45) + (confidence * 0.25) + (recency * 0.20) + (importance * 0.10)
+        final_score = (relevance * 0.45) + (confidence * 0.25) + (recency * 0.20) + (importance * 0.10)
 
-def memory_to_context(mem: dict, user_message: str = "", max_results: int = 5) -> str:
-    lines = []
-    
+        # Boost user_explicit and pinned items even more aggressively
+        if is_pinned:
+            final_score += 0.3  # Pinned items get massive boost
+        elif is_explicit:
+            final_score += 0.15 # Explicit items get substantial boost
+
+        # Store details for debugging/breakdown if needed
+        scored_items.append({
+            "item": item,
+            "text": item_texts[idx],
+            "score": final_score,
+            "relevance": relevance,
+            "confidence": confidence,
+            "recency": recency,
+            "importance": importance
+        })
+
+    # Sort descending
+    scored_items.sort(key=lambda x: x["score"], reverse=True)
+
+    if return_details:
+        return scored_items
+    else:
+        return [x["item"] for x in scored_items[:max_results]]
+
+LATEST_RANKING_DEBUG = {}
+
+def memory_to_context(mem: dict, user_message: str = "", memory_budget: int = 1500, preferred_model: str = None, user_id: str = None) -> str:
+    global LATEST_RANKING_DEBUG
+
     def get_val(item):
         if isinstance(item, dict):
             return item.get("value") or item.get("name") or item.get("item") or ""
         return str(item)
 
-    # Only inject facts with confidence >= 0.65
     def filter_high_confidence(lst):
         res = []
         for item in lst:
@@ -1062,6 +1122,18 @@ def memory_to_context(mem: dict, user_message: str = "", max_results: int = 5) -
                 res.append(item)
         return res
 
+    def filter_low_confidence(lst):
+        res = []
+        for item in lst:
+            if isinstance(item, dict):
+                if item.get("confidence", 1.0) < 0.65:
+                    res.append(item)
+        return res
+
+    # 1. Protected Section
+    # - Profile fields with confidence >= 0.65
+    # - AI Notes / Style rules with confidence >= 0.8 or pinned == True
+    profile_lines = []
     p = mem.get("profile", {})
     for field in ["name", "role", "company", "location", "email", "phone"]:
         f_obj = p.get(field)
@@ -1069,51 +1141,221 @@ def memory_to_context(mem: dict, user_message: str = "", max_results: int = 5) -
             val = f_obj.get("value") if isinstance(f_obj, dict) else f_obj
             conf = f_obj.get("confidence", 1.0) if isinstance(f_obj, dict) else 1.0
             if val and conf >= 0.65:
-                lines.append(f"- {field.capitalize()}: {val}")
+                profile_lines.append(f"- {field.capitalize()}: {val}")
+
+    protected_notes = []
+    other_notes = []
+    for note in mem.get("ai_notes", []):
+        if isinstance(note, dict):
+            conf = note.get("confidence", 1.0)
+            pinned = note.get("pinned", False) or note.get("is_pinned", False)
+            if pinned or conf >= 0.8:
+                protected_notes.append(note)
+            elif conf >= 0.65:
+                other_notes.append(note)
+        else:
+            other_notes.append(note)
+
+    # Rank protected notes to display the most relevant ones first, but keep all of them
+    protected_notes_details = rank_memory_items(user_message, protected_notes, max_results=len(protected_notes), return_details=True)
+    ranked_protected_notes = [x["item"] for x in protected_notes_details]
+
+    # Gather category lists
+    categories = {
+        "clients": (mem.get("clients", []), None),
+        "projects": (mem.get("projects", []), "name"),
+        "deadlines": (mem.get("deadlines", []), "item"),
+        "preferences": (mem.get("preferences", []), None),
+        "important_facts": (mem.get("important_facts", []), None),
+        "ai_notes_other": (other_notes, None)
+    }
+
+    # Rank each category and collect details
+    ranked_categories_details = {}
+    for cat_name, (lst, key_f) in categories.items():
+        high = filter_high_confidence(lst)
+        # Use return_details=True to get scores and matching info
+        details = rank_memory_items(user_message, high, max_results=len(high), key_field=key_f, return_details=True)
+        ranked_categories_details[cat_name] = details
+
+    # Low Priority items collection
+    low_priority_fact_strings = []
+    # Collect items from list categories that are not in the top limit (default 5 items per category) or are low confidence
+    for cat_name, (lst, key_f) in categories.items():
+        details = ranked_categories_details[cat_name]
+        top_items = [d["item"] for d in details[:5]]
+        rest_items = [d["item"] for d in details[5:]]
+        low_conf = filter_low_confidence(lst)
+        
+        # Add rest and low_conf to low priority
+        prefix = cat_name[:-6] if cat_name.endswith("_other") else cat_name
+        # Singularize prefix for readability
+        if prefix.endswith("s"):
+            prefix = prefix[:-1]
+        
+        for item in (rest_items + low_conf):
+            val_str = get_val(item)
+            if val_str:
+                if prefix == "deadline" and isinstance(item, dict) and "date" in item:
+                    low_priority_fact_strings.append(f"Deadline: {val_str} (Due: {item['date']})")
+                else:
+                    low_priority_fact_strings.append(f"{prefix.capitalize()}: {val_str}")
+
+    # Generate or retrieve low-priority summary paragraph
+    summary_text = ""
+    summary_used = False
+    if low_priority_fact_strings:
+        import hashlib
+        low_priority_fact_strings.sort()
+        joined_facts = "||".join(low_priority_fact_strings)
+        current_hash = hashlib.md5(joined_facts.encode("utf-8")).hexdigest()
+        
+        if mem.get("low_priority_hash") == current_hash and mem.get("low_priority_summary"):
+            summary_text = mem.get("low_priority_summary")
+            summary_used = True
+        else:
+            print(f"[Memory Budget] Regenerating summary for {len(low_priority_fact_strings)} facts...")
+            facts_bullet_list = "\n".join(f"- {f}" for f in low_priority_fact_strings)
+            prompt = (
+                "Summarize the following old or low-priority user facts, preferences, deadlines, and style rules "
+                "into a single, short, dense 'Memory Summary' paragraph. Do not include duplicates. Keep it extremely "
+                "concise (ideally under 300 characters, at most a couple of short sentences). Plain text only.\n\n"
+                f"Facts to summarize:\n{facts_bullet_list}\n\nSummary:"
+            )
+            try:
+                from backend.models import query_openrouter
+                summary_text = query_openrouter(prompt, preferred_model=preferred_model)
+                summary_text = summary_text.replace("\n", " ").strip()
+                
+                # Cache it in memory dict
+                mem["low_priority_hash"] = current_hash
+                mem["low_priority_summary"] = summary_text
+                summary_used = True
+                if user_id:
+                    save_memory(user_id, mem)
+            except Exception as e:
+                print("[Memory Budget Error] Failed to generate low-priority summary:", e)
+                summary_text = ""
+
+    # Helper function to assemble and count tokens
+    def assemble(limit):
+        lines = []
+        # Protected profile
+        lines.extend(profile_lines)
+        
+        # Protected notes
+        if ranked_protected_notes:
+            lines.append("- Behavioral & Style rules to follow (High Priority):")
+            for note in ranked_protected_notes:
+                lines.append(f"  • {get_val(note)}")
+                
+        # Dynamic categories with limit
+        cl = [d["item"] for d in ranked_categories_details["clients"][:limit]]
+        if cl:
+            lines.append(f"- Known clients: {', '.join([get_val(c) for c in cl])}")
+            
+        pr = [d["item"] for d in ranked_categories_details["projects"][:limit]]
+        if pr:
+            lines.append(f"- Active/recent projects: {', '.join([get_val(p) for p in pr])}")
+            
+        dl = [d["item"] for d in ranked_categories_details["deadlines"][:limit]]
+        if dl:
+            parts = [f"{d.get('date','?')} ({d.get('item','')[:40]})" for d in dl]
+            lines.append(f"- Deadlines: {' | '.join(parts)}")
+            
+        pf = [d["item"] for d in ranked_categories_details["preferences"][:limit]]
+        if pf:
+            lines.append("- User preferences:")
+            for pref in pf:
+                lines.append(f"  • {get_val(pref)}")
+                
+        ft = [d["item"] for d in ranked_categories_details["important_facts"][:limit]]
+        if ft:
+            lines.append("- Important facts to remember:")
+            for fact in ft:
+                lines.append(f"  • {get_val(fact)}")
+                
+        nt = [d["item"] for d in ranked_categories_details["ai_notes_other"][:limit]]
+        if nt:
+            lines.append("- Behavioral & Style rules (Medium Priority):")
+            for note in nt:
+                lines.append(f"  • {get_val(note)}")
+                
+        if summary_text:
+            lines.append(f"- Memory Summary (Older/Low-Priority facts): {summary_text}")
+            
+        # Metadata
+        sessions = mem.get("session_count", 0)
+        messages = mem.get("message_count", 0)
+        if messages:
+            lines.append(f"- Sessions: {sessions}  |  Messages sent: {messages}")
+        if mem.get("first_seen") and mem.get("last_seen"):
+            lines.append(f"- First seen: {mem['first_seen']}  |  Last seen: {mem['last_seen']}")
+            
+        return "\n".join(lines) if lines else "No user facts stored yet."
+
+    # Progressive pruning logic if token budget exceeded
+    final_limit = 5
+    pruned = False
+    context_str = assemble(final_limit)
     
-    clients = rank_memory_items(user_message, filter_high_confidence(mem.get("clients", [])), max_results=max_results)
-    if clients:
-        lines.append(f"- Known clients: {', '.join([get_val(c) for c in clients])}")
+    # Prune from 5 down to 1 if estimated tokens exceed budget
+    for limit in range(5, 0, -1):
+        estimated_tokens = len(context_str) // 4
+        if estimated_tokens <= memory_budget:
+            final_limit = limit
+            break
+        context_str = assemble(limit)
+        final_limit = limit
+        pruned = True
+
+    # If still too large, try formatting without dynamic items at all (only protected + summary)
+    estimated_tokens = len(context_str) // 4
+    if estimated_tokens > memory_budget:
+        context_str = assemble(0) # 0 limit means no dynamic items
+        estimated_tokens = len(context_str) // 4
+        pruned = True
+
+    # Populate Debug dictionary
+    debug_ranked = {}
+    
+    # 1. Protected items
+    debug_protected = profile_lines.copy()
+    for note in ranked_protected_notes:
+        debug_protected.append(f"AI Note (High Priority): {get_val(note)}")
         
-    projects = rank_memory_items(user_message, filter_high_confidence(mem.get("projects", [])), max_results=max_results, key_field="name")
-    if projects:
-        names = [proj.get("name", "") for proj in projects]
-        lines.append(f"- Active/recent projects: {', '.join(names)}")
-        
-    deadlines = rank_memory_items(user_message, filter_high_confidence(mem.get("deadlines", [])), max_results=max(1, max_results - 1), key_field="item")
-    if deadlines:
-        parts = [f"{d.get('date','?')} ({d.get('item','')[:40]})" for d in deadlines]
-        lines.append(f"- Deadlines: {' | '.join(parts)}")
-        
-    preferences = rank_memory_items(user_message, filter_high_confidence(mem.get("preferences", [])), max_results=max_results)
-    if preferences:
-        lines.append("- User preferences:")
-        for pref in preferences:
-            lines.append(f"  • {get_val(pref)}")
+    # 2. Category rankings details
+    for cat_name, details in ranked_categories_details.items():
+        debug_ranked[cat_name] = []
+        for d in details:
+            injected = False
+            if final_limit > 0:
+                injected = (d["item"] in [x["item"] for x in details[:final_limit]])
+            debug_ranked[cat_name].append({
+                "text": d["text"],
+                "score": d["score"],
+                "injected": injected,
+                "details": {
+                    "relevance": d["relevance"],
+                    "confidence": d["confidence"],
+                    "recency": d["recency"],
+                    "importance": d["importance"]
+                }
+            })
             
-    facts = rank_memory_items(user_message, filter_high_confidence(mem.get("important_facts", [])), max_results=max_results)
-    if facts:
-        lines.append("- Important facts to remember:")
-        for fact in facts:
-            lines.append(f"  • {get_val(fact)}")
-            
-    notes = rank_memory_items(user_message, filter_high_confidence(mem.get("ai_notes", [])), max_results=max_results)
-    if notes:
-        lines.append("- Inferred behavioral observations (ai_notes):")
-        for note in notes:
-            lines.append(f"  • {get_val(note)}")
-            
-    topics = rank_memory_items(user_message, filter_high_confidence(mem.get("topics_discussed", [])), max_results=max_results + 1)
-    if topics:
-        lines.append(f"- Topics worked on previously: {', '.join([get_val(t) for t in topics])}")
-        
-    sessions = mem.get("session_count", 0)
-    messages = mem.get("message_count", 0)
-    if messages:
-        lines.append(f"- Sessions: {sessions}  |  Messages sent: {messages}")
-    if mem.get("first_seen") and mem.get("last_seen"):
-        lines.append(f"- First seen: {mem['first_seen']}  |  Last seen: {mem['last_seen']}")
-    return "\n".join(lines) if lines else "No user facts stored yet."
+    LATEST_RANKING_DEBUG = {
+        "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "query": user_message,
+        "memory_budget": memory_budget,
+        "estimated_tokens": estimated_tokens,
+        "pruned": pruned,
+        "summary_used": summary_used and bool(summary_text),
+        "protected_items": debug_protected,
+        "ranked_items": debug_ranked,
+        "injected_context": context_str
+    }
+
+    return context_str
 
 @memory_bp.route("/api/memory", methods=["GET"])
 @login_required
@@ -1121,6 +1363,206 @@ def get_memory_api():
     uid = current_user_id()
     mem = load_memory(uid)
     return jsonify(mem)
+
+@memory_bp.route("/api/memory/debug", methods=["GET"])
+@login_required
+def get_ranking_debug_api():
+    global LATEST_RANKING_DEBUG
+    return jsonify(LATEST_RANKING_DEBUG)
+
+@memory_bp.route("/api/memory/pin", methods=["POST"])
+@login_required
+def pin_memory_api():
+    uid = current_user_id()
+    data = request.get_json() or {}
+    key = data.get("key")
+    val = data.get("value")
+    pin = data.get("pin", True)
+    
+    mem = load_memory(uid)
+    changed = False
+    
+    if key in ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]:
+        for item in mem.get(key, []):
+            if isinstance(item, dict) and item.get("value") == val:
+                item["pinned"] = pin
+                if pin:
+                    item["confidence"] = 1.0
+                changed = True
+                break
+    elif key == "projects":
+        for item in mem.get("projects", []):
+            if isinstance(item, dict) and item.get("name") == val:
+                item["pinned"] = pin
+                if pin:
+                    item["confidence"] = 1.0
+                changed = True
+                break
+    elif key == "deadlines":
+        for item in mem.get("deadlines", []):
+            if isinstance(item, dict) and item.get("item") == val:
+                item["pinned"] = pin
+                if pin:
+                    item["confidence"] = 1.0
+                changed = True
+                break
+                
+    if changed:
+        save_memory(uid, mem)
+        return jsonify({"status": "ok", "memory": mem})
+    return jsonify({"status": "no_change", "error": "Item not found"}), 404
+
+def classify_memory_command(user_message: str, preferred_model: str = None) -> dict:
+    keywords = {"forget", "stop using", "delete note", "remove preference", "unpin", "clear preference", "don't remember", "pin", "emphasize"}
+    msg_lower = user_message.lower()
+    if not any(kw in msg_lower for kw in keywords):
+        return {"is_command": False}
+        
+    prompt = (
+        "You are an intent classifier for a personal memory assistant.\n"
+        "The user is issuing a command to delete or pin memory items.\n"
+        "Analyze this user message and determine if it is an explicit command to modify their memory.\n"
+        "Example commands:\n"
+        "- 'forget everything about Vue' -> {\"is_command\": true, \"action\": \"forget\", \"target_query\": \"Vue\"}\n"
+        "- 'stop using formal tone' -> {\"is_command\": true, \"action\": \"forget\", \"target_query\": \"formal tone\"}\n"
+        "- 'Forget all old design preferences' -> {\"is_command\": true, \"action\": \"batch_forget\", \"target_query\": \"old design preferences\"}\n"
+        "- 'remove preference for Lex Digitals' -> {\"is_command\": true, \"action\": \"forget\", \"target_query\": \"Lex Digitals\"}\n"
+        "- 'unpin note about Lex' -> {\"is_command\": true, \"action\": \"unpin\", \"target_query\": \"Lex\"}\n"
+        "- 'pin my preference for React' -> {\"is_command\": true, \"action\": \"pin\", \"target_query\": \"preference for React\"}\n"
+        "\n"
+        "Return a JSON object in this exact format (do not output any other text, markdown blocks, or styling):\n"
+        "{\n"
+        "  \"is_command\": true or false,\n"
+        "  \"action\": \"forget\" | \"batch_forget\" | \"unpin\" | \"pin\",\n"
+        "  \"target_query\": \"extracted topic or query or preference\"\n"
+        "}\n\n"
+        f"User message: {user_message}\n\n"
+        "Response:"
+    )
+    
+    try:
+        from backend.models import query_openrouter
+        resp = query_openrouter(prompt, preferred_model=preferred_model)
+        cleaned = resp.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        data = json.loads(cleaned.strip())
+        return data
+    except Exception as e:
+        print("[Command Interceptor Error] Failed to classify command:", e)
+        return {"is_command": False}
+
+def execute_memory_command(uid: str, mem: dict, command_data: dict) -> str:
+    action = command_data.get("action")
+    target_query = command_data.get("target_query", "").strip()
+    if not target_query:
+        return "I'm not sure what you want me to do. Could you be more specific?"
+        
+    changed = False
+    deleted_items = []
+    
+    list_keys = ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes", "projects", "deadlines"]
+    
+    def get_item_text(item):
+        if isinstance(item, dict):
+            return item.get("value") or item.get("name") or item.get("item") or ""
+        return str(item)
+        
+    if action in ["forget", "batch_forget"]:
+        candidates = []
+        for key in list_keys:
+            for idx, item in enumerate(mem.get(key, [])):
+                text = get_item_text(item)
+                if text:
+                    candidates.append((key, idx, item, text))
+                    
+        if not candidates:
+            return "I couldn't find anything matching that in my memory."
+            
+        target_emb = None
+        target_embs = get_embeddings_cached([target_query])
+        if target_embs:
+            target_emb = target_embs[0]
+            
+        item_texts = [c[3] for c in candidates]
+        item_embs = get_embeddings_cached(item_texts)
+        
+        to_delete = []
+        for idx, (key, item_idx, item, text) in enumerate(candidates):
+            keyword_match = target_query.lower() in text.lower()
+            semantic_match = False
+            if target_emb and idx < len(item_embs) and item_embs[idx]:
+                sim = cosine_similarity(target_emb, item_embs[idx])
+                if sim >= 0.55:
+                    semantic_match = True
+                    
+            if keyword_match or semantic_match:
+                to_delete.append((key, item))
+                deleted_items.append(text)
+                
+        if to_delete:
+            for key, item in to_delete:
+                mem[key] = [x for x in mem[key] if x != item]
+            changed = True
+            
+            bullets = "\n".join(f"• {item}" for item in deleted_items[:5])
+            if len(deleted_items) > 5:
+                bullets += f"\n• ... and {len(deleted_items) - 5} more items."
+            
+            if changed and uid:
+                save_memory(uid, mem)
+            return f"✓ I've forgotten the following from your memory:\n{bullets}"
+        else:
+            return f"I couldn't find any facts or preferences related to '{target_query}' in my memory."
+            
+    elif action in ["pin", "unpin"]:
+        pin_val = (action == "pin")
+        candidates = []
+        for key in list_keys:
+            for idx, item in enumerate(mem.get(key, [])):
+                text = get_item_text(item)
+                if text:
+                    candidates.append((key, idx, item, text))
+                    
+        target_emb = None
+        target_embs = get_embeddings_cached([target_query])
+        if target_embs:
+            target_emb = target_embs[0]
+            
+        best_match = None
+        best_sim = -1.0
+        
+        item_texts = [c[3] for c in candidates]
+        item_embs = get_embeddings_cached(item_texts)
+        
+        for idx, (key, item_idx, item, text) in enumerate(candidates):
+            sim = 0.0
+            if target_query.lower() in text.lower():
+                sim = 1.0
+            elif target_emb and idx < len(item_embs) and item_embs[idx]:
+                sim = cosine_similarity(target_emb, item_embs[idx])
+                
+            if sim > best_sim:
+                best_sim = sim
+                best_match = (key, item, text)
+                
+        if best_match and best_sim >= 0.5:
+            key, item, text = best_match
+            if isinstance(item, dict):
+                item["pinned"] = pin_val
+                if pin_val:
+                    item["confidence"] = 1.0
+                changed = True
+                action_str = "pinned" if pin_val else "unpinned"
+                if changed and uid:
+                    save_memory(uid, mem)
+                return f"✓ I've {action_str} this item: '{text}'"
+        
+        return f"I couldn't find a matching fact or preference to pin/unpin for '{target_query}'."
+
+    return "Memory command executed."
 
 @memory_bp.route("/api/memory/update", methods=["POST"])
 @login_required

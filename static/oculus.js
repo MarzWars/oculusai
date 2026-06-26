@@ -1068,19 +1068,21 @@ function renderBrainListItems(key, lst) {
     const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const escapedVal = escapeHtml(val);
     const escapedReasoning = escapeHtml(reasoning);
+    const isPinned = typeof item === 'object' ? (item.pinned || item.is_pinned || false) : false;
     
     const overrideBtn = score < 1.0 ? `
       <button class="brain-trust-btn" onclick="overrideConfidence('${key}', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Trust fact (Force 1.0): ${escapedReasoning}">👍</button>
     ` : '';
 
     return `
-      <div class="brain-list-item" title="${escapedReasoning}">
+      <div class="brain-list-item ${isPinned ? 'pinned' : ''}" title="${escapedReasoning}">
         <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0;">
           <span class="brain-list-text" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapedVal}</span>
           ${badge}
         </div>
         <div style="display:flex; align-items:center; gap:4px; margin-left:6px;">
           ${overrideBtn}
+          <button class="brain-pin-btn ${isPinned ? 'pinned' : ''}" onclick="togglePinListItem('${key}', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`, ${!isPinned})" title="${isPinned ? 'Unpin item' : 'Pin item (give maximum importance boost)'}">📌</button>
           <button class="brain-delete-btn" onclick="deleteBrainListItem('${key}', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete item">×</button>
         </div>
       </div>
@@ -1099,19 +1101,21 @@ function renderBrainNotesItems(lst) {
     const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const escapedVal = escapeHtml(val);
     const escapedReasoning = escapeHtml(reasoning);
+    const isPinned = typeof item === 'object' ? (item.pinned || item.is_pinned || false) : false;
     
     const overrideBtn = score < 1.0 ? `
       <button class="brain-trust-btn" onclick="overrideConfidence('ai_notes', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Trust: ${escapedReasoning}">👍</button>
     ` : '';
 
     return `
-      <div class="brain-notes-card" title="${escapedReasoning}">
+      <div class="brain-notes-card ${isPinned ? 'pinned' : ''}" title="${escapedReasoning}">
         <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0; margin-bottom:4px;">
           <span class="brain-list-text" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapedVal}</span>
           ${badge}
         </div>
-        <div style="display:flex; justify-content:flex-end; gap:4px;">
+        <div style="display:flex; justify-content:flex-end; gap:4px; align-items:center;">
           ${overrideBtn}
+          <button class="brain-pin-btn ${isPinned ? 'pinned' : ''}" onclick="togglePinListItem('ai_notes', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`, ${!isPinned})" title="${isPinned ? 'Unpin note' : 'Pin note (give maximum importance boost)'}">📌</button>
           <button class="brain-delete-btn" onclick="deleteBrainListItem('ai_notes', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete behavioral note">×</button>
         </div>
       </div>
@@ -1129,13 +1133,14 @@ function renderBrainProjectItems(projects) {
     const lastReinforced = proj.last_reinforced || '';
     const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const escapedName = escapeHtml(name);
+    const isPinned = proj.pinned || proj.is_pinned || false;
     
     const overrideBtn = score < 1.0 ? `
       <button class="brain-trust-btn" onclick="overrideConfidence('projects', \`${escapedName.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Trust Project: ${escapeHtml(reasoning)}">👍</button>
     ` : '';
     
     return `
-      <div class="brain-list-item" title="${escapeHtml(reasoning)}">
+      <div class="brain-list-item ${isPinned ? 'pinned' : ''}" title="${escapeHtml(reasoning)}">
         <div class="brain-deadline-info" style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:6px;">
             <span class="brain-list-text" style="color:var(--text); font-weight:500; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapedName}</span>
@@ -1145,6 +1150,7 @@ function renderBrainProjectItems(projects) {
         </div>
         <div style="display:flex; align-items:center; gap:4px;">
           ${overrideBtn}
+          <button class="brain-pin-btn ${isPinned ? 'pinned' : ''}" onclick="togglePinListItem('projects', \`${escapedName.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`, ${!isPinned})" title="${isPinned ? 'Unpin project' : 'Pin project (give maximum importance boost)'}">📌</button>
           <button class="brain-delete-btn" onclick="deleteBrainProject(\`${escapedName.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete project">×</button>
         </div>
       </div>
@@ -1162,13 +1168,14 @@ function renderBrainDeadlineItems(deadlines) {
     const lastReinforced = dl.last_reinforced || '';
     const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const escapedItem = escapeHtml(item);
+    const isPinned = dl.pinned || dl.is_pinned || false;
     
     const overrideBtn = score < 1.0 ? `
       <button class="brain-trust-btn" onclick="overrideConfidence('deadlines', \`${escapedItem.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Trust Deadline: ${escapeHtml(reasoning)}">👍</button>
     ` : '';
     
     return `
-      <div class="brain-list-item" title="${escapeHtml(reasoning)}">
+      <div class="brain-list-item ${isPinned ? 'pinned' : ''}" title="${escapeHtml(reasoning)}">
         <div class="brain-deadline-info" style="flex:1; min-width:0;">
           <div style="display:flex; align-items:center; gap:6px;">
             <span class="brain-list-text" style="color:var(--text); font-weight:500; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapedItem}</span>
@@ -1178,6 +1185,7 @@ function renderBrainDeadlineItems(deadlines) {
         </div>
         <div style="display:flex; align-items:center; gap:4px;">
           ${overrideBtn}
+          <button class="brain-pin-btn ${isPinned ? 'pinned' : ''}" onclick="togglePinListItem('deadlines', \`${escapedItem.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`, ${!isPinned})" title="${isPinned ? 'Unpin deadline' : 'Pin deadline (give maximum importance boost)'}">📌</button>
           <button class="brain-delete-btn" onclick="deleteBrainDeadline(\`${escapedItem.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete deadline">×</button>
         </div>
       </div>
@@ -1919,6 +1927,11 @@ async function loadWorkspaces() {
       if (reflectionToggle) {
         const settings = activeWs.settings || {};
         reflectionToggle.checked = !!settings.self_reflection_enabled;
+      }
+      const budgetInput = document.getElementById('memoryBudgetInput');
+      if (budgetInput) {
+        const settings = activeWs.settings || {};
+        budgetInput.value = settings.memory_token_budget !== undefined ? settings.memory_token_budget : 1500;
       }
     }
 
@@ -3033,5 +3046,115 @@ async function submitStyleFeedback(element, type) {
   } catch (err) {
     widget.innerHTML = `<span style="color: #f38ba8;">Error: ${err.message}</span>`;
     setTimeout(() => cancelStyleCorrection(element), 2000);
+  }
+}
+
+async function togglePinListItem(key, value, pin) {
+  try {
+    const resp = await fetch('/api/memory/pin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key, value, pin })
+    });
+    if (resp.ok) {
+      await loadBrainMemory();
+    } else {
+      const err = await resp.json();
+      alert("Failed to pin/unpin item: " + (err.error || resp.statusText));
+    }
+  } catch (e) {
+    console.error("Error pinning/unpinning item:", e);
+  }
+}
+
+async function updateMemoryTokenBudget(input) {
+  const budget = parseInt(input.value, 10);
+  if (isNaN(budget) || budget < 100 || budget > 10000) {
+    alert("Please enter a valid token budget between 100 and 10000.");
+    return;
+  }
+  try {
+    const resp = await fetch(`/api/workspaces/${activeWorkspaceId}/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memory_token_budget: budget })
+    });
+    if (!resp.ok) {
+      throw new Error('Failed to update workspace settings');
+    }
+    const activeWs = userWorkspaces.find(w => w.id === activeWorkspaceId);
+    if (activeWs) {
+      if (!activeWs.settings) activeWs.settings = {};
+      activeWs.settings.memory_token_budget = budget;
+    }
+  } catch (err) {
+    alert("Error saving setting: " + err.message);
+  }
+}
+
+let brainDebugOpen = false;
+
+function toggleBrainDebugView() {
+  const container = document.getElementById('brainDebugContainer');
+  if (!container) return;
+  brainDebugOpen = !brainDebugOpen;
+  container.style.display = brainDebugOpen ? 'block' : 'none';
+  if (brainDebugOpen) {
+    loadBrainRankingDebug();
+  }
+}
+
+async function loadBrainRankingDebug() {
+  const container = document.getElementById('brainDebugContainer');
+  if (!container) return;
+  try {
+    const resp = await fetch('/api/memory/debug');
+    if (!resp.ok) throw new Error("Failed to load debug info");
+    const data = await resp.json();
+    if (!data || !data.timestamp) {
+      container.innerHTML = 'No debug info loaded. Ask Oculus something to generate context rankings.';
+      return;
+    }
+    
+    let html = `<div style="font-weight:700; color:var(--accent); margin-bottom:6px;">LATEST RANKING PROCESS</div>`;
+    html += `<div><strong>Time:</strong> ${data.timestamp}</div>`;
+    html += `<div><strong>Query:</strong> "${escapeHtml(data.query || '(None)')}"</div>`;
+    html += `<div><strong>Memory Budget:</strong> ${data.memory_budget} tokens</div>`;
+    html += `<div><strong>Est. Injected Tokens:</strong> ${data.estimated_tokens}</div>`;
+    html += `<div><strong>Pruned due to Budget:</strong> ${data.pruned ? '<span style="color:var(--red)">YES</span>' : 'NO'}</div>`;
+    html += `<div><strong>Low-Priority Summary Used:</strong> ${data.summary_used ? 'YES' : 'NO'}</div>`;
+    
+    if (data.protected_items && data.protected_items.length > 0) {
+      html += `<div style="font-weight:700; color:var(--green); margin-top:10px; margin-bottom:4px;">PROTECTED ITEMS (Always Injected)</div>`;
+      data.protected_items.forEach(item => {
+        html += `<div style="padding-left:6px; margin-bottom:2px;">• ${escapeHtml(item)}</div>`;
+      });
+    }
+    
+    if (data.ranked_items) {
+      html += `<div style="font-weight:700; color:var(--purple); margin-top:10px; margin-bottom:4px;">DYNAMIC RANKINGS (Score breakdown)</div>`;
+      for (const [category, items] of Object.entries(data.ranked_items)) {
+        if (!items || items.length === 0) continue;
+        html += `<div style="text-transform:uppercase; font-weight:700; font-size:10px; margin-top:6px; color:var(--text);">${category}</div>`;
+        items.forEach(x => {
+          const scoreStr = x.score !== undefined ? x.score.toFixed(3) : 'N/A';
+          const detailsStr = x.details ? `(rel: ${x.details.relevance.toFixed(2)}, conf: ${x.details.confidence.toFixed(2)}, rec: ${x.details.recency.toFixed(2)}, imp: ${x.details.importance.toFixed(2)})` : '';
+          const style = x.injected ? 'color:var(--text)' : 'color:var(--text-faint); text-decoration:line-through;';
+          html += `<div style="padding-left:6px; margin-bottom:2px; ${style}">`;
+          html += `• [Score: ${scoreStr}] ${escapeHtml(x.text)} <span style="font-size:9.5px; opacity:0.7;">${detailsStr}</span>`;
+          if (!x.injected) {
+             html += ` <span style="color:var(--red); font-size:9px;">[Omitted]</span>`;
+          }
+          html += `</div>`;
+        });
+      }
+    }
+    
+    html += `<div style="font-weight:700; color:var(--orange); margin-top:10px; margin-bottom:4px;">FINAL INJECTED CONTEXT</div>`;
+    html += `<pre style="white-space:pre-wrap; word-break:break-all; background:rgba(0,0,0,0.15); border:1px solid rgba(255,255,255,0.05); padding:6px; border-radius:4px; font-size:9.5px;">${escapeHtml(data.injected_context)}</pre>`;
+    
+    container.innerHTML = html;
+  } catch (err) {
+    container.innerHTML = `<div style="color:var(--red)">Error: ${err.message}</div>`;
   }
 }

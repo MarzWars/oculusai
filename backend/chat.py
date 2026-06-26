@@ -9,7 +9,8 @@ from backend.models import query_openrouter, query_openrouter_stream
 from backend.auth import login_required, current_user_id, current_email
 from backend.memory import (
     load_memory, save_memory, extract_memory_regex, 
-    extract_memory_async, memory_to_context
+    extract_memory_async, memory_to_context,
+    classify_memory_command, execute_memory_command
 )
 from backend.prompts import SYSTEM_PROMPT
 from backend.search import web_search, should_search
@@ -143,14 +144,20 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
         f"Time: {now.strftime('%H:%M')} SAST (UTC+2)"
     )
 
-    # Load active workspace name
+    # Load active workspace info
     workspace_name = "Default Workspace"
+    workspace_settings = {}
     try:
-        res = supabase.table("oculus_workspaces").select("name").eq("id", workspace_id).execute()
+        res = supabase.table("oculus_workspaces").select("name, settings").eq("id", workspace_id).execute()
         if res.data:
             workspace_name = res.data[0].get("name", "Default Workspace")
+            workspace_settings = res.data[0].get("settings") or {}
     except Exception as e:
-        print("[Prompt Engine] Error loading workspace name:", e)
+        print("[Prompt Engine] Error loading workspace info:", e)
+
+    memory_token_budget = int(workspace_settings.get("memory_token_budget", 1500))
+    uid = current_user_id()
+    preferred_model = session.get("selected_model", Config.DEFAULT_MODEL)
 
     web_raw_context = web_search(user_message) if should_search(user_message) else ""
 
@@ -182,13 +189,12 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
 
     # Start with default budget variables
     verbatim_turns = Config.VERBATIM_TURNS
-    memory_max_results = 5
     web_length_limit = len(web_raw_context)
     rag_max_results = len(rag_chunks) if rag_chunks else 0
 
     while True:
         # 1. Compile Memory Context
-        mem_context = memory_to_context(mem, user_message, max_results=memory_max_results)
+        mem_context = memory_to_context(mem, user_message, memory_budget=memory_token_budget, preferred_model=preferred_model, user_id=uid)
         
         # 2. Compile Web Context
         web_context = web_raw_context[:web_length_limit] if web_raw_context else ""
@@ -312,9 +318,9 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
         elif rag_max_results > 0:
             rag_max_results -= 1
             print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Reducing RAG document chunks to {rag_max_results}...")
-        elif memory_max_results > 1:
-            memory_max_results -= 1
-            print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Reducing memory max_results to {memory_max_results}...")
+        elif memory_token_budget > 500:
+            memory_token_budget = max(500, memory_token_budget - 250)
+            print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Reducing memory budget to {memory_token_budget}...")
         elif web_length_limit > 0:
             web_length_limit = max(0, web_length_limit - 1000)
             print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Truncating web search context to {web_length_limit} chars...")
@@ -408,6 +414,21 @@ def ask():
     history = load_history(wid)
     memory  = load_memory(uid)
 
+    preferred_model = session.get("selected_model", Config.DEFAULT_MODEL)
+
+    # 0. Intercept memory control commands
+    command_data = classify_memory_command(user_message, preferred_model=preferred_model)
+    if command_data.get("is_command"):
+        confirmation = execute_memory_command(uid, memory, command_data)
+        
+        def generate_command_resp():
+            yield confirmation
+            history.append({"role": "user", "text": user_message})
+            history.append({"role": "ai", "text": confirmation})
+            save_history(wid, history)
+            
+        return Response(generate_command_resp(), mimetype="text/event-stream")
+
     # 1. Run memory extraction and update message count
     extract_memory_regex(user_message, memory)
     memory["message_count"] = memory.get("message_count", 0) + 1
@@ -452,7 +473,15 @@ def ask():
                     draft = query_openrouter(prompt, preferred_model=preferred_model)
                     if draft:
                         from backend.prompts import CRITIQUE_PROMPT_TEMPLATE
-                        memory_context = memory_to_context(memory, user_message)
+                        ws_settings = {}
+                        try:
+                            ws_res = supabase.table("oculus_workspaces").select("settings").eq("id", wid).execute()
+                            if ws_res.data:
+                                ws_settings = ws_res.data[0].get("settings") or {}
+                        except Exception:
+                            pass
+                        memory_token_budget = int(ws_settings.get("memory_token_budget", 1500))
+                        memory_context = memory_to_context(memory, user_message, memory_budget=memory_token_budget, preferred_model=preferred_model, user_id=uid)
                         stream_prompt = CRITIQUE_PROMPT_TEMPLATE.format(
                             memory_context=memory_context,
                             user_message=user_message,
