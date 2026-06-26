@@ -80,6 +80,72 @@ Oculus is an **AI Knowledge Workspace & Actions Engine** designed specifically f
 
 ---
 
+## 🧠 Major Memory & Intelligence Upgrades (26 June 2026)
+
+Oculus's core intelligence, long-term memory capabilities, and user style adaptation have been heavily upgraded. The memory system is now divided into three major architectural pillars implemented throughout June 2026:
+
+### 1. Confidence Scoring & Quality Control (Phase 1)
+* **Metadata-Rich Memory Schema**: Every memorized item (preferences, important facts, projects, deadlines, clients) now contains metadata attributes: `confidence` score (0.0 to 1.0), `source_type` (`conversation` or `user_explicit`), `last_reinforced` date, and extraction `reasoning` justification.
+* **Badges & Tooltips**: The Oculus Brain UI renders confidence score badges (High, Medium, Low) for all items. Hovering over a badge reveals a tooltip explaining why Oculus extracted that fact, its source type, and the date it was reinforced.
+* **Self-Conflict Resolution UI**: When you tell Oculus something that contradicts an existing memory item, a red **Resolve Memory Conflict** card appears at the top of the Brain drawer, allowing you to choose whether to keep the existing fact, use the new fact, or keep both.
+* **Automatic Decay Auditing**: An active memory decay audit system reduces confidence by `-0.05` per week of inactivity, floored at `0.1`, forcing outdated facts to decay naturally unless reinforced.
+
+### 2. Style & Behavior Notes (Phase 2)
+* **AI Style Inference**: A background style analyzer reads your recent conversation logs every few turns (default 10, configurable) to infer formatting guidelines, tone preferences, vocabulary directives, and forbidden styles.
+* **Categorized AI Notes**: Inferred observations are saved in the **Style & Behavior Notes** drawer, split into `"tone"`, `"formatting"`, `"vocabulary"`, `"client_specific"`, and `"forbidden"` rules.
+* **Interactive Cooldown Widget**: After every 4 assistant responses, an interactive feedback widget ("Did this response match your style? (Yes/No)") renders at the bottom of the chat bubble.
+  - Clicking **Yes** reinforces the notes (confidence $+0.05$).
+  - Clicking **No** allows you to input an explicit correction, creating a high-confidence (`0.9`) `user_explicit` style rule.
+* **Prefix Directives**: Prefixing prompts with `"Style preference:"` or `"style note:"` bypasses normal conversation flow and writes style rules directly to memory.
+
+### 3. Superior Context Ranking & Conversation Intelligence (Phase 3)
+* **Weighted Scored Context Ranking Engine**: When you query Oculus, memory items are ranked by a weighted scoring formula:
+  $$\text{final\_score} = (\text{relevance} \times 0.45) + (\text{confidence} \times 0.25) + (\text{recency} \times 0.20) + (\text{importance} \times 0.10)$$
+  Relevance is calculated using OpenAI's `text-embedding-3-small` vector embeddings to measure semantic similarity.
+* **Sub-Millisecond Embedding Cache**: High-performance in-memory caching mapping strings to embedding vectors ensures zero API latency when loading memory.
+* **Token Budget & Hashed LLM Summary Compression**: Memory context injected into chat is limited to a strict token budget (default `1500` tokens, configurable in settings). Low-priority facts are compressed into a single dense summary paragraph using a hashed LLM call that only triggers when facts change.
+* **Memory Control Commands**: You can issue explicit instructions like *"forget everything about Vue"*, *"stop using formal tone"*, or *"pin Acme mockup deadline"* in conversation. Oculus intercepts these semantically, updates your memory database, and reloads the Brain UI instantly.
+* **UI Pinning**: Click 📌 on any list item in the Brain or Notes panel to pin it, giving it maximum importance boost (`importance = 1.0` plus `+0.3` score boost).
+* **Developer Debug Panel**: A collapsible panel at the bottom of the Brain drawer showing timestamp, query, estimated tokens, pruning status, score breakdown details for each memory item, and the final prompt block.
+
+---
+
+## 🎯 Prompt Testing Guide
+
+Use the following prompts to verify that these upgrades are working correctly:
+
+### 1. Verification of Confidence & Quality Control
+* **Save a Fact**:
+  > *"I have a pet dog named Buster who is a Golden Retriever."*
+  * **Verify**: Open the **Oculus Brain** panel. Confirm the fact appears under *Important Facts* with a confidence score badge. Hover over the badge to inspect the reasoning tooltip.
+* **Trigger a Conflict**:
+  > *"Actually, Buster is a Black Labrador, not a Golden Retriever."*
+  * **Verify**: Open the **Oculus Brain** panel. A red card at the top will alert you to a conflict between the existing fact and the new fact. Click **Use New** or **Keep Both** to resolve it.
+
+### 2. Verification of Behavioral & Style Notes
+* **Explicit Style Training**:
+  > *"Style preference: When writing copy for Lex Digitals, always use a professional, clear tone and never use exclamation marks."*
+  * **Verify**: Open the **Style & Behavior Notes** panel. Check that the rule has been saved with **High** confidence, source `user_explicit`, and category `tone`.
+* **Interactive Style Feedback Widget**:
+  * Send 4 conversation messages (e.g. *"hello"*, *"how are you?"*, etc.).
+  * **Verify**: On the 4th response, a widget will appear at the bottom of the chat bubble asking *"Did this response match your style?"*.
+  * Click **No**, input *"write responses in lowercase only"* and click **Submit**. Check the notes panel to confirm a new `user_explicit` rule has been committed.
+
+### 3. Verification of Context Ranking & Memory Commands
+* **Semantic Delete Command**:
+  > *"Forget everything about my dog."*
+  * **Verify**: Oculus will immediately reply with: `✓ I've forgotten...` listing the Buster facts. Check the Brain UI to verify they have been deleted.
+* **Pinning Facts**:
+  * Add a fact or preference to your brain.
+  * Click the 📌 icon next to it. Confirm that it turns peach colored.
+  * Send a message: *"Who are you?"*
+  * Expand the **Toggle Context Ranking Debug Info** console at the bottom of the Brain panel. Confirm that the pinned item shows an importance of `1.0` and a score boost.
+* **Adjusting Token Budget**:
+  * Open the **Workspace Settings** panel.
+  * Change the **Memory Token Budget** to `1000`. Switch workspaces and switch back to confirm the value is persisted.
+
+---
+
 ## 📖 How to Use Oculus — Complete Guide
 
 This section covers every major feature in detail. Think of this as a field manual — read it once and you will know exactly how to get full value out of the system.
