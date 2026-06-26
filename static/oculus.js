@@ -441,6 +441,16 @@ async function sendMessage() {
   appendUserBubble(text);
   showTyping();
 
+  // Check if this is a doc retrieval request — if so, show the gallery instead of calling AI
+  const intercepted = await interceptDocRetrievalIntent(text);
+  if (intercepted) {
+    hideTyping();
+    input.disabled = false;
+    sendBtn.disabled = false;
+    input.focus();
+    return;
+  }
+
   // Create stream bubble placeholder
   const feed = document.getElementById('chatFeed');
   const row = document.createElement('div');
@@ -628,6 +638,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load workspace documents for the active workspace
   loadWorkspaceDocuments();
+
+  // Load generated documents panel
+  loadGeneratedDocs();
+
+  // Rehydrate action cards from Supabase (fixes download links after page refresh)
+  rehydrateChatState();
 
   // Initialize AI Action Engine hooks
   activateHistoricalProposals();
@@ -1874,6 +1890,7 @@ async function executeProposedAction(actionId) {
       // Sync UI components
       loadBrainIntoSidebar();
       loadActionHistoryLog();
+      loadGeneratedDocs(); // Refresh generated docs panel
     } else {
       statusEl.className = "action-card-status failed";
       statusEl.textContent = `❌ Failed: ${result.error || result.message || 'Execution error'}`;
@@ -2158,6 +2175,191 @@ async function cancelActionFromLog(actionId, event) {
     if (itemEl) itemEl.innerHTML = originalHtml;
   }
 }
+
+// ─────────────────────────────────────────
+// 🔄 CHAT STATE REHYDRATION
+// Fetches action cards from Supabase and updates download links in existing
+// rendered bubbles so they survive page refresh.
+// ─────────────────────────────────────────
+
+async function rehydrateChatState() {
+  try {
+    const resp = await fetch('/api/chat/state');
+    if (!resp.ok) return;
+    const data = await resp.json();
+    if (data.status !== 'success') return;
+
+    const cards = data.action_cards || [];
+    if (!cards.length) return;
+
+    for (const card of cards) {
+      const aid = card.action_id;
+      if (!aid) continue;
+
+      // If the action card is already in the DOM, update its status
+      const existingCard = document.getElementById(`action-card-${aid}`);
+      if (existingCard) {
+        updateActionCardStatusFromServer(aid);
+        // Also update any download button inside the card with the permanent URL
+        if (card.download_url && card.status === 'executed') {
+          const statusEl = document.getElementById(`action-status-${aid}`);
+          if (statusEl && !statusEl.querySelector('a.sandbox-download-btn')) {
+            const existingOutcome = statusEl.innerHTML;
+            // Inject a fresh download link if not present
+            if (!existingOutcome.includes('sandbox-download-btn') && card.download_url) {
+              const dlBtn = `<a href="${card.download_url}" class="sandbox-download-btn" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>Download</span></a>`;
+              statusEl.innerHTML = statusEl.innerHTML + ' ' + dlBtn;
+            }
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('[Rehydrate] Chat state rehydration failed:', err.message);
+  }
+}
+
+
+// ─────────────────────────────────────────
+// 📁 GENERATED DOCUMENTS PANEL
+// Loads and renders docs from oculus_generated_docs via /api/generated-docs
+// ─────────────────────────────────────────
+
+async function loadGeneratedDocs(searchQuery = '') {
+  const container = document.getElementById('generatedDocsContent');
+  if (!container) return;
+
+  container.innerHTML = '<div style="font-size:12px; color:var(--text-muted); padding:8px 0;">Loading generated documents…</div>';
+
+  try {
+    const url = searchQuery
+      ? `/api/generated-docs?q=${encodeURIComponent(searchQuery)}`
+      : '/api/generated-docs';
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    const docs = data.docs || [];
+    if (!docs.length) {
+      container.innerHTML = `
+        <div style="font-size:12px; color:var(--text-faint); padding:16px 0; text-align:center;">
+          ${searchQuery ? `No documents matching "<strong>${escapeHtml(searchQuery)}</strong>"` : 'No documents generated yet.'}
+        </div>`;
+      return;
+    }
+
+    container.innerHTML = docs.map(doc => {
+      const iconMap = { proposal: '📝', document: '📂', email: '✉️', quote: '💰' };
+      const icon = iconMap[doc.doc_type] || '📄';
+      const date = new Date(doc.created_at).toLocaleDateString('en-ZA', {
+        day: '2-digit', month: 'short', year: 'numeric'
+      });
+      const sizeKB = doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : '';
+      const typeBadge = doc.doc_type
+        ? `<span class="act-badge status-executed" style="font-size:9px; padding:1px 5px;">${doc.doc_type}</span>`
+        : '';
+      const fmtBadge = doc.format
+        ? `<span style="font-size:9px; color:var(--text-faint); margin-left:4px;">${doc.format.toUpperCase()}</span>`
+        : '';
+
+      const dlUrl = doc.download_url || `/api/generated-docs/${doc.id}/download`;
+
+      return `
+        <div class="generated-doc-item" style="border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:8px; background:var(--bg-2);">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+            <div style="flex:1; min-width:0;">
+              <div style="display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap;">
+                <span style="font-size:14px;">${icon}</span>
+                <span style="font-size:12.5px; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(doc.title || doc.filename)}">${escapeHtml(doc.title || doc.filename)}</span>
+                ${typeBadge}${fmtBadge}
+              </div>
+              ${doc.description ? `<div style="font-size:11px; color:var(--text-muted); margin-bottom:4px; line-height:1.4;">${escapeHtml(doc.description.substring(0, 80))}${doc.description.length > 80 ? '…' : ''}</div>` : ''}
+              <div style="font-size:10.5px; color:var(--text-faint);">${date}${sizeKB ? ' · ' + sizeKB : ''}</div>
+            </div>
+            <a href="${dlUrl}" class="sandbox-download-btn" target="_blank" rel="noopener noreferrer" style="flex-shrink:0; white-space:nowrap;" title="Download">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              <span>Download</span>
+            </a>
+          </div>
+        </div>`;
+    }).join('');
+  } catch (err) {
+    container.innerHTML = `<div style="font-size:12px; color:var(--red); padding:8px 0;">Error: ${err.message}</div>`;
+  }
+}
+
+// Called by the search input in the generated docs panel
+function searchGeneratedDocs() {
+  const input = document.getElementById('generatedDocsSearch');
+  const q = input ? input.value.trim() : '';
+  loadGeneratedDocs(q);
+}
+
+
+// ─────────────────────────────────────────
+// 🔍 NATURAL LANGUAGE DOC RETRIEVAL
+// Intercepts messages like "show me the proposal for Red Rooms"
+// and renders a docs gallery card instead of / alongside the AI response.
+// ─────────────────────────────────────────
+
+const DOC_RETRIEVAL_PATTERN = /(show|give|find|list|what|get).{0,20}(proposal|quote|document|email|doc|draft)/i;
+
+async function interceptDocRetrievalIntent(text) {
+  if (!DOC_RETRIEVAL_PATTERN.test(text)) return false;
+
+  // Extract a search term: everything after the action verb up to end
+  const termMatch = text.match(/(?:proposal|quote|document|email|doc|draft)\s+(?:for|about|on|named|called)?\s*(.+)/i);
+  const searchTerm = termMatch ? termMatch[1].trim() : text.replace(/(show|give|find|list|what|get)\s*(me\s*)?(the\s*)?/i, '').trim();
+
+  // Fetch matching docs
+  try {
+    const resp = await fetch(`/api/generated-docs?q=${encodeURIComponent(searchTerm)}`);
+    if (!resp.ok) return false;
+    const data = await resp.json();
+    const docs = data.docs || [];
+
+    if (!docs.length) return false; // Let the AI handle it
+
+    // Render a doc gallery card in the feed
+    const feed = document.getElementById('chatFeed');
+    const row = document.createElement('div');
+    row.className = 'bubble-row ai-row';
+
+    const iconMap = { proposal: '📝', document: '📂', email: '✉️', quote: '💰' };
+    const cardsHtml = docs.slice(0, 8).map(doc => {
+      const icon = iconMap[doc.doc_type] || '📄';
+      const date = new Date(doc.created_at).toLocaleDateString('en-ZA', { day:'2-digit', month:'short', year:'numeric' });
+      const dlUrl = doc.download_url || `/api/generated-docs/${doc.id}/download`;
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--bg-2); margin-bottom:6px; gap:10px;">
+          <div style="min-width:0; flex:1;">
+            <div style="font-size:12.5px; font-weight:600; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${icon} ${escapeHtml(doc.title || doc.filename)}</div>
+            <div style="font-size:10.5px; color:var(--text-faint); margin-top:2px;">${date} · ${(doc.format || 'file').toUpperCase()}</div>
+          </div>
+          <a href="${dlUrl}" class="sandbox-download-btn" target="_blank" rel="noopener noreferrer" style="flex-shrink:0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" width="11" height="11"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            <span>Download</span>
+          </a>
+        </div>`;
+    }).join('');
+
+    row.innerHTML = `
+      ${AI_AVATAR}
+      <div class="bubble ai-bubble rendered">
+        <p style="font-weight:600; margin-bottom:10px;">📁 Found ${docs.length} document${docs.length !== 1 ? 's' : ''} matching <em>"${escapeHtml(searchTerm)}"</em>:</p>
+        ${cardsHtml}
+        ${docs.length > 8 ? `<div style="font-size:11px; color:var(--text-muted); margin-top:4px;">+ ${docs.length - 8} more. Refine your search for more specific results.</div>` : ''}
+      </div>`;
+
+    feed.insertBefore(row, document.getElementById('typingIndicator'));
+    scrollToBottom();
+    return true; // Intercepted — don't send to AI
+  } catch (err) {
+    console.warn('[DocRetrieval] Failed:', err.message);
+    return false;
+  }
+}
+
 
 // ─────────────────────────────────────────
 // 📂 WORKSPACE DOCUMENTS CONTROLLER

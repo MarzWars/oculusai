@@ -1,4 +1,5 @@
 import json
+import threading
 from datetime import datetime
 from backend.extensions import supabase
 from backend.models import query_openrouter_extraction
@@ -339,7 +340,7 @@ def _execute_generate_proposal(user_id: str, workspace_id: str, args: dict) -> s
     run_foot.font.italic = True
     run_foot.font.color.rgb = MUTED_COLOR
     
-    # Directory setup and save
+    # Directory setup and save locally first
     sandbox_dir = os.path.join("workspaces", workspace_id, "proposals")
     os.makedirs(sandbox_dir, exist_ok=True)
     
@@ -349,8 +350,39 @@ def _execute_generate_proposal(user_id: str, workspace_id: str, args: dict) -> s
     
     doc.save(file_path)
     
-    download_url = f"/api/sandbox/download?path=proposals/{file_name}"
-    return f"Proposal saved to sandbox as [proposals/{file_name}]({download_url})"
+    # Upload to Supabase Storage → permanent signed URL
+    from backend.docs import upload_to_storage, register_generated_doc, update_memory_after_doc
+    storage_sub = f"proposals/{file_name}"
+    download_url = upload_to_storage(workspace_id, file_path, storage_sub)
+
+    # Graceful fallback: if Storage upload failed, use local route
+    if not download_url:
+        download_url = f"/api/sandbox/download?path=proposals/{file_name}"
+        print(f"[Actions] Proposal Storage upload failed — using local fallback URL")
+
+    full_storage_path = f"{workspace_id}/{storage_sub}"
+    register_generated_doc(
+        user_id=user_id,
+        workspace_id=workspace_id,
+        action_id="",
+        doc_type="proposal",
+        filename=file_name,
+        title=proposal_title.replace("_", " "),
+        description=f"Proposal for {client_name.replace('_', ' ')}: {details[:120]}",
+        fmt="docx",
+        storage_path=full_storage_path,
+        download_url=download_url,
+        file_size=os.path.getsize(file_path),
+    )
+
+    # Update memory in background
+    threading.Thread(
+        target=update_memory_after_doc,
+        args=(user_id, "proposal", proposal_title.replace("_", " "), client_name.replace("_", " "))
+    ).start()
+
+    client_display = client_name.replace("_", " ")
+    return f"Proposal generated for **{client_display}** — [⬇ Download Proposal DOCX]({download_url})"
 
 
 def _generate_pdf_reportlab(file_path: str, title: str, content: str):
@@ -550,8 +582,37 @@ def _execute_generate_document(user_id: str, workspace_id: str, args: dict) -> s
                 except Exception:
                     pass
                     
-    download_url = f"/api/sandbox/download?path=documents/{filename}"
-    return f"Document saved as [documents/{filename}]({download_url})"
+    # Upload to Supabase Storage → permanent signed URL
+    from backend.docs import upload_to_storage, register_generated_doc, update_memory_after_doc
+    storage_sub = f"documents/{filename}"
+    download_url = upload_to_storage(workspace_id, file_path, storage_sub)
+
+    if not download_url:
+        download_url = f"/api/sandbox/download?path=documents/{filename}"
+        print(f"[Actions] Document Storage upload failed — using local fallback URL")
+
+    full_storage_path = f"{workspace_id}/{storage_sub}"
+    register_generated_doc(
+        user_id=user_id,
+        workspace_id=workspace_id,
+        action_id="",
+        doc_type="document",
+        filename=filename,
+        title=title,
+        description=f"{fmt.upper()} document: {title}",
+        fmt=fmt,
+        storage_path=full_storage_path,
+        download_url=download_url,
+        file_size=os.path.getsize(file_path),
+    )
+
+    # Update memory in background
+    threading.Thread(
+        target=update_memory_after_doc,
+        args=(user_id, "document", title)
+    ).start()
+
+    return f"Document **{title}** generated — [⬇ Download {fmt.upper()}]({download_url})"
 
 
 def _execute_send_email(user_id: str, workspace_id: str, args: dict) -> str:
@@ -629,11 +690,38 @@ def _execute_send_email(user_id: str, workspace_id: str, args: dict) -> str:
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(html_content)
         
-    download_url = f"/api/sandbox/download?path=emails/{file_name}"
-    status_label = "Email draft preview saved to sandbox"
-    if smtp_enabled:
-        status_label += " (SMTP failed, fallback)"
-    return f"{status_label} as [emails/{file_name}]({download_url})"
+    # Upload to Supabase Storage → permanent signed URL
+    from backend.docs import upload_to_storage, register_generated_doc, update_memory_after_doc
+    storage_sub = f"emails/{file_name}"
+    download_url = upload_to_storage(workspace_id, file_path, storage_sub)
+
+    if not download_url:
+        download_url = f"/api/sandbox/download?path=emails/{file_name}"
+        print(f"[Actions] Email Storage upload failed — using local fallback URL")
+
+    full_storage_path = f"{workspace_id}/{storage_sub}"
+    register_generated_doc(
+        user_id=user_id,
+        workspace_id=workspace_id,
+        action_id="",
+        doc_type="email",
+        filename=file_name,
+        title=f"Email to {to_contact}: {subject}",
+        description=f"To: {to_contact} | Subject: {subject}",
+        fmt="html",
+        storage_path=full_storage_path,
+        download_url=download_url,
+        file_size=os.path.getsize(file_path),
+    )
+
+    # Update memory in background
+    threading.Thread(
+        target=update_memory_after_doc,
+        args=(user_id, "email", subject, to_contact)
+    ).start()
+
+    status_label = "Email sent via SMTP ✅" if smtp_enabled else "Email draft saved"
+    return f"{status_label} — [⬇ Preview Email Draft]({download_url})"
 
 
 def _undo_file_action(user_id: str, workspace_id: str, action_type: str, args: dict) -> str:

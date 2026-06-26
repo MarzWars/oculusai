@@ -78,6 +78,27 @@
                 </div>
             </div>
 
+            <!-- Generated Documents Browser -->
+            <div style="margin-top: 20px;">
+                <div class="sidebar-section-title">📁 Generated Documents</div>
+                <div style="display:flex; gap:6px; margin-bottom:8px;">
+                    <input
+                        type="text"
+                        id="generatedDocsSearch"
+                        placeholder="Search proposals, emails…"
+                        style="flex:1; background:var(--bg-3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font-sans); font-size:12px; padding:5px 10px; outline:none;"
+                        onkeydown="if(event.key==='Enter') searchGeneratedDocs()"
+                    >
+                    <button
+                        onclick="searchGeneratedDocs()"
+                        style="background:var(--accent); color:#fff; border:none; border-radius:6px; padding:5px 10px; font-size:11px; cursor:pointer; font-family:var(--font-sans); white-space:nowrap;"
+                    >Search</button>
+                </div>
+                <div id="generatedDocsContent" style="padding: 4px 0; max-height: 400px; overflow-y: auto;">
+                    <div style="font-size:12px; color:var(--text-muted); padding:8px 0;">Loading…</div>
+                </div>
+            </div>
+
         </div>
     </div>
     <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>

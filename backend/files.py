@@ -217,10 +217,33 @@ def download_sandbox_file_api():
     if not target_path.startswith(workspace_root):
         return jsonify({"error": "Access denied: outside workspace sandbox"}), 403
         
-    if not os.path.exists(target_path) or os.path.isdir(target_path):
-        return jsonify({"error": "File not found"}), 404
-        
-    from flask import send_file
-    return send_file(target_path, as_attachment=True)
+    if os.path.exists(target_path) and not os.path.isdir(target_path):
+        from flask import send_file
+        return send_file(target_path, as_attachment=True)
+
+    # File not found locally (e.g. after server restart) — fall back to Supabase Storage
+    filename = os.path.basename(file_path_param)
+    print(f"[Files] Local file missing: {target_path} — checking oculus_generated_docs for '{filename}'")
+    try:
+        from backend.extensions import supabase as _sb
+        res = _sb.table("oculus_generated_docs")\
+            .select("download_url, user_id")\
+            .eq("filename", filename)\
+            .eq("workspace_id", wid)\
+            .order("created_at", desc=True)\
+            .limit(1)\
+            .execute()
+        if res.data:
+            row = res.data[0]
+            # Security: ensure it belongs to this user's workspace (workspace_id already filtered)
+            dl_url = row.get("download_url", "")
+            if dl_url:
+                from flask import redirect
+                return redirect(dl_url)
+    except Exception as e:
+        print(f"[Files] Supabase fallback lookup failed: {e}")
+
+    return jsonify({"error": "File not found — it may have been deleted or the server was restarted"}), 404
+
 
 

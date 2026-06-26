@@ -34,6 +34,37 @@ def save_history(user_id: str, messages: list):
     except Exception as e:
         print("History save error:", e)
 
+def load_action_cards(workspace_id: str) -> list:
+    """Load persisted action cards for a workspace from oculus_chat.action_cards."""
+    try:
+        res = supabase.table("oculus_chat").select("action_cards").eq("user_id", workspace_id).execute()
+        if res.data:
+            return res.data[0].get("action_cards") or []
+    except Exception as e:
+        print("Action cards load error:", e)
+    return []
+
+def save_action_card(workspace_id: str, card: dict):
+    """
+    Upsert a single action card into oculus_chat.action_cards for the workspace.
+    card schema: {action_id, action_type, status, download_url, message_index, created_at}
+    Deduplicates by action_id and keeps the most recent 50.
+    """
+    try:
+        existing = load_action_cards(workspace_id)
+        # Deduplicate: replace any existing card with same action_id
+        existing = [c for c in existing if c.get("action_id") != card.get("action_id")]
+        existing.append(card)
+        # Cap at 50 cards
+        if len(existing) > 50:
+            existing = existing[-50:]
+        supabase.table("oculus_chat").upsert({
+            "user_id": workspace_id,
+            "action_cards": existing,
+        }).execute()
+    except Exception as e:
+        print("save_action_card error:", e)
+
 def load_summary(user_id: str) -> str:
     try:
         res = supabase.table("oculus_chat").select("summary").eq("user_id", user_id).execute()
@@ -391,6 +422,8 @@ def ask():
     UPLOADED_FILES_CACHE.pop(wid, None)
     
     preferred_model = session.get("selected_model", Config.DEFAULT_MODEL)
+    # Track how many messages exist before this exchange so we know the card's message_index
+    msg_index_before = len(history) - 1  # the user message was just appended
 
     def generate():
         try:
@@ -409,6 +442,18 @@ def ask():
 
             history.append({"role": "ai", "text": full_text.strip()})
             save_history(wid, history)
+
+            # Persist action card to Supabase so it survives page refresh
+            # Note: download_url will be updated when the action is *executed* — here we store the pending card
+            if action_data and action_id:
+                save_action_card(wid, {
+                    "action_id":    action_id,
+                    "action_type":  action_data["action_type"],
+                    "status":       "pending",
+                    "download_url": "",
+                    "message_index": msg_index_before + 1,  # index of the AI reply
+                    "created_at":   datetime.utcnow().isoformat() + "Z",
+                })
 
             # Summarise in background after responding and saving
             import threading
@@ -430,3 +475,47 @@ def ask():
             save_history(wid, history)
 
     return Response(generate(), mimetype="text/event-stream")
+
+
+@chat_bp.route("/api/chat/state", methods=["GET"])
+@login_required
+def get_chat_state():
+    """
+    Returns the full chat state for the current workspace:
+    - messages list (for rehydration)
+    - action_cards list (so download links and card statuses survive refresh)
+    Used by the frontend on DOMContentLoaded to rehydrate action cards with permanent URLs.
+    """
+    uid = current_user_id()
+    wid = session.get("current_workspace_id", uid)
+    messages     = load_history(wid)
+    action_cards = load_action_cards(wid)
+
+    # Enrich each action card with the latest status from oculus_actions
+    enriched_cards = []
+    for card in action_cards:
+        aid = card.get("action_id")
+        if aid:
+            try:
+                res = supabase.table("oculus_actions").select("status, outcome").eq("id", aid).execute()
+                if res.data:
+                    row = res.data[0]
+                    card["status"] = row.get("status", card.get("status", "pending"))
+                    # If executed, try to pull the download URL from outcome text
+                    if row.get("status") == "executed" and not card.get("download_url"):
+                        outcome = row.get("outcome", "")
+                        # Extract URL from markdown link pattern in outcome string
+                        import re
+                        url_match = re.search(r'\((/api/[^\)]+|https?://[^\)]+)\)', outcome)
+                        if url_match:
+                            card["download_url"] = url_match.group(1)
+            except Exception:
+                pass
+        enriched_cards.append(card)
+
+    return jsonify({
+        "status":       "success",
+        "messages":     messages,
+        "action_cards": enriched_cards,
+    })
+
