@@ -200,46 +200,8 @@ Current Memory State:
 
 Consolidated JSON:"""
 
-MEMORY_CONFIDENCE_EXTRACTION_PROMPT = """You are a precise, background memory extraction agent for Oculus AI.
-Your job is to analyze the user's latest message, the recent conversation history, and their current memory JSON state, and output a JSON object representing the updates and any conflicts.
-
-Analyze both the latest message and the conversation history for context. The history will help you resolve pronouns ("he", "it", "they"), follow-ups, and corrections (e.g. if the user says "actually, change my name to Peter", the history shows they previously said "my name is Alex").
-
-Compare the user's message and context to the current memory state and identify new facts, changes, or reinforcements.
-For every fact you extract, you MUST assign:
-1. "value" (or appropriate fields like "name" for projects, "item" and "date" for deadlines)
-2. "confidence": A score between 0.0 and 1.0.
-   - 1.0: Explicit, direct statement by the user (e.g. "My name is Alex", "I prefer Python", "I am working on Project Red Rooms").
-   - 0.7 - 0.9: Highly likely/clear inference or statement with minor ambiguity.
-   - 0.4 - 0.6: Vague or indirect statement (e.g. "Maybe we should use React", "I think my client is Lex").
-3. "reasoning": A brief, one-sentence explanation for the score (e.g. "Direct statement by user.", "Inferred from discussion about flask routes.").
-
-Categories to extract:
-- "profile": Extract "name", "role", "company", "location", "email", "phone".
-- "clients": Unique client names.
-- "projects": Unique project names.
-- "preferences": User preferences (e.g. "likes Python", "dislikes Tailwind").
-- "important_facts": General facts to remember.
-- "deadlines": Deadline objects: {{"item": "Task name", "date": "Due date"}}.
-- "topics_discussed": General topics (e.g. "Python", "SEO").
-- "ai_notes": Style, behavior, copy, design, or coding preferences implicitly followed (e.g. "writes copy in a bold tone").
-
-CONFLICT DETECTION:
-If a newly extracted fact directly contradicts or is inconsistent with an existing fact in the memory, list it under the "conflicts" list and do NOT add it to "updates".
-This applies to profile fields AND list categories:
-- Profile conflict example: "name" is already "Alex", and the user says "Call me Peter".
-- List conflict example: "preferences" contains "likes React", and the user says "I hate React now" or "avoid React". This contradicts the existing item, so it is a conflict.
-Each conflict object must have:
-  - "key": The section/field name (e.g., "profile.name" or "preferences")
-  - "existing": The existing item from memory (copying its exact format, e.g. text/value/dict)
-  - "new": The new conflicting item, containing its "value" (or specific fields), "confidence", and "reasoning".
-
-Output format:
-Your output MUST be a single, valid JSON object with the keys "updates" and "conflicts".
-Do NOT include any explanation, markdown formatting wrappers (like ```json), or intro. Return only the raw JSON.
-
-Current Memory State:
-{current_memory_json}
+MEMORY_STAGE1_EXTRACTION_PROMPT = """You are a memory extraction assistant.
+Analyze the user's latest message and the recent conversation history to extract proposed updates, preferences, deadlines, facts, or potential profile changes.
 
 Recent Conversation History:
 {recent_history}
@@ -247,7 +209,112 @@ Recent Conversation History:
 User Latest Message:
 "{user_message}"
 
-JSON Output:"""
+Current Memory State:
+{current_memory_json}
+
+Your task:
+Identify any new facts, profile updates, client mentions, project names, user preferences, deadlines, topics, or observations.
+List these as proposed updates. Also, identify if the user statement directly contradicts or corrects any existing item in the memory state (e.g. they say they hate React now, but memory says they prefer React).
+Output your proposed updates and conflicts in a raw JSON structure as follows:
+{{
+  "proposed_updates": {{
+     "profile": {{
+        "name": "extracted name or null",
+        "role": "extracted role or null",
+        "company": "extracted company or null",
+        "location": "extracted location or null",
+        "email": "extracted email or null",
+        "phone": "extracted phone or null"
+     }},
+     "preferences": ["list of preference strings"],
+     "clients": ["list of client names"],
+     "projects": ["list of project names/values"],
+     "deadlines": [
+        {{"item": "Task name", "date": "Due date"}}
+     ],
+     "important_facts": ["list of general facts"],
+     "topics_discussed": ["list of topics"],
+     "ai_notes": ["list of style/behavioral observations"]
+  }},
+  "proposed_conflicts": [
+     {{
+        "key": "field path (e.g. profile.name, preferences)",
+        "existing_value": "the existing value/text from memory",
+        "proposed_value": "the new conflicting value/text"
+     }}
+  ]
+}}
+
+Do NOT include any explanation, markdown code blocks, or preamble. Output raw JSON only."""
+
+
+MEMORY_STAGE2_QUALITY_PROMPT = """You are a senior memory quality auditor.
+Review the proposed raw memory updates and conflicts against the user's conversation context and current memory state. Your job is to filter out noise/duplicates, assign a source type, justify a confidence score, and output a clean JSON.
+
+Recent Conversation History:
+{recent_history}
+
+User Latest Message:
+"{user_message}"
+
+Current Memory State:
+{current_memory_json}
+
+Proposed Raw Updates/Conflicts (from Stage 1):
+{stage1_output}
+
+For every fact/update you validate, you MUST assign:
+1. "confidence": A score between 0.0 and 1.0:
+   - 1.0: Explicit direct user statements (e.g. "I work at Lex Digitals", "My name is Alex").
+   - 0.7 - 0.9: Clear inferences or statements with minor ambiguity (e.g. "I'm styling the page in React" -> prefers React).
+   - 0.4 - 0.6: Vague or indirect statements (e.g. "We might use Node.js later").
+2. "source_type": One of:
+   - "user_explicit": Direct user profile or preference statement.
+   - "conversation": Inferred from regular chat discussion.
+   - "document": Extracted from uploaded client/workspace documents (not applicable here unless mentioned).
+   - "manual": Manually set (used for manual UI updates, not here).
+3. "reasoning": A brief, one-sentence justification explaining how the confidence score was derived based on the conversation text.
+4. "last_reinforced": Current date: {current_date}
+
+Format the output exactly as a JSON object:
+{{
+  "updates": {{
+     "profile": {{
+        "name": {{ "value": "...", "confidence": 1.0, "source_type": "user_explicit", "last_reinforced": "{current_date}", "reasoning": "..." }} (include only fields that actually changed/updated)
+     }},
+     "preferences": [
+        {{ "value": "...", "confidence": 0.8, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
+     ],
+     "clients": [
+        {{ "value": "...", "confidence": 0.9, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
+     ],
+     "projects": [
+        {{ "name": "...", "value": "...", "confidence": 0.85, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
+     ],
+     "deadlines": [
+        {{ "item": "...", "value": "...", "date": "...", "confidence": 0.9, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
+     ],
+     "important_facts": [
+        {{ "value": "...", "confidence": 0.85, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
+     ],
+     "topics_discussed": [
+        {{ "value": "...", "confidence": 0.8, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
+     ],
+     "ai_notes": [
+        {{ "value": "...", "confidence": 0.75, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
+     ]
+  }},
+  "conflicts": [
+     {{
+        "key": "field path",
+        "existing": {{ "value": "...", "confidence": ... }},
+        "new": {{ "value": "...", "confidence": ..., "source_type": "...", "last_reinforced": "{current_date}", "reasoning": "..." }}
+     }}
+  ]
+}}
+
+Ensure only clean, validated updates are returned. Do NOT return items that are already identical in memory.
+Do NOT include any markdown code wrappers or preamble. Output raw JSON only."""
 
 
 CRITIQUE_PROMPT_TEMPLATE = """You are Oculus, an expert editor and critic.

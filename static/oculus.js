@@ -807,18 +807,28 @@ function renderBrain(mem) {
   renderBrainIntoEl(content, mem);
 }
 
-function getConfidenceBadgeHtml(score) {
+function getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced) {
   if (score === undefined || score === null) return '';
   let badgeClass = 'low';
   let badgeText = 'Low';
-  if (score >= 0.7) {
+  if (score >= 0.8) {
     badgeClass = 'high';
     badgeText = 'High';
-  } else if (score >= 0.4) {
+  } else if (score >= 0.65) {
     badgeClass = 'medium';
     badgeText = 'Medium';
   }
-  return `<span class="conf-badge conf-${badgeClass}" title="Confidence Score: ${score.toFixed(2)}">${badgeText}</span>`;
+  let tooltip = `Confidence Score: ${score.toFixed(2)}`;
+  if (sourceType) {
+    tooltip += `\nSource: ${sourceType}`;
+  }
+  if (lastReinforced) {
+    tooltip += `\nLast Reinforced: ${lastReinforced}`;
+  }
+  if (reasoning) {
+    tooltip += `\nReasoning: ${reasoning}`;
+  }
+  return `<span class="conf-badge conf-${badgeClass}" title="${escapeHtml(tooltip)}">${badgeText}</span>`;
 }
 
 function renderBrainIntoEl(content, mem) {
@@ -879,9 +889,11 @@ function renderBrainIntoEl(content, mem) {
   const getProfileFieldHtml = (field, label, type = "text") => {
     const fObj = profile[field] || {};
     const val = typeof fObj === 'object' ? (fObj.value || '') : fObj || '';
-    const score = typeof fObj === 'object' ? fObj.confidence : 1.0;
+    const score = typeof fObj === 'object' ? (fObj.confidence !== undefined ? fObj.confidence : 1.0) : 1.0;
     const reasoning = typeof fObj === 'object' ? fObj.reasoning : '';
-    const badge = getConfidenceBadgeHtml(score);
+    const sourceType = typeof fObj === 'object' ? fObj.source_type : 'manual';
+    const lastReinforced = typeof fObj === 'object' ? fObj.last_reinforced : '';
+    const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const overrideBtn = (score < 1.0 && val) ? `
       <button class="brain-trust-btn" onclick="overrideProfileConfidence('${field}')" title="Trust (Force 1.0) field value: ${escapeHtml(reasoning)}" style="margin-left: 2px;">👍</button>
     ` : '';
@@ -992,9 +1004,11 @@ function renderBrainListItems(key, lst) {
   if (!lst || lst.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
   return lst.map(item => {
     const val = typeof item === 'object' ? item.value : item;
-    const score = typeof item === 'object' ? item.confidence : 1.0;
+    const score = typeof item === 'object' ? (item.confidence !== undefined ? item.confidence : 1.0) : 1.0;
     const reasoning = typeof item === 'object' ? item.reasoning : '';
-    const badge = getConfidenceBadgeHtml(score);
+    const sourceType = typeof item === 'object' ? item.source_type : 'conversation';
+    const lastReinforced = typeof item === 'object' ? item.last_reinforced : '';
+    const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const escapedVal = escapeHtml(val);
     const escapedReasoning = escapeHtml(reasoning);
     
@@ -1021,9 +1035,11 @@ function renderBrainNotesItems(lst) {
   if (!lst || lst.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
   return lst.map(item => {
     const val = typeof item === 'object' ? item.value : item;
-    const score = typeof item === 'object' ? item.confidence : 1.0;
+    const score = typeof item === 'object' ? (item.confidence !== undefined ? item.confidence : 1.0) : 1.0;
     const reasoning = typeof item === 'object' ? item.reasoning : '';
-    const badge = getConfidenceBadgeHtml(score);
+    const sourceType = typeof item === 'object' ? item.source_type : 'conversation';
+    const lastReinforced = typeof item === 'object' ? item.last_reinforced : '';
+    const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const escapedVal = escapeHtml(val);
     const escapedReasoning = escapeHtml(reasoning);
     
@@ -1052,7 +1068,9 @@ function renderBrainProjectItems(projects) {
     const name = proj.name || proj.value || '';
     const score = proj.confidence !== undefined ? proj.confidence : 0.85;
     const reasoning = proj.reasoning || '';
-    const badge = getConfidenceBadgeHtml(score);
+    const sourceType = proj.source_type || 'conversation';
+    const lastReinforced = proj.last_reinforced || '';
+    const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const escapedName = escapeHtml(name);
     
     const overrideBtn = score < 1.0 ? `
@@ -1083,7 +1101,9 @@ function renderBrainDeadlineItems(deadlines) {
     const item = dl.item || dl.value || '';
     const score = dl.confidence !== undefined ? dl.confidence : 0.85;
     const reasoning = dl.reasoning || '';
-    const badge = getConfidenceBadgeHtml(score);
+    const sourceType = dl.source_type || 'conversation';
+    const lastReinforced = dl.last_reinforced || '';
+    const badge = getConfidenceBadgeHtml(score, sourceType, reasoning, lastReinforced);
     const escapedItem = escapeHtml(item);
     
     const overrideBtn = score < 1.0 ? `

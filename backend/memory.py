@@ -7,7 +7,7 @@ from config import Config
 from backend.extensions import supabase
 from backend.utils import is_ad_content, _add_unique
 from backend.models import query_openrouter_extraction
-from backend.prompts import MEMORY_CONFIDENCE_EXTRACTION_PROMPT, MEMORY_CONSOLIDATION_PROMPT_TEMPLATE
+from backend.prompts import MEMORY_CONSOLIDATION_PROMPT_TEMPLATE
 from backend.auth import login_required, current_user_id
 
 memory_bp = Blueprint("memory", __name__)
@@ -43,6 +43,8 @@ def normalize_fact(item, default_confidence=0.85, default_reasoning="Legacy memo
         return {
             "value": item,
             "confidence": default_confidence,
+            "source_type": "conversation",
+            "last_reinforced": now_date,
             "reasoning": default_reasoning,
             "added": now_date,
             "last_seen": now_date
@@ -58,9 +60,15 @@ def normalize_fact(item, default_confidence=0.85, default_reasoning="Legacy memo
             except Exception:
                 conf = default_confidence
         
+        source = item.get("source_type")
+        if not source:
+            source = "user_explicit" if conf >= 1.0 else "conversation"
+
         res = {
             "value": val,
             "confidence": conf,
+            "source_type": source,
+            "last_reinforced": item.get("last_reinforced") or item.get("last_seen") or item.get("added") or now_date,
             "reasoning": item.get("reasoning") or default_reasoning,
             "added": item.get("added") or now_date,
             "last_seen": item.get("last_seen") or item.get("added") or now_date
@@ -103,6 +111,7 @@ def apply_memory_decay(mem: dict) -> bool:
     return changed
 
 def load_memory(user_id: str) -> dict:
+    now_date = datetime.now().strftime("%Y-%m-%d")
     try:
         res = supabase.table("oculus_memory").select("memory").eq("user_id", user_id).execute()
         mem = res.data[0].get("memory", {}) if res.data else {}
@@ -120,13 +129,19 @@ def load_memory(user_id: str) -> dict:
     for field in ["name", "role", "company", "location", "email", "phone"]:
         val = profile.get(field)
         if val is None:
-            profile[field] = {"value": "", "confidence": 1.0, "reasoning": "Unspecified"}
+            profile[field] = {"value": "", "confidence": 1.0, "source_type": "manual", "last_reinforced": now_date, "reasoning": "Unspecified"}
         elif isinstance(val, str):
-            profile[field] = {"value": val, "confidence": 1.0, "reasoning": "Legacy profile item"}
+            profile[field] = {"value": val, "confidence": 1.0, "source_type": "manual", "last_reinforced": now_date, "reasoning": "Legacy profile item"}
         elif isinstance(val, dict):
+            conf = val.get("confidence") if val.get("confidence") is not None else 1.0
+            source = val.get("source_type")
+            if not source:
+                source = "user_explicit" if conf >= 1.0 else "conversation"
             profile[field] = {
                 "value": val.get("value") or "",
-                "confidence": val.get("confidence") if val.get("confidence") is not None else 1.0,
+                "confidence": conf,
+                "source_type": source,
+                "last_reinforced": val.get("last_reinforced") or val.get("last_seen") or now_date,
                 "reasoning": val.get("reasoning") or "Saved profile item"
             }
 
@@ -212,6 +227,7 @@ def load_memory(user_id: str) -> dict:
 
 def save_memory(user_id: str, mem: dict):
     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now_date = datetime.now().strftime("%Y-%m-%d")
     mem["last_seen"] = now
     if not mem.get("first_seen"):
         mem["first_seen"] = now
@@ -222,9 +238,13 @@ def save_memory(user_id: str, mem: dict):
     for field in ["name", "role", "company", "location", "email", "phone"]:
         val = profile.get(field)
         if isinstance(val, str):
-            profile[field] = {"value": val, "confidence": 1.0, "reasoning": "Saved profile item"}
-        elif isinstance(val, dict) and "value" not in val:
-            profile[field] = {"value": "", "confidence": 1.0, "reasoning": "Unspecified"}
+            profile[field] = {"value": val, "confidence": 1.0, "source_type": "manual", "last_reinforced": now_date, "reasoning": "Saved profile item"}
+        elif isinstance(val, dict):
+            if "value" not in val:
+                profile[field] = {"value": "", "confidence": 1.0, "source_type": "manual", "last_reinforced": now_date, "reasoning": "Unspecified"}
+            else:
+                val.setdefault("source_type", "user_explicit" if val.get("confidence", 1.0) >= 1.0 else "conversation")
+                val.setdefault("last_reinforced", now_date)
 
     # Normalize list fields
     list_keys = ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]
@@ -240,9 +260,10 @@ def save_memory(user_id: str, mem: dict):
     except Exception as e:
         print("Memory save error:", e)
 
-def add_profile_field_with_conflict_check(mem: dict, field: str, new_val: str, confidence: float, reasoning: str) -> bool:
+def add_profile_field_with_conflict_check(mem: dict, field: str, new_val: str, confidence: float, reasoning: str, source_type: str = "conversation", last_reinforced: str = None) -> bool:
     """Safely updates a profile field or registers a conflict if it contradicts the existing value."""
     now_date = datetime.now().strftime("%Y-%m-%d")
+    reinforced_date = last_reinforced or now_date
     old_obj = mem["profile"].get(field) or {}
     old_val = (old_obj.get("value") if isinstance(old_obj, dict) else old_obj) or ""
     
@@ -253,11 +274,15 @@ def add_profile_field_with_conflict_check(mem: dict, field: str, new_val: str, c
             "existing": {
                 "value": old_val,
                 "confidence": old_obj.get("confidence", 1.0) if isinstance(old_obj, dict) else 1.0,
+                "source_type": old_obj.get("source_type", "manual") if isinstance(old_obj, dict) else "manual",
+                "last_reinforced": old_obj.get("last_reinforced", now_date) if isinstance(old_obj, dict) else now_date,
                 "reasoning": old_obj.get("reasoning", "Existing profile item") if isinstance(old_obj, dict) else "Existing profile item"
             },
             "new": {
                 "value": new_val,
                 "confidence": confidence,
+                "source_type": source_type,
+                "last_reinforced": reinforced_date,
                 "reasoning": reasoning
             },
             "detected_at": now_date
@@ -270,6 +295,8 @@ def add_profile_field_with_conflict_check(mem: dict, field: str, new_val: str, c
         mem["profile"][field] = {
             "value": new_val,
             "confidence": confidence,
+            "source_type": source_type,
+            "last_reinforced": reinforced_date,
             "reasoning": reasoning
         }
         return True
@@ -461,7 +488,10 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                 
             confidence = new_obj.get("confidence") if isinstance(new_obj, dict) and new_obj.get("confidence") is not None else 0.85
             reasoning = new_obj.get("reasoning") if isinstance(new_obj, dict) else "Inferred from discussion"
-            if add_profile_field_with_conflict_check(current_memory, field, new_val, confidence, reasoning):
+            source_type = new_obj.get("source_type") if isinstance(new_obj, dict) else "conversation"
+            last_reinforced = new_obj.get("last_reinforced") if isinstance(new_obj, dict) and new_obj.get("last_reinforced") else now_date
+            
+            if add_profile_field_with_conflict_check(current_memory, field, new_val, confidence, reasoning, source_type, last_reinforced):
                 changed = True
 
     # Helper for standard lists: preferences, clients, important_facts, ai_notes, topics_discussed
@@ -480,20 +510,28 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                 continue
                 
             existing_item = next((i for i in current_memory.get(key, []) if str(i.get("value", "")).lower() == val.lower()), None)
+            proposed_conf = item.get("confidence") if isinstance(item, dict) and item.get("confidence") is not None else 0.85
+            proposed_reasoning = item.get("reasoning") if isinstance(item, dict) else "Inferred from discussion"
+            proposed_source = item.get("source_type") if isinstance(item, dict) else "conversation"
+            proposed_reinforced = item.get("last_reinforced") if isinstance(item, dict) and item.get("last_reinforced") else now_date
+
             if existing_item:
                 # Reinforce
                 old_conf = existing_item.get("confidence", 0.85)
-                new_conf = min(1.0, old_conf + 0.15)
-                if new_conf != old_conf:
-                    existing_item["confidence"] = new_conf
-                    existing_item["reasoning"] = f"Reinforced by discussion."
-                    existing_item["last_seen"] = now_date
-                    changed = True
+                new_conf = min(1.0, max(old_conf, proposed_conf) + 0.1)
+                existing_item["confidence"] = round(new_conf, 3)
+                existing_item["reasoning"] = f"Reinforced. {proposed_reasoning}"
+                existing_item["source_type"] = proposed_source
+                existing_item["last_reinforced"] = proposed_reinforced
+                existing_item["last_seen"] = now_date
+                changed = True
             else:
                 current_memory[key].append({
                     "value": val,
-                    "confidence": item.get("confidence") if isinstance(item, dict) and item.get("confidence") is not None else 0.85,
-                    "reasoning": item.get("reasoning") if isinstance(item, dict) else "Inferred from discussion",
+                    "confidence": proposed_conf,
+                    "source_type": proposed_source,
+                    "last_reinforced": proposed_reinforced,
+                    "reasoning": proposed_reasoning,
                     "added": now_date,
                     "last_seen": now_date
                 })
@@ -517,20 +555,28 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                 continue
                 
             existing = next((p for p in current_memory["projects"] if str(p.get("name", "")).lower() == name.lower()), None)
+            proposed_conf = proj.get("confidence") if isinstance(proj, dict) and proj.get("confidence") is not None else 0.85
+            proposed_reasoning = proj.get("reasoning") if isinstance(proj, dict) else "Inferred from discussion"
+            proposed_source = proj.get("source_type") if isinstance(proj, dict) else "conversation"
+            proposed_reinforced = proj.get("last_reinforced") if isinstance(proj, dict) and proj.get("last_reinforced") else now_date
+
             if existing:
                 old_conf = existing.get("confidence", 0.85)
-                new_conf = min(1.0, old_conf + 0.15)
-                if new_conf != old_conf:
-                    existing["confidence"] = new_conf
-                    existing["reasoning"] = "Reinforced by discussion."
-                    existing["last_seen"] = now_date
-                    changed = True
+                new_conf = min(1.0, max(old_conf, proposed_conf) + 0.1)
+                existing["confidence"] = round(new_conf, 3)
+                existing["reasoning"] = f"Reinforced. {proposed_reasoning}"
+                existing["source_type"] = proposed_source
+                existing["last_reinforced"] = proposed_reinforced
+                existing["last_seen"] = now_date
+                changed = True
             else:
                 current_memory["projects"].append({
                     "name": name,
                     "value": name,
-                    "confidence": proj.get("confidence") if isinstance(proj, dict) and proj.get("confidence") is not None else 0.85,
-                    "reasoning": proj.get("reasoning") if isinstance(proj, dict) else "Inferred from discussion",
+                    "confidence": proposed_conf,
+                    "source_type": proposed_source,
+                    "last_reinforced": proposed_reinforced,
+                    "reasoning": proposed_reasoning,
                     "added": now_date,
                     "last_seen": now_date
                 })
@@ -555,28 +601,38 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                 continue
                 
             existing = next((d for d in current_memory["deadlines"] if str(d.get("item", "")).lower() == item_name.lower()), None)
+            proposed_conf = dl.get("confidence") if isinstance(dl, dict) and dl.get("confidence") is not None else 0.85
+            proposed_reasoning = dl.get("reasoning") if isinstance(dl, dict) else "Inferred from discussion"
+            proposed_source = dl.get("source_type") if isinstance(dl, dict) else "conversation"
+            proposed_reinforced = dl.get("last_reinforced") if isinstance(dl, dict) and dl.get("last_reinforced") else now_date
+
             if existing:
                 if date_val != "Not specified" and existing.get("date") != date_val:
                     existing["date"] = date_val
-                    existing["confidence"] = min(1.0, existing.get("confidence", 0.85) + 0.1)
-                    existing["reasoning"] = "Deadline date updated."
+                    existing["confidence"] = min(1.0, max(existing.get("confidence", 0.85), proposed_conf) + 0.1)
+                    existing["reasoning"] = f"Deadline date updated. {proposed_reasoning}"
+                    existing["source_type"] = proposed_source
+                    existing["last_reinforced"] = proposed_reinforced
                     existing["last_seen"] = now_date
                     changed = True
                 else:
                     old_conf = existing.get("confidence", 0.85)
-                    new_conf = min(1.0, old_conf + 0.1)
-                    if new_conf != old_conf:
-                        existing["confidence"] = new_conf
-                        existing["reasoning"] = "Reinforced by discussion."
-                        existing["last_seen"] = now_date
-                        changed = True
+                    new_conf = min(1.0, max(old_conf, proposed_conf) + 0.1)
+                    existing["confidence"] = round(new_conf, 3)
+                    existing["reasoning"] = f"Reinforced. {proposed_reasoning}"
+                    existing["source_type"] = proposed_source
+                    existing["last_reinforced"] = proposed_reinforced
+                    existing["last_seen"] = now_date
+                    changed = True
             else:
                 current_memory["deadlines"].append({
                     "item": item_name,
                     "value": item_name,
                     "date": date_val,
-                    "confidence": dl.get("confidence") if isinstance(dl, dict) and dl.get("confidence") is not None else 0.85,
-                    "reasoning": dl.get("reasoning") if isinstance(dl, dict) else "Inferred from discussion",
+                    "confidence": proposed_conf,
+                    "source_type": proposed_source,
+                    "last_reinforced": proposed_reinforced,
+                    "reasoning": proposed_reasoning,
                     "added": now_date,
                     "last_seen": now_date
                 })
@@ -587,14 +643,12 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
     return changed
 
 def extract_memory_llm(user_message: str, current_memory: dict, history: list = None, preferred_model: str = None) -> bool:
-    """Uses LLM to extract structured memory with confidence, falling back to regex on failure."""
+    """Uses a two-stage LLM pipeline to extract, validate, and score background memories with quality audit."""
     if is_ad_content(user_message):
         return False
 
     recent_turns = []
     if history:
-        # Take the last 6 turns (excluding the current latest user message if already appended)
-        # to provide context without overloading
         for msg in history[-6:]:
             role = "User" if msg.get("role") == "user" else "Oculus"
             text = msg.get("text") or msg.get("text_content") or ""
@@ -602,16 +656,34 @@ def extract_memory_llm(user_message: str, current_memory: dict, history: list = 
                 recent_turns.append(f"{role}: {text}")
     
     recent_history_str = "\n".join(recent_turns) if recent_turns else "No recent conversation history."
-
-    prompt = MEMORY_CONFIDENCE_EXTRACTION_PROMPT.format(
-        current_memory_json=json.dumps(current_memory, indent=2),
-        recent_history=recent_history_str,
-        user_message=user_message
-    )
+    current_date = datetime.now().strftime("%Y-%m-%d")
 
     try:
-        raw_res = query_openrouter_extraction(prompt, preferred_model=preferred_model)
-        cleaned = raw_res.strip()
+        from backend.prompts import MEMORY_STAGE1_EXTRACTION_PROMPT, MEMORY_STAGE2_QUALITY_PROMPT
+        
+        # Stage 1: Raw Extraction
+        prompt1 = MEMORY_STAGE1_EXTRACTION_PROMPT.format(
+            current_memory_json=json.dumps(current_memory, indent=2),
+            recent_history=recent_history_str,
+            user_message=user_message
+        )
+        
+        print("[Memory Extraction] Running Stage 1: Raw Extraction...")
+        stage1_res = query_openrouter_extraction(prompt1, preferred_model=preferred_model)
+        
+        # Stage 2: Quality Review & Scoring
+        prompt2 = MEMORY_STAGE2_QUALITY_PROMPT.format(
+            current_memory_json=json.dumps(current_memory, indent=2),
+            recent_history=recent_history_str,
+            user_message=user_message,
+            stage1_output=stage1_res,
+            current_date=current_date
+        )
+        
+        print("[Memory Extraction] Running Stage 2: Quality Review & Scoring...")
+        stage2_res = query_openrouter_extraction(prompt2, preferred_model=preferred_model)
+        
+        cleaned = stage2_res.strip()
         if cleaned.startswith("```"):
             cleaned = re.sub(r"^```(?:json)?\n", "", cleaned)
             cleaned = re.sub(r"\n```$", "", cleaned)
@@ -629,16 +701,23 @@ def extract_memory_llm(user_message: str, current_memory: dict, history: list = 
             if conflicts and isinstance(conflicts, list):
                 existing_conflicts = current_memory.setdefault("conflicts", [])
                 for conflict in conflicts:
-                    new_val = conflict.get("new", {}).get("value")
-                    dup = any(c.get("new", {}).get("value") == new_val and c.get("key") == conflict.get("key") for c in existing_conflicts)
+                    new_item = conflict.get("new", {})
+                    new_val = new_item.get("value") or new_item.get("name") or new_item.get("item")
+                    key = conflict.get("key")
+                    
+                    dup = any(
+                        (c.get("new", {}).get("value") or c.get("new", {}).get("name") or c.get("new", {}).get("item")) == new_val 
+                        and c.get("key") == key 
+                        for c in existing_conflicts
+                    )
                     if not dup:
                         conflict["id"] = str(uuid.uuid4())[:8]
-                        conflict["detected_at"] = datetime.now().strftime("%Y-%m-%d")
+                        conflict["detected_at"] = current_date
                         existing_conflicts.append(conflict)
                         changed = True
             return changed
     except Exception as e:
-        print(f"[Memory Extraction Error] LLM extraction failed: {e}. Falling back to Regex extraction.")
+        print(f"[Memory Extraction Error] Two-stage LLM extraction failed: {e}. Falling back to Regex extraction.")
         return extract_memory_regex(user_message, current_memory)
     return False
 
