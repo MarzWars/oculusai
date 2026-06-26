@@ -399,6 +399,16 @@ function insertAiBubble(rawText) {
     }
   }
 
+  // Refresh memory panels in the background
+  setTimeout(async () => {
+    try {
+      if (typeof loadBrainMemory === 'function') await loadBrainMemory();
+      if (typeof loadNotesMemory === 'function') await loadNotesMemory();
+    } catch (e) {
+      console.warn("[Memory Auto-Refresh] Failed to auto-refresh memory:", e);
+    }
+  }, 1500);
+
   scrollToBottom();
 }
 
@@ -541,6 +551,17 @@ async function sendMessage() {
           bubble.insertAdjacentHTML('beforeend', feedbackHtml);
         }
       }
+
+      // Refresh memory panels in the background
+      setTimeout(async () => {
+        try {
+          if (typeof loadBrainMemory === 'function') await loadBrainMemory();
+          if (typeof loadNotesMemory === 'function') await loadNotesMemory();
+        } catch (e) {
+          console.warn("[Memory Auto-Refresh] Failed to auto-refresh memory:", e);
+        }
+      }, 1500);
+
       scrollToBottom();
     }
 

@@ -308,6 +308,43 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
     changed = False
     t = text.strip()
 
+    # Check for explicit style training inputs prefixed with style/behavior notes
+    for prefix in ["style preference:", "style note:", "behavior note:"]:
+        if t.lower().startswith(prefix):
+            style_content = t[len(prefix):].strip()
+            if style_content:
+                category = "tone"
+                lower_sc = style_content.lower()
+                if "format" in lower_sc or "bullet" in lower_sc or "list" in lower_sc or "paragraph" in lower_sc or "spacing" in lower_sc:
+                    category = "formatting"
+                elif "avoid" in lower_sc or "don't" in lower_sc or "dont" in lower_sc or "never" in lower_sc or "stop" in lower_sc:
+                    category = "forbidden"
+                elif "word" in lower_sc or "spelling" in lower_sc or "phrase" in lower_sc or "term" in lower_sc:
+                    category = "vocabulary"
+                elif "client" in lower_sc or "for " in lower_sc:
+                    category = "client_specific"
+                
+                duplicate = False
+                for note in mem.setdefault("ai_notes", []):
+                    note_val = note.get("value") if isinstance(note, dict) else note
+                    if note_val and str(note_val).lower() == style_content.lower():
+                        duplicate = True
+                        break
+                
+                if not duplicate:
+                    mem["ai_notes"].append({
+                        "value": style_content,
+                        "category": category,
+                        "confidence": 1.0,
+                        "source_type": "user_explicit",
+                        "last_reinforced": datetime.now().strftime("%Y-%m-%d"),
+                        "reasoning": "Explicit style training command prefix detected",
+                        "added": datetime.now().strftime("%Y-%m-%d"),
+                        "last_seen": datetime.now().strftime("%Y-%m-%d")
+                    })
+                    changed = True
+            return changed
+
     for pat in [
         r"(?:my name is|i(?:'m| am) called|call me|i go by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
         r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+here[,.]",
