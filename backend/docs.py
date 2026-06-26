@@ -153,6 +153,10 @@ def list_generated_docs():
     """
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
 
     q       = (request.args.get("q") or "").strip().lower()
     dtype   = (request.args.get("type") or "").strip().lower()
@@ -198,6 +202,10 @@ def download_generated_doc(doc_id):
     """
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
 
     try:
         res = supabase.table("oculus_generated_docs").select("*").eq("id", doc_id).execute()
@@ -206,8 +214,8 @@ def download_generated_doc(doc_id):
 
         doc = res.data[0]
 
-        # Security: ensure the doc belongs to this user's workspace
-        if doc.get("workspace_id") != wid or doc.get("user_id") != uid:
+        # Security: ensure the doc belongs to this user
+        if doc.get("user_id") != uid:
             return jsonify({"error": "Access denied"}), 403
 
         download_url = doc.get("download_url", "")
@@ -229,6 +237,10 @@ def refresh_doc_url(doc_id):
     """
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
 
     try:
         res = supabase.table("oculus_generated_docs").select("*").eq("id", doc_id).execute()
@@ -236,7 +248,7 @@ def refresh_doc_url(doc_id):
             return jsonify({"error": "Document not found"}), 404
 
         doc = res.data[0]
-        if doc.get("workspace_id") != wid or doc.get("user_id") != uid:
+        if doc.get("user_id") != uid:
             return jsonify({"error": "Access denied"}), 403
 
         storage_path = doc.get("storage_path", "")

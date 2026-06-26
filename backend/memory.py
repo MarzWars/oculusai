@@ -586,13 +586,26 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
 
     return changed
 
-def extract_memory_llm(user_message: str, current_memory: dict, preferred_model: str = None) -> bool:
+def extract_memory_llm(user_message: str, current_memory: dict, history: list = None, preferred_model: str = None) -> bool:
     """Uses LLM to extract structured memory with confidence, falling back to regex on failure."""
     if is_ad_content(user_message):
         return False
 
+    recent_turns = []
+    if history:
+        # Take the last 6 turns (excluding the current latest user message if already appended)
+        # to provide context without overloading
+        for msg in history[-6:]:
+            role = "User" if msg.get("role") == "user" else "Oculus"
+            text = msg.get("text") or msg.get("text_content") or ""
+            if text:
+                recent_turns.append(f"{role}: {text}")
+    
+    recent_history_str = "\n".join(recent_turns) if recent_turns else "No recent conversation history."
+
     prompt = MEMORY_CONFIDENCE_EXTRACTION_PROMPT.format(
         current_memory_json=json.dumps(current_memory, indent=2),
+        recent_history=recent_history_str,
         user_message=user_message
     )
 
@@ -652,11 +665,11 @@ def consolidate_memory_llm(current_memory: dict, preferred_model: str = None) ->
         print(f"[Memory Consolidation Error] LLM consolidation failed: {e}")
     return current_memory
 
-def extract_memory_async(user_id: str, user_message: str, preferred_model: str = None):
+def extract_memory_async(user_id: str, user_message: str, history: list = None, preferred_model: str = None):
     """Background task to run LLM memory extraction, deconfliction, and save to Supabase."""
     try:
         mem = load_memory(user_id)
-        changed = extract_memory_llm(user_message, mem, preferred_model=preferred_model)
+        changed = extract_memory_llm(user_message, mem, history=history, preferred_model=preferred_model)
         
         should_consolidate = changed and (
             mem.get("message_count", 0) % 5 == 0 or

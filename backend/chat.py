@@ -376,6 +376,10 @@ def set_model():
 def clear():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     try:
         supabase.table("oculus_chat").upsert({
             "user_id":  wid,
@@ -392,6 +396,10 @@ def clear():
 def ask():
     uid          = current_user_id()
     wid          = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     data         = request.get_json()
     user_message = (data.get("message") or "").strip()
     if not user_message:
@@ -454,19 +462,38 @@ def ask():
                     print("[Chat Reflection Error] Draft generation failed, falling back:", ex)
 
             output_chunks = []
+            accumulated_text = ""
+            yielded_index = 0
             for chunk in query_openrouter_stream(stream_prompt, preferred_model=preferred_model):
                 output_chunks.append(chunk)
-                yield chunk
+                accumulated_text += chunk
+                if "</think>" in accumulated_text:
+                    parts = accumulated_text.split("</think>", 1)
+                    final_part = parts[1]
+                    to_yield = final_part[yielded_index:]
+                    if to_yield:
+                        yield to_yield
+                        yielded_index += len(to_yield)
+                elif "<think>" not in accumulated_text:
+                    to_yield = accumulated_text[yielded_index:]
+                    if to_yield:
+                        yield to_yield
+                        yielded_index += len(to_yield)
             
             full_text = "".join(output_chunks)
+            clean_text = full_text
+            if "</think>" in clean_text:
+                clean_text = clean_text.split("</think>", 1)[1].strip()
+            elif "<think>" in clean_text:
+                clean_text = clean_text.split("<think>", 1)[1].strip()
 
             # 4. Stream and append action proposal at the end if detected
             if action_data and action_id:
                 proposal_block = f"\n\n[[ACTION_PROPOSAL]]: {json.dumps({'action_id': action_id, 'action_type': action_data['action_type'], 'arguments': action_data['arguments']})}"
-                full_text += proposal_block
+                clean_text += proposal_block
                 yield proposal_block
 
-            history.append({"role": "ai", "text": full_text.strip()})
+            history.append({"role": "ai", "text": clean_text.strip()})
             save_history(wid, history)
 
             # Persist action card to Supabase so it survives page refresh
@@ -484,7 +511,7 @@ def ask():
                 # Save the AI's full drafted content into the action's arguments
                 # so document generators can use it as the body (not just the brief user input)
                 try:
-                    ai_draft_text = full_text  # full text before the [[ACTION_PROPOSAL]] block
+                    ai_draft_text = clean_text  # full text before the [[ACTION_PROPOSAL]] block
                     # Strip the [[ACTION_PROPOSAL]] block if present
                     ap_idx = ai_draft_text.find("[[ACTION_PROPOSAL]]:")
                     if ap_idx != -1:
@@ -504,10 +531,10 @@ def ask():
                 args=(wid, history.copy())
             ).start()
 
-            # Run deep LLM extraction in background
+            # Run deep LLM extraction in background with conversation context
             threading.Thread(
                 target=extract_memory_async,
-                args=(uid, user_message, preferred_model)
+                args=(uid, user_message, history.copy(), preferred_model)
             ).start()
         except Exception as e:
             error = f"\n[Error: {str(e)}]"
@@ -530,6 +557,10 @@ def get_chat_state():
     """
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     messages     = load_history(wid)
     action_cards = load_action_cards(wid)
 

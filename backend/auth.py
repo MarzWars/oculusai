@@ -2,7 +2,13 @@ from functools import wraps
 from flask import Blueprint, session, redirect, request, render_template
 from backend.extensions import supabase
 from backend.utils import _esc
+
 auth_bp = Blueprint("auth", __name__)
+
+def get_auth_client():
+    from supabase import create_client
+    from config import Config
+    return create_client(Config.SUPABASE_URL, Config.SUPABASE_KEY)
 
 def login_required(f):
     """Decorator — redirects to /login if the user is not in session."""
@@ -38,7 +44,8 @@ def register():
             error = "Password must be at least 6 characters."
         else:
             try:
-                res = supabase.auth.sign_up({"email": email, "password": password})
+                auth_client = get_auth_client()
+                res = auth_client.auth.sign_up({"email": email, "password": password})
                 if res.user:
                     success = "Account created! You can now log in."
                 else:
@@ -64,7 +71,8 @@ def login():
             error = "Email and password are required."
         else:
             try:
-                res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+                auth_client = get_auth_client()
+                res = auth_client.auth.sign_in_with_password({"email": email, "password": password})
                 if res.user:
                     uid = str(res.user.id)
                     session["user_id"] = uid

@@ -40,6 +40,10 @@ def summarize_long_file(filename: str, content: str) -> str:
 def upload_file_api():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     if "files" not in request.files:
         return jsonify({"error": "No file part in the request"}), 400
         
@@ -147,6 +151,10 @@ def upload_file_api():
 def delete_uploaded_file_api():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     data = request.get_json() or {}
     filename = data.get("name")
     
@@ -167,6 +175,10 @@ def list_uploaded_files_api():
     """Return the current session's in-memory uploaded files list for the active workspace."""
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     cache = UPLOADED_FILES_CACHE.get(wid, [])
     files_list = [{"name": f["name"], "size": f["size"], "is_rag": f.get("is_rag", False)} for f in cache]
     return jsonify({"status": "ok", "files": files_list})
@@ -177,6 +189,10 @@ def list_uploaded_files_api():
 def save_sandbox_file_api():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     data = request.get_json() or {}
     filename = data.get("filename", "").strip()
     content = data.get("content", "")
@@ -206,6 +222,10 @@ def save_sandbox_file_api():
 def download_sandbox_file_api():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     file_path_param = request.args.get("path", "").strip()
     if not file_path_param:
         return jsonify({"error": "Path parameter is required"}), 400

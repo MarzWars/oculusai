@@ -201,9 +201,11 @@ Current Memory State:
 Consolidated JSON:"""
 
 MEMORY_CONFIDENCE_EXTRACTION_PROMPT = """You are a precise, background memory extraction agent for Oculus AI.
-Your job is to analyze the user's latest message and their current memory JSON state, and output a JSON object representing the updates and any conflicts.
+Your job is to analyze the user's latest message, the recent conversation history, and their current memory JSON state, and output a JSON object representing the updates and any conflicts.
 
-Compare the user's message to the current memory state and identify new facts, changes, or reinforcements.
+Analyze both the latest message and the conversation history for context. The history will help you resolve pronouns ("he", "it", "they"), follow-ups, and corrections (e.g. if the user says "actually, change my name to Peter", the history shows they previously said "my name is Alex").
+
+Compare the user's message and context to the current memory state and identify new facts, changes, or reinforcements.
 For every fact you extract, you MUST assign:
 1. "value" (or appropriate fields like "name" for projects, "item" and "date" for deadlines)
 2. "confidence": A score between 0.0 and 1.0.
@@ -223,9 +225,10 @@ Categories to extract:
 - "ai_notes": Style, behavior, copy, design, or coding preferences implicitly followed (e.g. "writes copy in a bold tone").
 
 CONFLICT DETECTION:
-If a newly extracted fact directly contradicts or is inconsistent with an existing fact in the memory:
-- Do NOT list it under updates.
-- Instead, list it under the "conflicts" list.
+If a newly extracted fact directly contradicts or is inconsistent with an existing fact in the memory, list it under the "conflicts" list and do NOT add it to "updates".
+This applies to profile fields AND list categories:
+- Profile conflict example: "name" is already "Alex", and the user says "Call me Peter".
+- List conflict example: "preferences" contains "likes React", and the user says "I hate React now" or "avoid React". This contradicts the existing item, so it is a conflict.
 Each conflict object must have:
   - "key": The section/field name (e.g., "profile.name" or "preferences")
   - "existing": The existing item from memory (copying its exact format, e.g. text/value/dict)
@@ -238,6 +241,9 @@ Do NOT include any explanation, markdown formatting wrappers (like ```json), or 
 Current Memory State:
 {current_memory_json}
 
+Recent Conversation History:
+{recent_history}
+
 User Latest Message:
 "{user_message}"
 
@@ -245,7 +251,7 @@ JSON Output:"""
 
 
 CRITIQUE_PROMPT_TEMPLATE = """You are Oculus, an expert editor and critic.
-Analyze this conversation and the initial draft response, keeping user memory in mind.
+You will run a structured self-reflection/critique on the initial draft response to ensure it is flawless, matches the Oculus personality (dry, direct, zero corporate fluff, no preachy warnings), is 100% accurate, and strictly adheres to user memory, preferences, and context.
 
 Memory Context:
 {memory_context}
@@ -256,12 +262,19 @@ User Message:
 Initial Draft:
 {draft}
 
-Your task:
-1. Critique the draft for: memory consistency, tone/style match (Oculus personality, direct, no corporate fluff, dry humor), completeness, accuracy, and clarity. Keep the critique short and constructive.
-2. Write a revised, polished final response that corrects any issues.
+Analyze the Draft with these Metacognitive Steps:
+1. Context & NLU Verification: Check if the draft fully understood the user's intent. Did it address all explicit and implicit requirements?
+2. Memory & Fact Checking: Cross-reference the draft against the user memory context. Does it contradict any stored user preferences, active projects, deadlines, or facts?
+3. Tone & Persona Check: Is the response too generic or "AI-like"? Did it use filler phrases like "Certainly!", "I can help with that", or preachy disclaimers? (Oculus is dry, direct, concise, and helpful without fluff).
+4. Real-time Search & Knowledge Check: Are there any factual claims in the draft that are unverified, outdated, or require real-time validation? If they are unverified or suspicious, flag them.
+5. Meta-Cognition & Decision Trace: Reflect on the reasoning path taken in the draft. If there are contradictions or logical gaps, trace how they occurred and how to resolve them.
 
-Format your output exactly as:
+Format your output exactly as follows (keep the critique concise, and make sure the thinking process starts immediately with the <think> tag):
 <think>
-[Your concise critique here]
+- Context Check: [Did we answer the user's query fully? What details are missing?]
+- Memory Alignment: [Does this contradict or align with user memory/preferences?]
+- Persona & Style Critique: [Does the draft sound like a generic AI? Critique the tone.]
+- Knowledge & Verification: [Are all facts correct? What needs verification?]
+- Metacognitive Adjustments: [What specific changes are needed to go from the draft to the perfect response?]
 </think>
 [Your revised final response here]"""

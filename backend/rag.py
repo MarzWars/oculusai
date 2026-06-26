@@ -409,6 +409,10 @@ rag_bp = Blueprint("rag", __name__)
 def list_documents():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     try:
         res = supabase.table("oculus_documents")\
             .select("*")\
@@ -424,6 +428,10 @@ def list_documents():
 def delete_document():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     data = request.get_json() or {}
     doc_id = data.get("document_id")
     if not doc_id:

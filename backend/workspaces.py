@@ -5,6 +5,20 @@ from backend.extensions import supabase
 
 workspaces_bp = Blueprint("workspaces", __name__)
 
+def verify_workspace_ownership(user_id: str, workspace_id: str) -> bool:
+    """Verifies that the workspace belongs to the given user."""
+    if not user_id or not workspace_id:
+        return False
+    # Backwards compatibility: default workspace matches user_id
+    if workspace_id == user_id:
+        return True
+    try:
+        res = supabase.table("oculus_workspaces").select("id").eq("user_id", user_id).eq("id", workspace_id).execute()
+        return len(res.data) > 0
+    except Exception as e:
+        print("[Workspaces] Error verifying ownership:", e)
+        return False
+
 def ensure_default_workspace(user_id: str):
     """Ensures a default workspace exists for the user.
     Uses user_id as workspace_id to preserve backwards compatibility with existing memory/chat logs.

@@ -136,6 +136,8 @@ def execute_action(action_id: str, user_id: str, workspace_id: str, overrides: d
             return {"status": "error", "message": "Action proposal not found."}
             
         action = res.data[0]
+        if action.get("user_id") != user_id:
+            return {"status": "error", "message": "Access denied to this action."}
         if action["status"] != "pending":
             return {"status": "error", "message": f"Action is already {action['status']}."}
             
@@ -187,6 +189,8 @@ def undo_action(action_id: str, user_id: str, workspace_id: str) -> dict:
             return {"status": "error", "message": "Action not found."}
             
         action = res.data[0]
+        if action.get("user_id") != user_id:
+            return {"status": "error", "message": "Access denied to this action."}
         if action["status"] != "executed":
             return {"status": "error", "message": f"Cannot undo action with status: {action['status']}"}
             
@@ -803,6 +807,10 @@ actions_bp = Blueprint("actions", __name__)
 def api_execute_action():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     data = request.get_json() or {}
     action_id = data.get("action_id")
     overrides = data.get("overrides")
@@ -818,10 +826,17 @@ def api_execute_action():
 @actions_bp.route("/api/actions/cancel", methods=["POST"])
 @login_required
 def api_cancel_action():
+    uid = current_user_id()
     data = request.get_json() or {}
     action_id = data.get("action_id")
     if not action_id:
         return jsonify({"error": "action_id is required"}), 400
+    
+    # Verify action ownership before cancelling
+    res = supabase.table("oculus_actions").select("user_id").eq("id", action_id).execute()
+    if not res.data or res.data[0].get("user_id") != uid:
+        return jsonify({"error": "Access denied"}), 403
+        
     result = cancel_action(action_id)
     if result["status"] == "error":
         return jsonify(result), 400
@@ -832,6 +847,10 @@ def api_cancel_action():
 def api_undo_action():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     data = request.get_json() or {}
     action_id = data.get("action_id")
     
@@ -848,6 +867,10 @@ def api_undo_action():
 def api_action_history():
     uid = current_user_id()
     wid = session.get("current_workspace_id", uid)
+    from backend.workspaces import verify_workspace_ownership
+    if not verify_workspace_ownership(uid, wid):
+        wid = uid
+        session["current_workspace_id"] = wid
     try:
         res = supabase.table("oculus_actions")\
             .select("*")\
@@ -863,9 +886,12 @@ def api_action_history():
 @actions_bp.route("/api/actions/status/<action_id>", methods=["GET"])
 @login_required
 def api_action_status(action_id):
+    uid = current_user_id()
     try:
         res = supabase.table("oculus_actions").select("*").eq("id", action_id).execute()
         if res.data:
+            if res.data[0].get("user_id") != uid:
+                return jsonify({"error": "Access denied"}), 403
             return jsonify({"status": "success", "action": res.data[0]})
         return jsonify({"error": "Action not found"}), 404
     except Exception as e:
