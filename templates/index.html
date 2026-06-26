@@ -33,19 +33,67 @@
         </div>
     </div>
 
-    <!-- ── Left Sidebar ── -->
-    <div class="left-sidebar" id="leftSidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-header-title">
-                <img src="/static/oculus_avatar.svg" width="18" height="18" alt="">
-                <strong>Settings</strong>
+    <!-- ── Sidebar Dock ── -->
+    <div class="sidebar-dock" id="sidebarDock">
+        <div class="dock-group top-group">
+            <div class="dock-logo">
+                <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
             </div>
-            <button class="sidebar-close-btn" onclick="toggleSidebar()" aria-label="Close">×</button>
+            <button class="dock-btn" onclick="togglePanel('models')" id="dock-btn-models" title="AI Models">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+                <span class="dock-tooltip">AI Models</span>
+            </button>
+            <button class="dock-btn" onclick="togglePanel('settings')" id="dock-btn-settings" title="Workspace Settings">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span class="dock-tooltip">Workspace Settings</span>
+            </button>
+            <button class="dock-btn" onclick="togglePanel('brain')" id="dock-btn-brain" title="Oculus Brain">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9.5 2.03a10.5 10.5 0 0 1 10.47 10.47c0 4.88-3.95 8.8-8.8 8.8a8.8 8.8 0 0 1-8.8-8.8C2.37 7.74 6 3.65 9.5 2.03z"/>
+                    <path d="M12 2.03v20"/>
+                </svg>
+                <span class="dock-tooltip">Oculus Brain</span>
+            </button>
         </div>
-        <div class="sidebar-body">
+        <div class="dock-group bottom-group">
+            <button class="dock-btn" onclick="togglePanel('notes')" id="dock-btn-notes" title="Style & Behavior Notes">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 20h9"/>
+                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+                </svg>
+                <span class="dock-tooltip">Style & Behavior Notes</span>
+            </button>
+            <button class="dock-btn" onclick="togglePanel('actions')" id="dock-btn-actions" title="Action Log">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                <span class="dock-tooltip">Action Log</span>
+            </button>
+            <button class="dock-btn" onclick="togglePanel('docs')" id="dock-btn-docs" title="Generated Documents">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                <span class="dock-tooltip">Generated Documents</span>
+            </button>
+        </div>
+    </div>
 
-            <!-- Model selector -->
-            <div>
+    <!-- ── Sliding Panel Drawer ── -->
+    <div class="sliding-panel" id="slidingPanel">
+        <div class="panel-header">
+            <h3 id="panelTitle">Oculus Brain</h3>
+            <button class="panel-close-btn" onclick="closePanel()">×</button>
+        </div>
+        <div class="panel-body">
+            <!-- 1. AI Models View -->
+            <div class="panel-view" id="view-models" style="display:none;">
                 <div class="sidebar-section-title">AI Model</div>
                 <div class="model-card-list" id="modelCardList">
                     {% for m in model_options %}
@@ -61,8 +109,8 @@
                 </div>
             </div>
 
-            <!-- Workspace Settings Toggle -->
-            <div style="margin-top: 16px; margin-bottom: 8px;">
+            <!-- 2. Workspace Settings View -->
+            <div class="panel-view" id="view-settings" style="display:none;">
                 <div class="sidebar-section-title">Workspace Settings</div>
                 <div class="settings-toggle-card" style="background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; transition: border-color 0.2s ease;">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
@@ -78,25 +126,32 @@
                 </div>
             </div>
 
-            <!-- Brain / Memory -->
-            <div>
+            <!-- 3. Oculus Brain View -->
+            <div class="panel-view" id="view-brain" style="display:none;">
                 <div class="sidebar-section-title">🧠 Oculus Brain</div>
-                <div class="brain-drawer-content" id="brainDrawerContent"
-                    style="padding:0; max-height:none; flex:none;">
+                <div class="brain-drawer-content" id="brainDrawerContent" style="padding:0; max-height:none; flex:none;">
                     <div class="brain-loading">Loading brain state…</div>
                 </div>
             </div>
 
-            <!-- Actions History Log -->
-            <div style="margin-top: 20px;">
+            <!-- 4. Style & Behavior Notes View -->
+            <div class="panel-view" id="view-notes" style="display:none;">
+                <div class="sidebar-section-title">🧠 Style & Behavior Notes</div>
+                <div class="brain-notes-content" id="brainNotesContent" style="padding:0; max-height:none; flex:none;">
+                    <div class="brain-loading">Loading notes…</div>
+                </div>
+            </div>
+
+            <!-- 5. Action Log View -->
+            <div class="panel-view" id="view-actions" style="display:none;">
                 <div class="sidebar-section-title">⚡ Action Log</div>
                 <div class="actions-log-content" id="actionsLogContent" style="padding: 10px 0;">
                     <div class="actions-loading" style="font-size:12.5px; color:var(--text-muted);">Loading actions history…</div>
                 </div>
             </div>
 
-            <!-- Generated Documents Browser -->
-            <div style="margin-top: 20px;">
+            <!-- 6. Generated Documents View -->
+            <div class="panel-view" id="view-docs" style="display:none;">
                 <div class="sidebar-section-title">📁 Generated Documents</div>
                 <div style="display:flex; gap:6px; margin-bottom:8px;">
                     <input
@@ -115,10 +170,10 @@
                     <div style="font-size:12px; color:var(--text-muted); padding:8px 0;">Loading…</div>
                 </div>
             </div>
-
         </div>
     </div>
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closePanel()"></div>
     
     <!-- ── Right Sidebar (Workspace Documents Browser) ── -->
     <div class="right-sidebar" id="rightSidebar">
@@ -150,10 +205,10 @@
 
     <!-- ── App Shell ── -->
     <div class="app-shell">
-
+        <div class="main-chat-container">
         <header>
             <div style="display:flex;align-items:center;gap:10px;">
-                <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Settings &amp; Brain">
+                <button class="sidebar-toggle-btn" onclick="togglePanel('brain')" title="Oculus Brain">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                         stroke-linejoin="round">
                         <line x1="3" y1="6" x2="21" y2="6" />
@@ -196,7 +251,7 @@
 
             <div class="header-actions">
                 <!-- Active model pill — clicking opens sidebar -->
-                <button class="active-model-pill" onclick="toggleSidebar()" title="Switch model" id="activeModelPill">
+                <button class="active-model-pill" onclick="togglePanel('models')" title="Switch model" id="activeModelPill">
                     <span class="dot"></span>
                     <span id="activeModelName">{{ active_name }}</span>
                 </button>
@@ -297,8 +352,7 @@
                 </button>
             </div>
             <div class="input-hint">Oculus can make mistakes. Verify important info.</div>
-        </div>
-
+        </div> <!-- end of main-chat-container -->
     </div>
 
     <!-- Legacy Brain Drawer (kept for JS compat, hidden) -->

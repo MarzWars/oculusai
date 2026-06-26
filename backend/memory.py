@@ -240,6 +240,41 @@ def save_memory(user_id: str, mem: dict):
     except Exception as e:
         print("Memory save error:", e)
 
+def add_profile_field_with_conflict_check(mem: dict, field: str, new_val: str, confidence: float, reasoning: str) -> bool:
+    """Safely updates a profile field or registers a conflict if it contradicts the existing value."""
+    now_date = datetime.now().strftime("%Y-%m-%d")
+    old_obj = mem["profile"].get(field) or {}
+    old_val = (old_obj.get("value") if isinstance(old_obj, dict) else old_obj) or ""
+    
+    if old_val and old_val.lower() != new_val.lower():
+        conflict_obj = {
+            "id": str(uuid.uuid4())[:8],
+            "key": f"profile.{field}",
+            "existing": {
+                "value": old_val,
+                "confidence": old_obj.get("confidence", 1.0) if isinstance(old_obj, dict) else 1.0,
+                "reasoning": old_obj.get("reasoning", "Existing profile item") if isinstance(old_obj, dict) else "Existing profile item"
+            },
+            "new": {
+                "value": new_val,
+                "confidence": confidence,
+                "reasoning": reasoning
+            },
+            "detected_at": now_date
+        }
+        existing_conflicts = mem.setdefault("conflicts", [])
+        if not any(c.get("key") == f"profile.{field}" and c.get("new", {}).get("value").lower() == new_val.lower() for c in existing_conflicts):
+            existing_conflicts.append(conflict_obj)
+            return True
+    elif old_val != new_val:
+        mem["profile"][field] = {
+            "value": new_val,
+            "confidence": confidence,
+            "reasoning": reasoning
+        }
+        return True
+    return False
+
 def extract_memory_regex(text: str, mem: dict) -> bool:
     if is_ad_content(text):
         return False
@@ -254,8 +289,8 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         if m:
             candidate = m.group(1).strip()
             if candidate.lower() not in {"the", "a", "an", "this", "that", "here"}:
-                mem["profile"]["name"] = {"value": candidate, "confidence": 1.0, "reasoning": "Direct statement."}
-                changed = True
+                if add_profile_field_with_conflict_check(mem, "name", candidate, 1.0, "Direct statement."):
+                    changed = True
                 break
 
     for pat in [
@@ -264,8 +299,8 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
     ]:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
-            mem["profile"]["company"] = {"value": m.group(1).strip()[:80], "confidence": 1.0, "reasoning": "Direct statement."}
-            changed = True
+            if add_profile_field_with_conflict_check(mem, "company", m.group(1).strip()[:80], 1.0, "Direct statement."):
+                changed = True
             break
 
     for pat in [
@@ -276,8 +311,8 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         if m:
             role = m.group(1).strip()
             if len(role.split()) <= 6:
-                mem["profile"]["role"] = {"value": role, "confidence": 1.0, "reasoning": "Direct statement."}
-                changed = True
+                if add_profile_field_with_conflict_check(mem, "role", role, 1.0, "Direct statement."):
+                    changed = True
                 break
 
     m = re.search(
@@ -285,18 +320,18 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         t, re.IGNORECASE
     )
     if m:
-        mem["profile"]["location"] = {"value": m.group(1).strip()[:60], "confidence": 1.0, "reasoning": "Direct statement."}
-        changed = True
+        if add_profile_field_with_conflict_check(mem, "location", m.group(1).strip()[:60], 1.0, "Direct statement."):
+            changed = True
 
     m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", t)
     if m:
-        mem["profile"]["email"] = {"value": m.group(0), "confidence": 1.0, "reasoning": "Explicit statement."}
-        changed = True
+        if add_profile_field_with_conflict_check(mem, "email", m.group(0), 1.0, "Explicit statement."):
+            changed = True
 
     m = re.search(r"(?:\+27|0)[6-8]\d[\s\-]?\d{3}[\s\-]?\d{4}", t)
     if m:
-        mem["profile"]["phone"] = {"value": m.group(0), "confidence": 1.0, "reasoning": "Explicit statement."}
-        changed = True
+        if add_profile_field_with_conflict_check(mem, "phone", m.group(0), 1.0, "Explicit statement."):
+            changed = True
 
     for pat in [
         r"(?:my client is|our client is|working (?:with|for) a? ?client called|the client(?:'s name)? is)\s+(.+?)(?:\.|,|$)",
@@ -424,37 +459,9 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
             if not new_val:
                 continue
                 
-            old_obj = current_memory["profile"].get(field) or {}
-            old_val = (old_obj.get("value") if isinstance(old_obj, dict) else old_obj) or ""
-            
-            # Programmatic conflict detection for key profile fields
-            if old_val and old_val.lower() != new_val.lower():
-                conflict_obj = {
-                    "id": str(uuid.uuid4())[:8],
-                    "key": f"profile.{field}",
-                    "existing": {
-                        "value": old_val,
-                        "confidence": old_obj.get("confidence", 1.0) if isinstance(old_obj, dict) else 1.0,
-                        "reasoning": old_obj.get("reasoning", "Existing profile item") if isinstance(old_obj, dict) else "Existing profile item"
-                    },
-                    "new": {
-                        "value": new_val,
-                        "confidence": new_obj.get("confidence", 0.85) if isinstance(new_obj, dict) else 0.85,
-                        "reasoning": new_obj.get("reasoning", "Inferred contradictory statement") if isinstance(new_obj, dict) else "Inferred contradictory statement"
-                    },
-                    "detected_at": now_date
-                }
-                
-                existing_conflicts = current_memory.setdefault("conflicts", [])
-                if not any(c.get("key") == f"profile.{field}" and c.get("new", {}).get("value").lower() == new_val.lower() for c in existing_conflicts):
-                    existing_conflicts.append(conflict_obj)
-                    changed = True
-            elif old_val != new_val:
-                current_memory["profile"][field] = {
-                    "value": new_val,
-                    "confidence": new_obj.get("confidence") if isinstance(new_obj, dict) and new_obj.get("confidence") is not None else 0.85,
-                    "reasoning": new_obj.get("reasoning") if isinstance(new_obj, dict) else "Inferred from discussion"
-                }
+            confidence = new_obj.get("confidence") if isinstance(new_obj, dict) and new_obj.get("confidence") is not None else 0.85
+            reasoning = new_obj.get("reasoning") if isinstance(new_obj, dict) else "Inferred from discussion"
+            if add_profile_field_with_conflict_check(current_memory, field, new_val, confidence, reasoning):
                 changed = True
 
     # Helper for standard lists: preferences, clients, important_facts, ai_notes, topics_discussed

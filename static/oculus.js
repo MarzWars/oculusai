@@ -176,34 +176,18 @@ function renderMarkdown(text) {
   // Build a combined tag pattern: think|thinking
   const thinkTagPattern = 'think(?:ing)?';
 
-  // 1. Closed thinking blocks — <think>…</think> or <thinking>…</thinking>
-  html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*?)<\\/(?:${thinkTagPattern})>`, 'gi'), (_, thought) => {
-    const { markup } = getStageHtml(thought, true);
-    return `<div class="thinking-block">${markup}</div>`;
-  });
+  // Completely strip closed and open thinking blocks from output
+  html = html.replace(new RegExp(`<(?:${thinkTagPattern})>[\\s\\S]*?<\\/(?:${thinkTagPattern})>`, 'gi'), '');
+  html = html.replace(new RegExp(`<(?:${thinkTagPattern})>[\\s\\S]*$`, 'gi'), '');
 
-  // 2. Open/streaming thinking blocks — tag opened but not yet closed
-  html = html.replace(new RegExp(`<(?:${thinkTagPattern})>([\\s\\S]*)$`, 'gi'), (_, thought) => {
-    const { markup } = getStageHtml(thought, false);
-    return `<div class="thinking-block">${markup}</div>`;
-  });
+  // Strip details blocks (legacy or existing self-reflection output formats)
+  html = html.replace(/<details class="thinking-block"[\s\S]*?<\/details>/gi, '');
+  html = html.replace(/<details class="thinking-block"[\s\S]*$/gi, '');
+  
+  html = html.replace(/<div class="thinking-block">[\s\S]*?<\/div>/gi, '');
+  html = html.replace(/<div class="thinking-block-streaming">[\s\S]*?<\/div>/gi, '');
 
-  // 1b. Protect details blocks
   const thinkingBlocks = [];
-
-  // Protect completed details blocks
-  html = html.replace(/<details class="thinking-block"([\s\S]*?)<\/details>/gi, (match) => {
-    const idx = thinkingBlocks.length;
-    thinkingBlocks.push(match);
-    return `%%THINKING_BLOCK_${idx}%%`;
-  });
-
-  // Protect open/streaming details blocks
-  html = html.replace(/<details class="thinking-block"([\s\S]*)$/gi, (match) => {
-    const idx = thinkingBlocks.length;
-    thinkingBlocks.push(match);
-    return `%%THINKING_BLOCK_${idx}%%`;
-  });
 
   // 2. Inline code
   html = html.replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
@@ -417,24 +401,11 @@ function renderStreamingHtml(text) {
   const closedRe = /<(?:think|thinking)>([\s\S]*?)<\/(?:think|thinking)>/gi;
   const openRe = /<(?:think|thinking)>([\s\S]*)$/i;
 
-  // 1. Closed (complete) thinking blocks
-  const closedBlocks = [];
-  remaining = remaining.replace(closedRe, (_, thought) => {
-    closedBlocks.push(thought);
-    return '';
-  });
-  for (const thought of closedBlocks) {
-    const { markup } = getStageHtml(thought, true);
-    html += `<div class="thinking-block-streaming">${markup}</div>`;
-  }
-
-  // 2. Open (still streaming) thinking block
+  // Strip thinking blocks from remaining content during stream
+  remaining = remaining.replace(closedRe, '');
   const openMatch = remaining.match(openRe);
   if (openMatch) {
-    const thought = openMatch[1];
     remaining = remaining.replace(openRe, '');
-    const { markup } = getStageHtml(thought, false);
-    html += `<div class="thinking-block-streaming">${markup}</div>`;
   }
 
   // 3. Main response text (everything outside thinking tags)
@@ -443,7 +414,7 @@ function renderStreamingHtml(text) {
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/`([^`\n]+)`/g, '<code class="inline-code">$1</code>');
 
-  if (responseText || (!openMatch && !closedBlocks.length)) {
+  if (responseText || !openMatch) {
     html += `<span class="stream-response">${responseText}<span class="stream-cursor"></span></span>`;
   }
 
@@ -552,25 +523,79 @@ async function sendMessage() {
 }
 
 
-// ── Left Sidebar ─────────────────────────
-function toggleSidebar() {
-  const sidebar = document.getElementById('leftSidebar');
-  const overlay = document.getElementById('sidebarOverlay');
-  if (!sidebar) return;
+// ── Left Sidebar & Sliding Panels ────────
+let activePanel = null;
 
-  const isOpen = sidebar.classList.contains('open');
-  if (isOpen) {
-    sidebar.classList.remove('open');
-    overlay.classList.remove('open');
+function toggleSidebar() {
+  togglePanel('brain');
+}
+
+function togglePanel(panelName) {
+  if (activePanel === panelName) {
+    closePanel();
   } else {
-    sidebar.classList.add('open');
-    overlay.classList.add('open');
-    // Load brain when sidebar opens (if not already loaded)
-    const brainContent = document.getElementById('brainDrawerContent');
-    if (brainContent && brainContent.querySelector('.brain-loading')) {
-      loadBrainIntoSidebar();
-    }
+    openPanel(panelName);
   }
+}
+
+function openPanel(panelName) {
+  activePanel = panelName;
+  const panel = document.getElementById('slidingPanel');
+  const overlay = document.getElementById('sidebarOverlay');
+  
+  // Update title
+  const titleEl = document.getElementById('panelTitle');
+  const titles = {
+    models: 'AI Model Options',
+    settings: 'Workspace Settings',
+    brain: 'Oculus Brain (Memory)',
+    notes: 'Style & Behavior Notes',
+    actions: 'AI Action Log',
+    docs: 'Generated Documents'
+  };
+  if (titleEl) titleEl.textContent = titles[panelName] || 'Oculus AI';
+  
+  // Show the correct view, hide others
+  document.querySelectorAll('.panel-view').forEach(view => {
+    view.style.display = 'none';
+  });
+  const currentView = document.getElementById(`view-${panelName}`);
+  if (currentView) currentView.style.display = 'flex';
+  
+  // Set active class on dock buttons
+  document.querySelectorAll('.dock-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  const activeBtn = document.getElementById(`dock-btn-${panelName}`);
+  if (activeBtn) activeBtn.classList.add('active');
+  
+  // Slide out panel
+  if (panel) panel.classList.add('open');
+  if (overlay) overlay.classList.add('open');
+  
+  // Load dynamic data based on view
+  if (panelName === 'brain') {
+    loadBrainMemory();
+  } else if (panelName === 'notes') {
+    loadNotesMemory();
+  } else if (panelName === 'actions') {
+    loadActionHistoryLog();
+  } else if (panelName === 'docs') {
+    loadGeneratedDocs();
+  }
+}
+
+function closePanel() {
+  activePanel = null;
+  const panel = document.getElementById('slidingPanel');
+  const overlay = document.getElementById('sidebarOverlay');
+  if (panel) panel.classList.remove('open');
+  if (overlay) overlay.classList.remove('open');
+  
+  // Remove active class from dock buttons
+  document.querySelectorAll('.dock-btn').forEach(btn => {
+    btn.classList.remove('active');
+  });
 }
 
 async function loadBrainIntoSidebar() {
@@ -736,7 +761,45 @@ let currentBrainMemory = null;
 // toggleBrain now opens the sidebar (backward compat)
 async function toggleBrain() { toggleSidebar(); }
 
-async function loadBrainMemory() { await loadBrainIntoSidebar(); }
+async function loadBrainMemory() {
+  await loadBrainIntoSidebar();
+  
+  // Also load the notes drawer if the Notes panel content is present
+  const notesContent = document.getElementById('brainNotesContent');
+  if (notesContent && currentBrainMemory) {
+    renderNotesIntoEl(notesContent, currentBrainMemory);
+  }
+}
+
+async function loadNotesMemory() {
+  const content = document.getElementById('brainNotesContent');
+  if (!content) return;
+  content.innerHTML = '<div class="brain-loading">Loading notes…</div>';
+  try {
+    const resp = await fetch('/api/memory');
+    if (!resp.ok) throw new Error('Failed to fetch memory');
+    currentBrainMemory = await resp.json();
+    renderNotesIntoEl(content, currentBrainMemory);
+  } catch (err) {
+    content.innerHTML = `<div class="brain-loading" style="color:var(--red)">Error: ${err.message}</div>`;
+  }
+}
+
+function renderNotesIntoEl(content, mem) {
+  const notes = mem.ai_notes || [];
+  content.innerHTML = `
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:10px; line-height: 1.4;">
+      Oculus automatically infers style and coding guidelines from your interactions. You can manage them manually below.
+    </div>
+    <div class="brain-list" id="brain-notes-list">
+      ${renderBrainNotesItems(notes)}
+    </div>
+    <div class="brain-add-form" style="margin-top:12px;">
+      <input type="text" class="brain-add-input" id="brain-note-add-input" placeholder="Add custom behavior note...">
+      <button class="brain-add-btn" onclick="addBrainListItem('ai_notes', 'brain-note-add-input')">Add</button>
+    </div>
+  `;
+}
 
 function renderBrain(mem) {
   const content = document.getElementById('brainDrawerContent') || document.querySelector('.brain-drawer-content');
@@ -922,17 +985,6 @@ function renderBrainIntoEl(content, mem) {
       </div>
     </div>
 
-    <!-- AI BEHAVIORAL INFERENCES SECTION -->
-    <div class="brain-section">
-      <div class="brain-section-title">🧠 Style & Behavior Notes</div>
-      <div class="brain-list" id="brain-notes-list">
-        ${renderBrainNotesItems(mem.ai_notes || [])}
-      </div>
-      <div class="brain-add-form">
-        <input type="text" class="brain-add-input" id="brain-note-add-input" placeholder="Add custom behavior note...">
-        <button class="brain-add-btn" onclick="addBrainListItem('ai_notes', 'brain-note-add-input')">Add</button>
-      </div>
-    </div>
   `;
 }
 
