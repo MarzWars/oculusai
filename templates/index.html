@@ -61,6 +61,23 @@
                 </div>
             </div>
 
+            <!-- Workspace Settings Toggle -->
+            <div style="margin-top: 16px; margin-bottom: 8px;">
+                <div class="sidebar-section-title">Workspace Settings</div>
+                <div class="settings-toggle-card" style="background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; transition: border-color 0.2s ease;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <span style="font-size: 13px; font-weight: 500; color: var(--text);">Self-Reflection Pass</span>
+                        <label class="switch-toggle" style="position: relative; display: inline-block; width: 36px; height: 20px;">
+                            <input type="checkbox" id="reflectionToggle" onchange="toggleSelfReflection(this)" style="opacity: 0; width: 0; height: 0;">
+                            <span class="slider-toggle" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border); transition: .2s; border-radius: 20px;"></span>
+                        </label>
+                    </div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.45;">
+                        Enables a 2-pass reflection step to audit memory alignment, accuracy, and tone consistency.
+                    </div>
+                </div>
+            </div>
+
             <!-- Brain / Memory -->
             <div>
                 <div class="sidebar-section-title">🧠 Oculus Brain</div>

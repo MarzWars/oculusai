@@ -75,7 +75,21 @@ function getStageHtml(thoughtText, isClosed) {
   }).join('')}
     </div>
   `;
-  return { markup: stagesMarkup, statusText: currentStatus, stage: stage };
+
+  let detailMarkup = "";
+  if (thoughtText && thoughtText.trim().length > 0) {
+    detailMarkup = `
+      <details class="thinking-details" style="border-top: 1px solid rgba(255,255,255,0.06); background: rgba(0,0,0,0.15);">
+        <summary style="padding: 10px 16px; font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; user-select: none;">
+          <span>📋 View Reflection / Critique</span>
+          <span class="details-chevron" style="transition: transform 0.2s; font-size: 10px;">▼</span>
+        </summary>
+        <div class="thinking-details-content" style="padding: 12px 16px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; color: var(--text-muted); border-top: 1px solid rgba(255,255,255,0.04); white-space: pre-wrap; overflow-x: auto;">${escapeHtml(thoughtText)}</div>
+      </details>
+    `;
+  }
+
+  return { markup: stagesMarkup + detailMarkup, statusText: currentStatus, stage: stage };
 }
 
 
@@ -730,44 +744,117 @@ function renderBrain(mem) {
   renderBrainIntoEl(content, mem);
 }
 
-function renderBrainIntoEl(content, mem) {
+function getConfidenceBadgeHtml(score) {
+  if (score === undefined || score === null) return '';
+  let badgeClass = 'low';
+  let badgeText = 'Low';
+  if (score >= 0.7) {
+    badgeClass = 'high';
+    badgeText = 'High';
+  } else if (score >= 0.4) {
+    badgeClass = 'medium';
+    badgeText = 'Medium';
+  }
+  return `<span class="conf-badge conf-${badgeClass}" title="Confidence Score: ${score.toFixed(2)}">${badgeText}</span>`;
+}
 
+function renderBrainIntoEl(content, mem) {
   const profile = mem.profile || {};
   const clients = mem.clients || [];
   const projects = mem.projects || [];
   const preferences = mem.preferences || [];
   const importantFacts = mem.important_facts || [];
   const deadlines = mem.deadlines || [];
+  const conflicts = mem.conflicts || [];
+
+  // ⚠️ Conflicts Resolver UI
+  let conflictsHtml = '';
+  if (conflicts.length > 0) {
+    conflictsHtml = `
+      <div class="brain-section conflicts-section" style="border: 1px solid rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.06); padding: 12px; border-radius: 8px; margin-bottom: 16px;">
+        <div class="brain-section-title" style="color: #f38ba8; font-weight: 600; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; font-size: 13px;">
+          <span style="display:flex; align-items:center; gap:6px;">⚠️ Resolve Memory Conflicts</span>
+          <span style="background: #f38ba8; color: #11111b; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 10px; display: inline-block;">${conflicts.length}</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          ${conflicts.map(c => {
+            const keyPath = c.key;
+            const existingVal = c.existing.value || c.existing.name || c.existing.item || '';
+            const newVal = c.new.value || c.new.name || c.new.item || '';
+            return `
+              <div class="conflict-card" style="background: var(--bg-3); border: 1px solid var(--border); border-radius: 6px; padding: 10px; font-size: 12.5px;">
+                <div style="font-weight: 700; text-transform: uppercase; font-size: 10px; color: var(--text-muted); margin-bottom: 6px; letter-spacing:0.04em;">Field: ${keyPath.replace(/\./g, ' → ')}</div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
+                    <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; margin-right: 6px; font-size: 12px; color: var(--text-muted);">
+                      <strong style="color:var(--text)">Current:</strong> ${escapeHtml(existingVal)}
+                      <span style="font-size: 10.5px; color: #a6e3a1; font-weight: 500;">(${c.existing.confidence.toFixed(2)})</span>
+                    </div>
+                    <button class="conflict-choice-btn" onclick="resolveConflict('${c.id}', 'keep_existing')" style="background: var(--bg-2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 3px 8px; font-size: 10.5px; font-weight:500; cursor: pointer;">Keep</button>
+                  </div>
+                  <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); padding: 6px 8px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.03);">
+                    <div style="flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; margin-right: 6px; font-size: 12px; color: var(--text-muted);">
+                      <strong style="color:var(--text)">New:</strong> ${escapeHtml(newVal)}
+                      <span style="font-size: 10.5px; color: #a6e3a1; font-weight: 500;">(${c.new.confidence.toFixed(2)})</span>
+                    </div>
+                    <button class="conflict-choice-btn" onclick="resolveConflict('${c.id}', 'use_new')" style="background: var(--accent); border: none; color: #fff; border-radius: 4px; padding: 3px 8px; font-size: 10.5px; font-weight:500; cursor: pointer;">Use New</button>
+                  </div>
+                  ${!keyPath.startsWith('profile.') ? `
+                  <div style="text-align: center; margin-top: 2px;">
+                    <button class="conflict-choice-btn" onclick="resolveConflict('${c.id}', 'keep_both')" style="background: none; border: none; color: var(--accent); font-size: 11px; font-weight: 500; cursor: pointer; text-decoration: underline;">Keep Both Versions</button>
+                  </div>
+                  ` : ''}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  const getProfileFieldHtml = (field, label, type = "text") => {
+    const fObj = profile[field] || {};
+    const val = typeof fObj === 'object' ? (fObj.value || '') : fObj || '';
+    const score = typeof fObj === 'object' ? fObj.confidence : 1.0;
+    const reasoning = typeof fObj === 'object' ? fObj.reasoning : '';
+    const badge = getConfidenceBadgeHtml(score);
+    const overrideBtn = (score < 1.0 && val) ? `
+      <button class="brain-trust-btn" onclick="overrideProfileConfidence('${field}')" title="Trust (Force 1.0) field value: ${escapeHtml(reasoning)}" style="margin-left: 2px;">👍</button>
+    ` : '';
+    
+    return `
+      <div class="brain-profile-field" title="${escapeHtml(reasoning)}">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+          <label>${label}</label>
+          <div style="display:flex; align-items:center; gap:4px;">
+            ${badge}
+            ${overrideBtn}
+          </div>
+        </div>
+        <input type="${type}" id="bp-${field}" value="${escapeHtml(val)}">
+      </div>
+    `;
+  };
 
   content.innerHTML = `
+    ${conflictsHtml}
+    
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid var(--border); padding-bottom:10px;">
+      <span style="font-size:11px; color:var(--text-muted);">Last decay audit: ${escapeHtml(mem.last_decay_run || 'Never')}</span>
+      <button class="decay-run-btn" onclick="runDecayJob()" style="background:transparent; border:1px solid var(--border); color:var(--text-muted); border-radius:4px; padding:3px 8px; font-size:10.5px; cursor:pointer; font-family:var(--font-sans); transition:all 0.15s;">🔄 Review Old Memories</button>
+    </div>
+
     <!-- PROFILE SECTION -->
     <div class="brain-section">
       <div class="brain-section-title">User Profile</div>
       <div class="brain-profile-grid">
-        <div class="brain-profile-field">
-          <label>Name</label>
-          <input type="text" id="bp-name" value="${escapeHtml(profile.name || '')}">
-        </div>
-        <div class="brain-profile-field">
-          <label>Role</label>
-          <input type="text" id="bp-role" value="${escapeHtml(profile.role || '')}">
-        </div>
-        <div class="brain-profile-field">
-          <label>Company</label>
-          <input type="text" id="bp-company" value="${escapeHtml(profile.company || '')}">
-        </div>
-        <div class="brain-profile-field">
-          <label>Location</label>
-          <input type="text" id="bp-location" value="${escapeHtml(profile.location || '')}">
-        </div>
-        <div class="brain-profile-field">
-          <label>Email</label>
-          <input type="email" id="bp-email" value="${escapeHtml(profile.email || '')}">
-        </div>
-        <div class="brain-profile-field">
-          <label>Phone</label>
-          <input type="text" id="bp-phone" value="${escapeHtml(profile.phone || '')}">
-        </div>
+        ${getProfileFieldHtml("name", "Name")}
+        ${getProfileFieldHtml("role", "Role")}
+        ${getProfileFieldHtml("company", "Company")}
+        ${getProfileFieldHtml("location", "Location")}
+        ${getProfileFieldHtml("email", "Email", "email")}
+        ${getProfileFieldHtml("phone", "Phone")}
         <button class="brain-save-btn" onclick="saveBrainProfile()">Save Profile</button>
       </div>
     </div>
@@ -851,48 +938,122 @@ function renderBrainIntoEl(content, mem) {
 
 function renderBrainListItems(key, lst) {
   if (!lst || lst.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
-  return lst.map(item => `
-    <div class="brain-list-item">
-      <span class="brain-list-text">${escapeHtml(item)}</span>
-      <button class="brain-delete-btn" onclick="deleteBrainListItem('${key}', \`${escapeHtml(item).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete item">×</button>
-    </div>
-  `).join('');
+  return lst.map(item => {
+    const val = typeof item === 'object' ? item.value : item;
+    const score = typeof item === 'object' ? item.confidence : 1.0;
+    const reasoning = typeof item === 'object' ? item.reasoning : '';
+    const badge = getConfidenceBadgeHtml(score);
+    const escapedVal = escapeHtml(val);
+    const escapedReasoning = escapeHtml(reasoning);
+    
+    const overrideBtn = score < 1.0 ? `
+      <button class="brain-trust-btn" onclick="overrideConfidence('${key}', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Trust fact (Force 1.0): ${escapedReasoning}">👍</button>
+    ` : '';
+
+    return `
+      <div class="brain-list-item" title="${escapedReasoning}">
+        <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0;">
+          <span class="brain-list-text" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapedVal}</span>
+          ${badge}
+        </div>
+        <div style="display:flex; align-items:center; gap:4px; margin-left:6px;">
+          ${overrideBtn}
+          <button class="brain-delete-btn" onclick="deleteBrainListItem('${key}', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete item">×</button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderBrainNotesItems(lst) {
   if (!lst || lst.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
-  return lst.map(item => `
-    <div class="brain-notes-card">
-      <span class="brain-list-text">${escapeHtml(item)}</span>
-      <button class="brain-delete-btn" onclick="deleteBrainListItem('ai_notes', \`${escapeHtml(item).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete behavioral note">×</button>
-    </div>
-  `).join('');
+  return lst.map(item => {
+    const val = typeof item === 'object' ? item.value : item;
+    const score = typeof item === 'object' ? item.confidence : 1.0;
+    const reasoning = typeof item === 'object' ? item.reasoning : '';
+    const badge = getConfidenceBadgeHtml(score);
+    const escapedVal = escapeHtml(val);
+    const escapedReasoning = escapeHtml(reasoning);
+    
+    const overrideBtn = score < 1.0 ? `
+      <button class="brain-trust-btn" onclick="overrideConfidence('ai_notes', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Trust: ${escapedReasoning}">👍</button>
+    ` : '';
+
+    return `
+      <div class="brain-notes-card" title="${escapedReasoning}">
+        <div style="display:flex; align-items:center; gap:6px; flex:1; min-width:0; margin-bottom:4px;">
+          <span class="brain-list-text" style="flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapedVal}</span>
+          ${badge}
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:4px;">
+          ${overrideBtn}
+          <button class="brain-delete-btn" onclick="deleteBrainListItem('ai_notes', \`${escapedVal.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete behavioral note">×</button>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function renderBrainProjectItems(projects) {
   if (!projects || projects.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
-  return projects.map(proj => `
-    <div class="brain-list-item">
-      <div class="brain-deadline-info">
-        <span class="brain-list-text" style="color:var(--text); font-weight:500;">${escapeHtml(proj.name || '')}</span>
-        <span>Added: ${escapeHtml(proj.added || '')}</span>
+  return projects.map(proj => {
+    const name = proj.name || proj.value || '';
+    const score = proj.confidence !== undefined ? proj.confidence : 0.85;
+    const reasoning = proj.reasoning || '';
+    const badge = getConfidenceBadgeHtml(score);
+    const escapedName = escapeHtml(name);
+    
+    const overrideBtn = score < 1.0 ? `
+      <button class="brain-trust-btn" onclick="overrideConfidence('projects', \`${escapedName.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Trust Project: ${escapeHtml(reasoning)}">👍</button>
+    ` : '';
+    
+    return `
+      <div class="brain-list-item" title="${escapeHtml(reasoning)}">
+        <div class="brain-deadline-info" style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span class="brain-list-text" style="color:var(--text); font-weight:500; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapedName}</span>
+            ${badge}
+          </div>
+          <span>Added: ${escapeHtml(proj.added || '')}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          ${overrideBtn}
+          <button class="brain-delete-btn" onclick="deleteBrainProject(\`${escapedName.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete project">×</button>
+        </div>
       </div>
-      <button class="brain-delete-btn" onclick="deleteBrainProject(\`${escapeHtml(proj.name).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete project">×</button>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function renderBrainDeadlineItems(deadlines) {
   if (!deadlines || deadlines.length === 0) return '<div style="font-size:12px; color:var(--text-faint); padding: 4px;">None recorded yet.</div>';
-  return deadlines.map(dl => `
-    <div class="brain-list-item">
-      <div class="brain-deadline-info">
-        <span class="brain-list-text" style="color:var(--text); font-weight:500;">${escapeHtml(dl.item || '')}</span>
-        <span style="color:var(--purple); font-weight:500;">Due: ${escapeHtml(dl.date || '')}</span>
+  return deadlines.map(dl => {
+    const item = dl.item || dl.value || '';
+    const score = dl.confidence !== undefined ? dl.confidence : 0.85;
+    const reasoning = dl.reasoning || '';
+    const badge = getConfidenceBadgeHtml(score);
+    const escapedItem = escapeHtml(item);
+    
+    const overrideBtn = score < 1.0 ? `
+      <button class="brain-trust-btn" onclick="overrideConfidence('deadlines', \`${escapedItem.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Trust Deadline: ${escapeHtml(reasoning)}">👍</button>
+    ` : '';
+    
+    return `
+      <div class="brain-list-item" title="${escapeHtml(reasoning)}">
+        <div class="brain-deadline-info" style="flex:1; min-width:0;">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span class="brain-list-text" style="color:var(--text); font-weight:500; text-overflow:ellipsis; overflow:hidden; white-space:nowrap;">${escapedItem}</span>
+            ${badge}
+          </div>
+          <span style="color:var(--purple); font-weight:500;">Due: ${escapeHtml(dl.date || '')}</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:4px;">
+          ${overrideBtn}
+          <button class="brain-delete-btn" onclick="deleteBrainDeadline(\`${escapedItem.replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete deadline">×</button>
+        </div>
       </div>
-      <button class="brain-delete-btn" onclick="deleteBrainDeadline(\`${escapeHtml(dl.item).replace(/`/g, '\\`').replace(/'/g, "\\'")}\`)" title="Delete deadline">×</button>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 }
 
 async function saveBrainProfile() {
@@ -904,7 +1065,8 @@ async function saveBrainProfile() {
     if (!el) continue;
 
     const newVal = el.value.trim();
-    const oldVal = (currentBrainMemory.profile || {})[field] || "";
+    const fieldObj = (currentBrainMemory.profile || {})[field] || {};
+    const oldVal = typeof fieldObj === 'object' ? (fieldObj.value || "") : (fieldObj || "");
 
     if (newVal !== oldVal) {
       try {
@@ -927,6 +1089,97 @@ async function saveBrainProfile() {
   if (updatedCount > 0) {
     alert("Profile saved successfully!");
     await loadBrainMemory();
+  }
+}
+
+async function overrideConfidence(key, value) {
+  try {
+    const resp = await fetch('/api/memory/override_confidence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: key, value: value, confidence: 1.0 })
+    });
+    if (resp.ok) {
+      await loadBrainMemory();
+    } else {
+      const err = await resp.json();
+      alert(err.error || "Failed to override confidence.");
+    }
+  } catch (e) {
+    console.error("Failed to override confidence:", e);
+  }
+}
+
+async function overrideProfileConfidence(field) {
+  try {
+    const resp = await fetch('/api/memory/override_confidence', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: "profile", field: field, confidence: 1.0 })
+    });
+    if (resp.ok) {
+      await loadBrainMemory();
+    } else {
+      const err = await resp.json();
+      alert(err.error || "Failed to override profile confidence.");
+    }
+  } catch (e) {
+    console.error("Failed to override profile confidence:", e);
+  }
+}
+
+async function resolveConflict(conflictId, action) {
+  try {
+    const resp = await fetch('/api/memory/resolve_conflict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ conflict_id: conflictId, action: action })
+    });
+    if (resp.ok) {
+      await loadBrainMemory();
+    } else {
+      const err = await resp.json();
+      alert(err.error || "Failed to resolve conflict.");
+    }
+  } catch (e) {
+    console.error("Failed to resolve conflict:", e);
+  }
+}
+
+async function runDecayJob() {
+  try {
+    const resp = await fetch('/api/memory/run_decay', { method: 'POST' });
+    if (resp.ok) {
+      await loadBrainMemory();
+      alert("Memory decay and review job completed successfully!");
+    } else {
+      const err = await resp.json();
+      alert(err.error || "Failed to run memory decay.");
+    }
+  } catch (e) {
+    console.error("Failed to run decay job:", e);
+  }
+}
+
+async function toggleSelfReflection(checkbox) {
+  const enabled = checkbox.checked;
+  try {
+    const resp = await fetch(`/api/workspaces/${activeWorkspaceId}/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ self_reflection_enabled: enabled })
+    });
+    if (!resp.ok) {
+      throw new Error('Failed to update workspace settings');
+    }
+    const activeWs = userWorkspaces.find(w => w.id === activeWorkspaceId);
+    if (activeWs) {
+      if (!activeWs.settings) activeWs.settings = {};
+      activeWs.settings.self_reflection_enabled = enabled;
+    }
+  } catch (err) {
+    alert("Error saving setting: " + err.message);
+    checkbox.checked = !enabled;
   }
 }
 
@@ -1529,6 +1782,15 @@ async function loadWorkspaces() {
     const nameEl = document.getElementById('currentWorkspaceName');
     if (nameEl && activeWs) {
       nameEl.textContent = activeWs.name;
+    }
+
+    // Set reflection toggle state
+    if (activeWs) {
+      const reflectionToggle = document.getElementById('reflectionToggle');
+      if (reflectionToggle) {
+        const settings = activeWs.settings || {};
+        reflectionToggle.checked = !!settings.self_reflection_enabled;
+      }
     }
 
     // Render the dropdown list

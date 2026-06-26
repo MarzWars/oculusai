@@ -1,20 +1,25 @@
 import re
 import json
+import uuid
 from datetime import datetime
 from flask import Blueprint, jsonify, request, session
 from config import Config
 from backend.extensions import supabase
 from backend.utils import is_ad_content, _add_unique
 from backend.models import query_openrouter_extraction
-from backend.prompts import MEMORY_EXTRACTION_PROMPT_TEMPLATE, MEMORY_CONSOLIDATION_PROMPT_TEMPLATE
+from backend.prompts import MEMORY_CONFIDENCE_EXTRACTION_PROMPT, MEMORY_CONSOLIDATION_PROMPT_TEMPLATE
 from backend.auth import login_required, current_user_id
 
 memory_bp = Blueprint("memory", __name__)
 
 MEMORY_DEFAULT = {
     "profile": {
-        "name": "", "role": "", "company": "",
-        "location": "", "email": "", "phone": ""
+        "name": {"value": "", "confidence": 1.0, "reasoning": "Unspecified"},
+        "role": {"value": "", "confidence": 1.0, "reasoning": "Unspecified"},
+        "company": {"value": "", "confidence": 1.0, "reasoning": "Unspecified"},
+        "location": {"value": "", "confidence": 1.0, "reasoning": "Unspecified"},
+        "email": {"value": "", "confidence": 1.0, "reasoning": "Unspecified"},
+        "phone": {"value": "", "confidence": 1.0, "reasoning": "Unspecified"}
     },
     "clients":         [],
     "projects":        [],
@@ -23,11 +28,79 @@ MEMORY_DEFAULT = {
     "topics_discussed":[],
     "deadlines":       [],
     "ai_notes":        [],
+    "conflicts":       [],
     "first_seen":      "",
     "last_seen":       "",
     "session_count":   0,
-    "message_count":   0
+    "message_count":   0,
+    "last_decay_run":  ""
 }
+
+def normalize_fact(item, default_confidence=0.85, default_reasoning="Legacy memory item"):
+    """Convert legacy string facts or raw dicts to structured confidence objects."""
+    now_date = datetime.now().strftime("%Y-%m-%d")
+    if isinstance(item, str):
+        return {
+            "value": item,
+            "confidence": default_confidence,
+            "reasoning": default_reasoning,
+            "added": now_date,
+            "last_seen": now_date
+        }
+    elif isinstance(item, dict):
+        val = item.get("value") or item.get("name") or item.get("item") or ""
+        conf = item.get("confidence")
+        if conf is None:
+            conf = default_confidence
+        else:
+            try:
+                conf = float(conf)
+            except Exception:
+                conf = default_confidence
+        
+        res = {
+            "value": val,
+            "confidence": conf,
+            "reasoning": item.get("reasoning") or default_reasoning,
+            "added": item.get("added") or now_date,
+            "last_seen": item.get("last_seen") or item.get("added") or now_date
+        }
+        
+        # Keep deadlines and projects fields intact
+        for k in ["date", "name", "item"]:
+            if k in item:
+                res[k] = item[k]
+        return res
+    return None
+
+def apply_memory_decay(mem: dict) -> bool:
+    """Decay logic: subtracts 0.05 per week of inactivity, floored at 0.1."""
+    now_date = datetime.now()
+    changed = False
+    
+    list_keys = ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes", "projects", "deadlines"]
+    for key in list_keys:
+        for item in mem.get(key, []):
+            last_seen_str = item.get("last_seen") or item.get("added")
+            if not last_seen_str:
+                continue
+            try:
+                date_only = last_seen_str.split()[0]
+                last_seen_date = datetime.strptime(date_only, "%Y-%m-%d")
+                days_inactive = (now_date - last_seen_date).days
+                if days_inactive >= 7:
+                    weeks = days_inactive // 7
+                    decay_amount = weeks * 0.05
+                    old_conf = item.get("confidence", 0.85)
+                    new_conf = max(0.1, round(old_conf - decay_amount, 3))
+                    if new_conf != old_conf:
+                        item["confidence"] = new_conf
+                        item["reasoning"] = f"Decayed due to {days_inactive} days of inactivity."
+                        changed = True
+            except Exception as e:
+                print(f"[Decay] Error parsing date for item {item}: {e}")
+                
+    return changed
 
 def load_memory(user_id: str) -> dict:
     try:
@@ -36,13 +109,105 @@ def load_memory(user_id: str) -> dict:
     except Exception as e:
         print("Memory load error:", e)
         mem = {}
+        
     merged = json.loads(json.dumps(MEMORY_DEFAULT))
     for key, val in mem.items():
         if key in merged:
-            if isinstance(val, dict) and isinstance(merged[key], dict):
-                merged[key].update(val)
-            else:
-                merged[key] = val
+            merged[key] = val
+            
+    # Normalize profile fields
+    profile = merged.setdefault("profile", {})
+    for field in ["name", "role", "company", "location", "email", "phone"]:
+        val = profile.get(field)
+        if val is None:
+            profile[field] = {"value": "", "confidence": 1.0, "reasoning": "Unspecified"}
+        elif isinstance(val, str):
+            profile[field] = {"value": val, "confidence": 1.0, "reasoning": "Legacy profile item"}
+        elif isinstance(val, dict):
+            profile[field] = {
+                "value": val.get("value") or "",
+                "confidence": val.get("confidence") if val.get("confidence") is not None else 1.0,
+                "reasoning": val.get("reasoning") or "Saved profile item"
+            }
+
+    # Normalize list-based fields
+    list_keys = ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]
+    for key in list_keys:
+        normalized = []
+        for item in merged.get(key, []):
+            norm = normalize_fact(item, default_confidence=0.85, default_reasoning="Legacy memory item")
+            if norm:
+                normalized.append(norm)
+        merged[key] = normalized
+
+    # Normalize projects
+    now_date = datetime.now().strftime("%Y-%m-%d")
+    normalized_projects = []
+    for item in merged.get("projects", []):
+        if isinstance(item, str):
+            normalized_projects.append({
+                "name": item,
+                "value": item,
+                "confidence": 0.85,
+                "reasoning": "Legacy project item",
+                "added": now_date,
+                "last_seen": now_date
+            })
+        elif isinstance(item, dict):
+            name = item.get("name") or item.get("value") or ""
+            normalized_projects.append({
+                "name": name,
+                "value": name,
+                "confidence": item.get("confidence") if item.get("confidence") is not None else 0.85,
+                "reasoning": item.get("reasoning") or "Saved project item",
+                "added": item.get("added") or now_date,
+                "last_seen": item.get("last_seen") or item.get("added") or now_date
+            })
+    merged["projects"] = normalized_projects
+
+    # Normalize deadlines
+    normalized_deadlines = []
+    for item in merged.get("deadlines", []):
+        if isinstance(item, str):
+            normalized_deadlines.append({
+                "item": item,
+                "value": item,
+                "date": "Not specified",
+                "confidence": 0.85,
+                "reasoning": "Legacy deadline item",
+                "added": now_date,
+                "last_seen": now_date
+            })
+        elif isinstance(item, dict):
+            task_name = item.get("item") or item.get("value") or ""
+            normalized_deadlines.append({
+                "item": task_name,
+                "value": task_name,
+                "date": item.get("date") or "Not specified",
+                "confidence": item.get("confidence") if item.get("confidence") is not None else 0.85,
+                "reasoning": item.get("reasoning") or "Saved deadline item",
+                "added": item.get("added") or now_date,
+                "last_seen": item.get("last_seen") or item.get("added") or now_date
+            })
+    merged["deadlines"] = normalized_deadlines
+
+    # Ensure conflicts list exists
+    if "conflicts" not in merged or not isinstance(merged["conflicts"], list):
+        merged["conflicts"] = []
+
+    # Bounded daily decay run
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    if merged.get("last_decay_run") != today_str:
+        decay_changed = apply_memory_decay(merged)
+        merged["last_decay_run"] = today_str
+        try:
+            supabase.table("oculus_memory").upsert({
+                "user_id": user_id,
+                "memory":  merged
+            }).execute()
+        except Exception as e:
+            print("Failed to save decayed memory:", e)
+
     return merged
 
 def save_memory(user_id: str, mem: dict):
@@ -51,6 +216,22 @@ def save_memory(user_id: str, mem: dict):
     if not mem.get("first_seen"):
         mem["first_seen"] = now
     mem.pop("conversation_count", None)
+
+    # Normalize profile fields
+    profile = mem.setdefault("profile", {})
+    for field in ["name", "role", "company", "location", "email", "phone"]:
+        val = profile.get(field)
+        if isinstance(val, str):
+            profile[field] = {"value": val, "confidence": 1.0, "reasoning": "Saved profile item"}
+        elif isinstance(val, dict) and "value" not in val:
+            profile[field] = {"value": "", "confidence": 1.0, "reasoning": "Unspecified"}
+
+    # Normalize list fields
+    list_keys = ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]
+    for key in list_keys:
+        if key in mem:
+            mem[key] = [normalize_fact(item) for item in mem[key] if normalize_fact(item) is not None]
+
     try:
         supabase.table("oculus_memory").upsert({
             "user_id": user_id,
@@ -73,7 +254,7 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         if m:
             candidate = m.group(1).strip()
             if candidate.lower() not in {"the", "a", "an", "this", "that", "here"}:
-                mem["profile"]["name"] = candidate
+                mem["profile"]["name"] = {"value": candidate, "confidence": 1.0, "reasoning": "Direct statement."}
                 changed = True
                 break
 
@@ -83,7 +264,7 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
     ]:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
-            mem["profile"]["company"] = m.group(1).strip()[:80]
+            mem["profile"]["company"] = {"value": m.group(1).strip()[:80], "confidence": 1.0, "reasoning": "Direct statement."}
             changed = True
             break
 
@@ -95,7 +276,7 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         if m:
             role = m.group(1).strip()
             if len(role.split()) <= 6:
-                mem["profile"]["role"] = role
+                mem["profile"]["role"] = {"value": role, "confidence": 1.0, "reasoning": "Direct statement."}
                 changed = True
                 break
 
@@ -104,17 +285,17 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         t, re.IGNORECASE
     )
     if m:
-        mem["profile"]["location"] = m.group(1).strip()[:60]
+        mem["profile"]["location"] = {"value": m.group(1).strip()[:60], "confidence": 1.0, "reasoning": "Direct statement."}
         changed = True
 
     m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", t)
     if m:
-        mem["profile"]["email"] = m.group(0)
+        mem["profile"]["email"] = {"value": m.group(0), "confidence": 1.0, "reasoning": "Explicit statement."}
         changed = True
 
     m = re.search(r"(?:\+27|0)[6-8]\d[\s\-]?\d{3}[\s\-]?\d{4}", t)
     if m:
-        mem["profile"]["phone"] = m.group(0)
+        mem["profile"]["phone"] = {"value": m.group(0), "confidence": 1.0, "reasoning": "Explicit statement."}
         changed = True
 
     for pat in [
@@ -138,7 +319,11 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
                 if candidate.lower() not in existing:
                     mem["projects"].append({
                         "name":  candidate[:80],
-                        "added": datetime.now().strftime("%Y-%m-%d")
+                        "value": candidate[:80],
+                        "added": datetime.now().strftime("%Y-%m-%d"),
+                        "last_seen": datetime.now().strftime("%Y-%m-%d"),
+                        "confidence": 0.85,
+                        "reasoning": "Inferred from regex"
                     })
                     if len(mem["projects"]) > 15:
                         mem["projects"] = mem["projects"][-15:]
@@ -153,8 +338,12 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         if len(dl) < 60:
             mem["deadlines"].append({
                 "item":  t[:80],
+                "value": t[:80],
                 "date":  dl,
-                "added": datetime.now().strftime("%Y-%m-%d")
+                "added": datetime.now().strftime("%Y-%m-%d"),
+                "last_seen": datetime.now().strftime("%Y-%m-%d"),
+                "confidence": 0.85,
+                "reasoning": "Inferred from regex"
             })
             if len(mem["deadlines"]) > 10:
                 mem["deadlines"] = mem["deadlines"][-10:]
@@ -217,113 +406,185 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
 
     return changed
 
-
 def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
-    """Safely merges LLM updates dictionary into current_memory."""
+    """Safely merges LLM updates dictionary into current_memory with confidence tracking & conflict detection."""
     changed = False
+    now_date = datetime.now().strftime("%Y-%m-%d")
 
     # 1. Profile
     profile_updates = updates.get("profile", {})
     if isinstance(profile_updates, dict):
         for field in ["name", "role", "company", "location", "email", "phone"]:
-            new_val = (profile_updates.get(field) or "").strip()
-            if new_val and current_memory["profile"].get(field) != new_val:
-                current_memory["profile"][field] = new_val
+            new_obj = profile_updates.get(field)
+            if not new_obj:
+                continue
+                
+            new_val = (new_obj.get("value") if isinstance(new_obj, dict) else new_obj) or ""
+            new_val = str(new_val).strip()
+            if not new_val:
+                continue
+                
+            old_obj = current_memory["profile"].get(field) or {}
+            old_val = (old_obj.get("value") if isinstance(old_obj, dict) else old_obj) or ""
+            
+            # Programmatic conflict detection for key profile fields
+            if old_val and old_val.lower() != new_val.lower():
+                conflict_obj = {
+                    "id": str(uuid.uuid4())[:8],
+                    "key": f"profile.{field}",
+                    "existing": {
+                        "value": old_val,
+                        "confidence": old_obj.get("confidence", 1.0) if isinstance(old_obj, dict) else 1.0,
+                        "reasoning": old_obj.get("reasoning", "Existing profile item") if isinstance(old_obj, dict) else "Existing profile item"
+                    },
+                    "new": {
+                        "value": new_val,
+                        "confidence": new_obj.get("confidence", 0.85) if isinstance(new_obj, dict) else 0.85,
+                        "reasoning": new_obj.get("reasoning", "Inferred contradictory statement") if isinstance(new_obj, dict) else "Inferred contradictory statement"
+                    },
+                    "detected_at": now_date
+                }
+                
+                existing_conflicts = current_memory.setdefault("conflicts", [])
+                if not any(c.get("key") == f"profile.{field}" and c.get("new", {}).get("value").lower() == new_val.lower() for c in existing_conflicts):
+                    existing_conflicts.append(conflict_obj)
+                    changed = True
+            elif old_val != new_val:
+                current_memory["profile"][field] = {
+                    "value": new_val,
+                    "confidence": new_obj.get("confidence") if isinstance(new_obj, dict) and new_obj.get("confidence") is not None else 0.85,
+                    "reasoning": new_obj.get("reasoning") if isinstance(new_obj, dict) else "Inferred from discussion"
+                }
                 changed = True
 
-    # 2. Clients
-    client_updates = updates.get("clients", [])
-    if isinstance(client_updates, list):
-        for client in client_updates:
-            if isinstance(client, str):
-                if _add_unique(current_memory["clients"], client, max_len=20):
+    # Helper for standard lists: preferences, clients, important_facts, ai_notes, topics_discussed
+    def merge_list_field(key, max_len):
+        nonlocal changed
+        updates_list = updates.get(key, [])
+        if not isinstance(updates_list, list):
+            return
+            
+        for item in updates_list:
+            if not item:
+                continue
+            val = (item.get("value") if isinstance(item, dict) else item) or ""
+            val = str(val).strip()
+            if not val:
+                continue
+                
+            existing_item = next((i for i in current_memory.get(key, []) if str(i.get("value", "")).lower() == val.lower()), None)
+            if existing_item:
+                # Reinforce
+                old_conf = existing_item.get("confidence", 0.85)
+                new_conf = min(1.0, old_conf + 0.15)
+                if new_conf != old_conf:
+                    existing_item["confidence"] = new_conf
+                    existing_item["reasoning"] = f"Reinforced by discussion."
+                    existing_item["last_seen"] = now_date
                     changed = True
+            else:
+                current_memory[key].append({
+                    "value": val,
+                    "confidence": item.get("confidence") if isinstance(item, dict) and item.get("confidence") is not None else 0.85,
+                    "reasoning": item.get("reasoning") if isinstance(item, dict) else "Inferred from discussion",
+                    "added": now_date,
+                    "last_seen": now_date
+                })
+                if len(current_memory[key]) > max_len:
+                    current_memory[key] = current_memory[key][-max_len:]
+                changed = True
+
+    merge_list_field("preferences", 15)
+    merge_list_field("clients", 20)
+    merge_list_field("important_facts", 20)
+    merge_list_field("topics_discussed", 30)
+    merge_list_field("ai_notes", 15)
 
     # 3. Projects
     project_updates = updates.get("projects", [])
     if isinstance(project_updates, list):
-        for project in project_updates:
-            proj_name = ""
-            if isinstance(project, dict) and "name" in project:
-                proj_name = project["name"].strip()
-            elif isinstance(project, str):
-                proj_name = project.strip()
+        for proj in project_updates:
+            name = (proj.get("name") or proj.get("value") if isinstance(proj, dict) else proj) or ""
+            name = str(name).strip()
+            if not name:
+                continue
                 
-            if proj_name:
-                existing = [p.get("name", "").lower() for p in current_memory["projects"]]
-                if proj_name.lower() not in existing:
-                    current_memory["projects"].append({
-                        "name": proj_name[:80],
-                        "added": datetime.now().strftime("%Y-%m-%d")
-                    })
-                    if len(current_memory["projects"]) > 15:
-                        current_memory["projects"] = current_memory["projects"][-15:]
+            existing = next((p for p in current_memory["projects"] if str(p.get("name", "")).lower() == name.lower()), None)
+            if existing:
+                old_conf = existing.get("confidence", 0.85)
+                new_conf = min(1.0, old_conf + 0.15)
+                if new_conf != old_conf:
+                    existing["confidence"] = new_conf
+                    existing["reasoning"] = "Reinforced by discussion."
+                    existing["last_seen"] = now_date
                     changed = True
+            else:
+                current_memory["projects"].append({
+                    "name": name,
+                    "value": name,
+                    "confidence": proj.get("confidence") if isinstance(proj, dict) and proj.get("confidence") is not None else 0.85,
+                    "reasoning": proj.get("reasoning") if isinstance(proj, dict) else "Inferred from discussion",
+                    "added": now_date,
+                    "last_seen": now_date
+                })
+                if len(current_memory["projects"]) > 15:
+                    current_memory["projects"] = current_memory["projects"][-15:]
+                changed = True
 
-    # 4. Preferences
-    pref_updates = updates.get("preferences", [])
-    if isinstance(pref_updates, list):
-        for pref in pref_updates:
-            if isinstance(pref, str):
-                if _add_unique(current_memory["preferences"], pref, max_len=15):
-                    changed = True
-
-    # 5. Important Facts
-    fact_updates = updates.get("important_facts", [])
-    if isinstance(fact_updates, list):
-        for fact in fact_updates:
-            if isinstance(fact, str):
-                if _add_unique(current_memory["important_facts"], fact, max_len=20):
-                    changed = True
-
-    # 6. Deadlines
+    # 4. Deadlines
     deadline_updates = updates.get("deadlines", [])
     if isinstance(deadline_updates, list):
         for dl in deadline_updates:
             item_name = ""
             date_val = ""
-            if isinstance(dl, dict) and "item" in dl and "date" in dl:
-                item_name = dl["item"].strip()
-                date_val = dl["date"].strip()
-            elif isinstance(dl, str):
-                item_name = dl.strip()
+            if isinstance(dl, dict):
+                item_name = (dl.get("item") or dl.get("value") or "").strip()
+                date_val = dl.get("date") or "Not specified"
+            else:
+                item_name = str(dl).strip()
                 date_val = "Not specified"
                 
-            if item_name:
+            if not item_name:
+                continue
+                
+            existing = next((d for d in current_memory["deadlines"] if str(d.get("item", "")).lower() == item_name.lower()), None)
+            if existing:
+                if date_val != "Not specified" and existing.get("date") != date_val:
+                    existing["date"] = date_val
+                    existing["confidence"] = min(1.0, existing.get("confidence", 0.85) + 0.1)
+                    existing["reasoning"] = "Deadline date updated."
+                    existing["last_seen"] = now_date
+                    changed = True
+                else:
+                    old_conf = existing.get("confidence", 0.85)
+                    new_conf = min(1.0, old_conf + 0.1)
+                    if new_conf != old_conf:
+                        existing["confidence"] = new_conf
+                        existing["reasoning"] = "Reinforced by discussion."
+                        existing["last_seen"] = now_date
+                        changed = True
+            else:
                 current_memory["deadlines"].append({
-                    "item": item_name[:80],
-                    "date": date_val[:60],
-                    "added": datetime.now().strftime("%Y-%m-%d")
+                    "item": item_name,
+                    "value": item_name,
+                    "date": date_val,
+                    "confidence": dl.get("confidence") if isinstance(dl, dict) and dl.get("confidence") is not None else 0.85,
+                    "reasoning": dl.get("reasoning") if isinstance(dl, dict) else "Inferred from discussion",
+                    "added": now_date,
+                    "last_seen": now_date
                 })
                 if len(current_memory["deadlines"]) > 10:
                     current_memory["deadlines"] = current_memory["deadlines"][-10:]
                 changed = True
 
-    # 7. Topics
-    topic_updates = updates.get("topics_discussed", [])
-    if isinstance(topic_updates, list):
-        for topic in topic_updates:
-            if isinstance(topic, str):
-                if _add_unique(current_memory["topics_discussed"], topic, max_len=30):
-                    changed = True
-
-    # 8. AI Inferences (ai_notes)
-    ai_notes_updates = updates.get("ai_notes", [])
-    if isinstance(ai_notes_updates, list):
-        for note in ai_notes_updates:
-            if isinstance(note, str):
-                if _add_unique(current_memory["ai_notes"], note, max_len=15):
-                    changed = True
-
     return changed
 
-
 def extract_memory_llm(user_message: str, current_memory: dict, preferred_model: str = None) -> bool:
-    """Uses LLM to extract structured memory from the user's message, falling back to regex on failure."""
+    """Uses LLM to extract structured memory with confidence, falling back to regex on failure."""
     if is_ad_content(user_message):
         return False
 
-    prompt = MEMORY_EXTRACTION_PROMPT_TEMPLATE.format(
+    prompt = MEMORY_CONFIDENCE_EXTRACTION_PROMPT.format(
         current_memory_json=json.dumps(current_memory, indent=2),
         user_message=user_message
     )
@@ -336,14 +597,30 @@ def extract_memory_llm(user_message: str, current_memory: dict, preferred_model:
             cleaned = re.sub(r"\n```$", "", cleaned)
         cleaned = cleaned.strip()
         
-        updates = json.loads(cleaned)
-        if isinstance(updates, dict) and updates:
-            return merge_memory_updates(current_memory, updates)
+        res_data = json.loads(cleaned)
+        if isinstance(res_data, dict):
+            updates = res_data.get("updates", {})
+            conflicts = res_data.get("conflicts", [])
+            
+            changed = False
+            if updates:
+                changed = merge_memory_updates(current_memory, updates)
+                
+            if conflicts and isinstance(conflicts, list):
+                existing_conflicts = current_memory.setdefault("conflicts", [])
+                for conflict in conflicts:
+                    new_val = conflict.get("new", {}).get("value")
+                    dup = any(c.get("new", {}).get("value") == new_val and c.get("key") == conflict.get("key") for c in existing_conflicts)
+                    if not dup:
+                        conflict["id"] = str(uuid.uuid4())[:8]
+                        conflict["detected_at"] = datetime.now().strftime("%Y-%m-%d")
+                        existing_conflicts.append(conflict)
+                        changed = True
+            return changed
     except Exception as e:
         print(f"[Memory Extraction Error] LLM extraction failed: {e}. Falling back to Regex extraction.")
         return extract_memory_regex(user_message, current_memory)
     return False
-
 
 def consolidate_memory_llm(current_memory: dict, preferred_model: str = None) -> dict:
     """Uses LLM to clean up redundancies, resolve contradictions, and remove outdated items in memory."""
@@ -368,7 +645,6 @@ def consolidate_memory_llm(current_memory: dict, preferred_model: str = None) ->
         print(f"[Memory Consolidation Error] LLM consolidation failed: {e}")
     return current_memory
 
-
 def extract_memory_async(user_id: str, user_message: str, preferred_model: str = None):
     """Background task to run LLM memory extraction, deconfliction, and save to Supabase."""
     try:
@@ -390,6 +666,7 @@ def extract_memory_async(user_id: str, user_message: str, preferred_model: str =
                 consolidated["message_count"] = mem.get("message_count", 0)
                 consolidated["first_seen"] = mem.get("first_seen", "")
                 consolidated["last_seen"] = mem.get("last_seen", "")
+                consolidated["conflicts"] = mem.get("conflicts", [])
                 mem = consolidated
                 changed = True
                 
@@ -399,12 +676,30 @@ def extract_memory_async(user_id: str, user_message: str, preferred_model: str =
     except Exception as e:
         print("[Async Memory Error] Failed to process memory asynchronously:", e)
 
-
 def rank_memory_items(user_message: str, items: list, max_results: int = 5, key_field: str = None) -> list:
     if not items:
         return []
     if not user_message:
-        return items[-max_results:]
+        # Sort by confidence * recency descending
+        scored_items = []
+        for item in items:
+            conf = 1.0
+            if isinstance(item, dict) and "confidence" in item:
+                conf = float(item["confidence"])
+            
+            recency = 0.5
+            if isinstance(item, dict):
+                date_str = item.get("last_seen") or item.get("added")
+                if date_str:
+                    try:
+                        added_date = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
+                        days_since = (datetime.now() - added_date).days
+                        recency = 1.0 / (max(0, days_since) + 1.0)
+                    except Exception:
+                        pass
+            scored_items.append((conf * recency, item))
+        scored_items.sort(key=lambda x: x[0], reverse=True)
+        return [item for score, item in scored_items[:max_results]]
 
     stop_words = {
         "the", "a", "an", "is", "for", "to", "and", "of", "in", "on", 
@@ -416,81 +711,103 @@ def rank_memory_items(user_message: str, items: list, max_results: int = 5, key_
 
     scored_items = []
     for idx, item in enumerate(items):
-        score = 0.0
-        if isinstance(item, dict) and key_field:
-            text_content = str(item.get(key_field, ""))
+        text_content = ""
+        if isinstance(item, dict):
+            text_content = str(item.get("value") or item.get("name") or item.get("item") or "")
         else:
             text_content = str(item)
 
         # 1. Relevance: token matches
         item_words = set(re.findall(r"\b\w+\b", text_content.lower()))
         overlap = search_tokens.intersection(item_words)
-        score += len(overlap) * 2.0
+        relevance = 1.0 + len(overlap) * 2.0
 
         # 2. Recency: index position or parsed date diff
-        recency_bonus = idx / len(items)
-        if isinstance(item, dict) and "added" in item:
-            try:
-                added_date = datetime.strptime(item["added"], "%Y-%m-%d")
-                days_since = (datetime.now() - added_date).days
-                days_since = max(0, days_since)
-                recency_bonus = 1.0 / (days_since + 1.0)
-            except Exception:
-                pass
+        recency = 0.5
+        if isinstance(item, dict):
+            date_str = item.get("last_seen") or item.get("added")
+            if date_str:
+                try:
+                    added_date = datetime.strptime(date_str.split()[0], "%Y-%m-%d")
+                    days_since = (datetime.now() - added_date).days
+                    recency = 1.0 / (max(0, days_since) + 1.0)
+                except Exception:
+                    pass
+
+        # 3. Confidence
+        confidence = 1.0
+        if isinstance(item, dict) and "confidence" in item:
+            confidence = float(item["confidence"])
         
-        score += recency_bonus
+        score = confidence * recency * relevance
         scored_items.append((score, item))
 
-    # Sort scored items by score descending
     scored_items.sort(key=lambda x: x[0], reverse=True)
     return [item for score, item in scored_items[:max_results]]
 
-
 def memory_to_context(mem: dict, user_message: str = "", max_results: int = 5) -> str:
     lines = []
-    p = mem.get("profile", {})
-    if p.get("name"):     lines.append(f"- Name: {p['name']}")
-    if p.get("role"):     lines.append(f"- Role: {p['role']}")
-    if p.get("company"):  lines.append(f"- Company: {p['company']}")
-    if p.get("location"): lines.append(f"- Location: {p['location']}")
-    if p.get("email"):    lines.append(f"- Email: {p['email']}")
-    if p.get("phone"):    lines.append(f"- Phone: {p['phone']}")
     
-    clients = rank_memory_items(user_message, mem.get("clients", []), max_results=max_results)
+    def get_val(item):
+        if isinstance(item, dict):
+            return item.get("value") or item.get("name") or item.get("item") or ""
+        return str(item)
+
+    # Only inject facts with confidence >= 0.65
+    def filter_high_confidence(lst):
+        res = []
+        for item in lst:
+            if isinstance(item, dict):
+                if item.get("confidence", 1.0) >= 0.65:
+                    res.append(item)
+            else:
+                res.append(item)
+        return res
+
+    p = mem.get("profile", {})
+    for field in ["name", "role", "company", "location", "email", "phone"]:
+        f_obj = p.get(field)
+        if f_obj:
+            val = f_obj.get("value") if isinstance(f_obj, dict) else f_obj
+            conf = f_obj.get("confidence", 1.0) if isinstance(f_obj, dict) else 1.0
+            if val and conf >= 0.65:
+                lines.append(f"- {field.capitalize()}: {val}")
+    
+    clients = rank_memory_items(user_message, filter_high_confidence(mem.get("clients", [])), max_results=max_results)
     if clients:
-        lines.append(f"- Known clients: {', '.join(clients)}")
+        lines.append(f"- Known clients: {', '.join([get_val(c) for c in clients])}")
         
-    projects = rank_memory_items(user_message, mem.get("projects", []), max_results=max_results, key_field="name")
+    projects = rank_memory_items(user_message, filter_high_confidence(mem.get("projects", [])), max_results=max_results, key_field="name")
     if projects:
         names = [proj.get("name", "") for proj in projects]
         lines.append(f"- Active/recent projects: {', '.join(names)}")
         
-    deadlines = rank_memory_items(user_message, mem.get("deadlines", []), max_results=max(1, max_results - 1), key_field="item")
+    deadlines = rank_memory_items(user_message, filter_high_confidence(mem.get("deadlines", [])), max_results=max(1, max_results - 1), key_field="item")
     if deadlines:
         parts = [f"{d.get('date','?')} ({d.get('item','')[:40]})" for d in deadlines]
         lines.append(f"- Deadlines: {' | '.join(parts)}")
         
-    preferences = rank_memory_items(user_message, mem.get("preferences", []), max_results=max_results)
+    preferences = rank_memory_items(user_message, filter_high_confidence(mem.get("preferences", [])), max_results=max_results)
     if preferences:
         lines.append("- User preferences:")
         for pref in preferences:
-            lines.append(f"  • {pref}")
+            lines.append(f"  • {get_val(pref)}")
             
-    facts = rank_memory_items(user_message, mem.get("important_facts", []), max_results=max_results)
+    facts = rank_memory_items(user_message, filter_high_confidence(mem.get("important_facts", [])), max_results=max_results)
     if facts:
         lines.append("- Important facts to remember:")
         for fact in facts:
-            lines.append(f"  • {fact}")
+            lines.append(f"  • {get_val(fact)}")
             
-    notes = rank_memory_items(user_message, mem.get("ai_notes", []), max_results=max_results)
+    notes = rank_memory_items(user_message, filter_high_confidence(mem.get("ai_notes", [])), max_results=max_results)
     if notes:
         lines.append("- Inferred behavioral observations (ai_notes):")
         for note in notes:
-            lines.append(f"  • {note}")
+            lines.append(f"  • {get_val(note)}")
             
-    topics = rank_memory_items(user_message, mem.get("topics_discussed", []), max_results=max_results + 1)
+    topics = rank_memory_items(user_message, filter_high_confidence(mem.get("topics_discussed", [])), max_results=max_results + 1)
     if topics:
-        lines.append(f"- Topics worked on previously: {', '.join(topics)}")
+        lines.append(f"- Topics worked on previously: {', '.join([get_val(t) for t in topics])}")
         
     sessions = mem.get("session_count", 0)
     messages = mem.get("message_count", 0)
@@ -500,14 +817,12 @@ def memory_to_context(mem: dict, user_message: str = "", max_results: int = 5) -
         lines.append(f"- First seen: {mem['first_seen']}  |  Last seen: {mem['last_seen']}")
     return "\n".join(lines) if lines else "No user facts stored yet."
 
-
 @memory_bp.route("/api/memory", methods=["GET"])
 @login_required
 def get_memory_api():
     uid = current_user_id()
     mem = load_memory(uid)
     return jsonify(mem)
-
 
 @memory_bp.route("/api/memory/update", methods=["POST"])
 @login_required
@@ -523,24 +838,40 @@ def update_memory_api():
         field = data.get("field")
         value = (data.get("value") or "").strip()
         if field in mem["profile"]:
-            mem["profile"][field] = value
+            mem["profile"][field] = {
+                "value": value,
+                "confidence": 1.0,
+                "reasoning": "Manually set by user"
+            }
             changed = True
             
     elif update_type == "list":
         key = data.get("key")
         value = (data.get("value") or "").strip()
         if key in ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]:
-            if _add_unique(mem[key], value):
+            existing = any((item.get("value") if isinstance(item, dict) else item) == value for item in mem[key])
+            if not existing:
+                mem[key].append({
+                    "value": value,
+                    "confidence": 1.0,
+                    "reasoning": "Manually added by user",
+                    "added": datetime.now().strftime("%Y-%m-%d"),
+                    "last_seen": datetime.now().strftime("%Y-%m-%d")
+                })
                 changed = True
                 
     elif update_type == "project":
         name = (data.get("name") or "").strip()
         if name:
-            existing = [p.get("name", "").lower() for p in mem["projects"]]
-            if name.lower() not in existing:
+            existing = any((p.get("name") if isinstance(p, dict) else p).lower() == name.lower() for p in mem["projects"])
+            if not existing:
                 mem["projects"].append({
-                    "name": name[:80],
-                    "added": datetime.now().strftime("%Y-%m-%d")
+                    "name": name,
+                    "value": name,
+                    "confidence": 1.0,
+                    "reasoning": "Manually added by user",
+                    "added": datetime.now().strftime("%Y-%m-%d"),
+                    "last_seen": datetime.now().strftime("%Y-%m-%d")
                 })
                 changed = True
                 
@@ -549,9 +880,13 @@ def update_memory_api():
         date_val = (data.get("date") or "").strip()
         if item and date_val:
             mem["deadlines"].append({
-                "item": item[:80],
-                "date": date_val[:60],
-                "added": datetime.now().strftime("%Y-%m-%d")
+                "item": item,
+                "value": item,
+                "date": date_val,
+                "confidence": 1.0,
+                "reasoning": "Manually added by user",
+                "added": datetime.now().strftime("%Y-%m-%d"),
+                "last_seen": datetime.now().strftime("%Y-%m-%d")
             })
             changed = True
             
@@ -559,7 +894,6 @@ def update_memory_api():
         save_memory(uid, mem)
         return jsonify({"status": "ok", "memory": mem})
     return jsonify({"status": "no_change", "error": "Invalid request parameters or duplicate item"}), 400
-
 
 @memory_bp.route("/api/memory/delete", methods=["POST"])
 @login_required
@@ -573,21 +907,22 @@ def delete_memory_api():
     
     if key in ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]:
         val = data.get("value")
-        if val in mem[key]:
-            mem[key].remove(val)
+        initial_len = len(mem[key])
+        mem[key] = [item for item in mem[key] if (item.get("value") if isinstance(item, dict) else item) != val]
+        if len(mem[key]) < initial_len:
             changed = True
             
     elif key == "projects":
         name = data.get("name")
         initial_len = len(mem["projects"])
-        mem["projects"] = [p for p in mem["projects"] if p.get("name") != name]
+        mem["projects"] = [p for p in mem["projects"] if (p.get("name") if isinstance(p, dict) else p) != name]
         if len(mem["projects"]) < initial_len:
             changed = True
             
     elif key == "deadlines":
         item = data.get("item")
         initial_len = len(mem["deadlines"])
-        mem["deadlines"] = [d for d in mem["deadlines"] if d.get("item") != item]
+        mem["deadlines"] = [d for d in mem["deadlines"] if (d.get("item") if isinstance(d, dict) else d) != item]
         if len(mem["deadlines"]) < initial_len:
             changed = True
             
@@ -596,3 +931,82 @@ def delete_memory_api():
         return jsonify({"status": "ok", "memory": mem})
     return jsonify({"status": "no_change", "error": "Item not found"}), 404
 
+@memory_bp.route("/api/memory/override_confidence", methods=["POST"])
+@login_required
+def override_confidence_api():
+    uid = current_user_id()
+    data = request.get_json() or {}
+    key = data.get("key")
+    val = data.get("value")
+    confidence = float(data.get("confidence", 1.0))
+    
+    mem = load_memory(uid)
+    changed = False
+    
+    if key == "profile":
+        field = data.get("field")
+        if field in mem["profile"]:
+            mem["profile"][field]["confidence"] = confidence
+            mem["profile"][field]["reasoning"] = "Manually overridden by user"
+            changed = True
+    elif key in ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes", "projects", "deadlines"]:
+        for item in mem[key]:
+            item_val = item.get("value") or item.get("name") or item.get("item")
+            if item_val == val:
+                item["confidence"] = confidence
+                item["reasoning"] = "Manually overridden by user"
+                item["last_seen"] = datetime.now().strftime("%Y-%m-%d")
+                changed = True
+                break
+                
+    if changed:
+        save_memory(uid, mem)
+        return jsonify({"status": "ok", "memory": mem})
+    return jsonify({"status": "error", "error": "Item not found"}), 404
+
+@memory_bp.route("/api/memory/resolve_conflict", methods=["POST"])
+@login_required
+def resolve_conflict_api():
+    uid = current_user_id()
+    data = request.get_json() or {}
+    cid = data.get("conflict_id")
+    action = data.get("action")
+    
+    mem = load_memory(uid)
+    conflicts = mem.get("conflicts", [])
+    conflict = next((c for c in conflicts if c.get("id") == cid), None)
+    if not conflict:
+        return jsonify({"status": "error", "error": "Conflict not found"}), 404
+        
+    key = conflict["key"]
+    existing = conflict["existing"]
+    new_item = conflict["new"]
+    
+    if key.startswith("profile."):
+        field = key.split(".")[1]
+        if action == "use_new":
+            mem["profile"][field] = new_item
+    else:
+        if action == "use_new":
+            target_val = existing.get("value") or existing.get("name") or existing.get("item")
+            for idx, item in enumerate(mem[key]):
+                item_val = item.get("value") or item.get("name") or item.get("item")
+                if item_val == target_val:
+                    mem[key][idx] = new_item
+                    break
+        elif action == "keep_both":
+            mem[key].append(new_item)
+
+    mem["conflicts"] = [c for c in conflicts if c.get("id") != cid]
+    save_memory(uid, mem)
+    return jsonify({"status": "ok", "memory": mem})
+
+@memory_bp.route("/api/memory/run_decay", methods=["POST"])
+@login_required
+def run_decay_api():
+    uid = current_user_id()
+    mem = load_memory(uid)
+    apply_memory_decay(mem)
+    mem["last_decay_run"] = datetime.now().strftime("%Y-%m-%d")
+    save_memory(uid, mem)
+    return jsonify({"status": "ok", "memory": mem})

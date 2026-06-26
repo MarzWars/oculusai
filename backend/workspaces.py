@@ -141,3 +141,26 @@ def delete_workspace_api():
         return jsonify({"status": "ok", "current_workspace_id": session["current_workspace_id"]})
     except Exception as e:
         return jsonify({"error": f"Error deleting workspace: {str(e)}"}), 500
+
+
+@workspaces_bp.route("/api/workspaces/<workspace_id>/settings", methods=["POST"])
+@login_required
+def update_workspace_settings_api(workspace_id):
+    uid = current_user_id()
+    try:
+        res = supabase.table("oculus_workspaces").select("id, settings").eq("user_id", uid).eq("id", workspace_id).execute()
+        if not res.data:
+            return jsonify({"error": "Workspace not found or access denied."}), 404
+            
+        current_settings = res.data[0].get("settings") or {}
+        if not isinstance(current_settings, dict):
+            current_settings = {}
+            
+        data = request.get_json() or {}
+        for k, v in data.items():
+            current_settings[k] = v
+            
+        supabase.table("oculus_workspaces").update({"settings": current_settings}).eq("id", workspace_id).execute()
+        return jsonify({"status": "ok", "settings": current_settings})
+    except Exception as e:
+        return jsonify({"error": f"Error updating settings: {str(e)}"}), 500

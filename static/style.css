@@ -3295,3 +3295,106 @@ code.inline-code {
   color: var(--text-muted);
   border-color: rgba(255, 255, 255, 0.1);
 }
+
+/* ── Phase 2 Confidence Badges ── */
+.conf-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  display: inline-flex;
+  align-items: center;
+}
+
+.conf-high {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+}
+
+.conf-medium {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
+
+.conf-low {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.2);
+}
+
+/* ── UI Trust and Decay buttons ── */
+.brain-trust-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.65;
+  transition: opacity 0.15s, transform 0.15s;
+  padding: 2px;
+}
+
+.brain-trust-btn:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
+.decay-run-btn:hover {
+  border-color: var(--accent) !important;
+  color: var(--text) !important;
+}
+
+/* ── Toggle Switch Component ── */
+.switch-toggle input:checked + .slider-toggle {
+  background-color: var(--accent);
+}
+
+.switch-toggle input:focus + .slider-toggle {
+  box-shadow: 0 0 1px var(--accent);
+}
+
+.switch-toggle input:checked + .slider-toggle:before {
+  transform: translateX(16px);
+}
+
+.slider-toggle {
+  transition: .2s;
+  border-radius: 20px;
+}
+
+.slider-toggle:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .2s;
+  border-radius: 50%;
+}
+
+.settings-toggle-card:hover {
+  border-color: rgba(124,106,247,0.3) !important;
+}
+
+/* ── Conflict cards ── */
+.conflict-choice-btn {
+  transition: opacity 0.15s, transform 0.1s;
+}
+.conflict-choice-btn:hover {
+  opacity: 0.9;
+  transform: translateY(-0.5px);
+}
+.conflict-choice-btn:active {
+  transform: translateY(0);
+}
+.details-chevron {
+  transition: transform 0.2s;
+}
+details[open] .details-chevron {
+  transform: rotate(180deg);
+}

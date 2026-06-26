@@ -416,6 +416,16 @@ def ask():
     if action_data:
         action_id = log_proposed_action(uid, wid, action_data["action_type"], action_data["arguments"])
 
+    # Load settings from supabase oculus_workspaces to check if self-reflection is enabled
+    self_reflection_enabled = False
+    try:
+        res = supabase.table("oculus_workspaces").select("settings").eq("id", wid).execute()
+        if res.data:
+            settings = res.data[0].get("settings") or {}
+            self_reflection_enabled = settings.get("self_reflection_enabled", False)
+    except Exception as e:
+        print("[Chat] Failed to load workspace settings:", e)
+
     prompt = build_prompt(wid, user_message, memory, history)
     # Clear uploaded files cache immediately
     from backend.files import UPLOADED_FILES_CACHE
@@ -427,8 +437,24 @@ def ask():
 
     def generate():
         try:
+            stream_prompt = prompt
+            if self_reflection_enabled:
+                print("[Chat Reflection] Running 2-pass self-reflection critique...")
+                try:
+                    draft = query_openrouter(prompt, preferred_model=preferred_model)
+                    if draft:
+                        from backend.prompts import CRITIQUE_PROMPT_TEMPLATE
+                        memory_context = memory_to_context(memory, user_message)
+                        stream_prompt = CRITIQUE_PROMPT_TEMPLATE.format(
+                            memory_context=memory_context,
+                            user_message=user_message,
+                            draft=draft
+                        )
+                except Exception as ex:
+                    print("[Chat Reflection Error] Draft generation failed, falling back:", ex)
+
             output_chunks = []
-            for chunk in query_openrouter_stream(prompt, preferred_model=preferred_model):
+            for chunk in query_openrouter_stream(stream_prompt, preferred_model=preferred_model):
                 output_chunks.append(chunk)
                 yield chunk
             
