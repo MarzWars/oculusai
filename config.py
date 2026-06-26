@@ -42,7 +42,7 @@ class Config:
                                                        "name": "Dolphin Mistral 24B",    "tag": "Uncensored · Free"},
     ]
     
-    DEFAULT_MODEL = "nousresearch/hermes-3-llama-3.1-70b"
+    DEFAULT_MODEL = "openrouter/owl-alpha"
     OR_TIMEOUT = 45  # seconds
     
     VERBATIM_TURNS = 6
