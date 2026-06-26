@@ -33,422 +33,452 @@
         </div>
     </div>
 
-    <!-- ── Sidebar Dock ── -->
-    <div class="sidebar-dock" id="sidebarDock">
-        <div class="dock-group top-group">
-            <div class="dock-logo">
-                <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
-            </div>
-            <button class="dock-btn" onclick="togglePanel('models')" id="dock-btn-models" title="AI Models">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="2" y1="12" x2="22" y2="12"/>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                </svg>
-                <span class="dock-tooltip">AI Models</span>
-            </button>
-            <button class="dock-btn" onclick="togglePanel('settings')" id="dock-btn-settings" title="Workspace Settings">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-                </svg>
-                <span class="dock-tooltip">Workspace Settings</span>
-            </button>
-            <button class="dock-btn" onclick="togglePanel('brain')" id="dock-btn-brain" title="Oculus Brain">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M9.5 2.03a10.5 10.5 0 0 1 10.47 10.47c0 4.88-3.95 8.8-8.8 8.8a8.8 8.8 0 0 1-8.8-8.8C2.37 7.74 6 3.65 9.5 2.03z"/>
-                    <path d="M12 2.03v20"/>
-                </svg>
-                <span class="dock-tooltip">Oculus Brain</span>
-            </button>
-        </div>
-        <div class="dock-group bottom-group">
-            <button class="dock-btn" onclick="togglePanel('notes')" id="dock-btn-notes" title="Style & Behavior Notes">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 20h9"/>
-                    <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
-                </svg>
-                <span class="dock-tooltip">Style & Behavior Notes</span>
-            </button>
-            <button class="dock-btn" onclick="togglePanel('actions')" id="dock-btn-actions" title="Action Log">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                </svg>
-                <span class="dock-tooltip">Action Log</span>
-            </button>
-            <button class="dock-btn" onclick="togglePanel('docs')" id="dock-btn-docs" title="Generated Documents">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                </svg>
-                <span class="dock-tooltip">Generated Documents</span>
-            </button>
-        </div>
-    </div>
-
-    <!-- ── Sliding Panel Drawer ── -->
-    <div class="sliding-panel" id="slidingPanel">
-        <div class="panel-header">
-            <h3 id="panelTitle">Oculus Brain</h3>
-            <button class="panel-close-btn" onclick="closePanel()">×</button>
-        </div>
-        <div class="panel-body">
-            <!-- 1. AI Models View -->
-            <div class="panel-view" id="view-models" style="display:none;">
-                <div class="sidebar-section-title">AI Model</div>
-                <div class="model-card-list" id="modelCardList">
-                    {% for m in model_options %}
-                    <div class="model-card {% if m.id == active_model %}active{% endif %}"
-                        onclick="setModel('{{ m.id }}')" data-model-id="{{ m.id }}">
-                        <div class="model-card-radio"></div>
-                        <div class="model-card-info">
-                            <div class="model-card-name">{{ m.name }}</div>
-                            <div class="model-card-tag">{{ m.tag }}</div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-            </div>
-
-            <!-- 2. Workspace Settings View -->
-            <div class="panel-view" id="view-settings" style="display:none;">
-                <div class="sidebar-section-title">Workspace Settings</div>
-                <div class="settings-toggle-card" style="background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; transition: border-color 0.2s ease;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <span style="font-size: 13px; font-weight: 500; color: var(--text);">Self-Reflection Pass</span>
-                        <label class="switch-toggle" style="position: relative; display: inline-block; width: 36px; height: 20px;">
-                            <input type="checkbox" id="reflectionToggle" onchange="toggleSelfReflection(this)" style="opacity: 0; width: 0; height: 0;">
-                            <span class="slider-toggle" style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border); transition: .2s; border-radius: 20px;"></span>
-                        </label>
-                    </div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.45;">
-                        Enables a 2-pass reflection step to audit memory alignment, accuracy, and tone consistency.
-                    </div>
-                </div>
-            </div>
-
-            <!-- 3. Oculus Brain View -->
-            <div class="panel-view" id="view-brain" style="display:none;">
-                <div class="sidebar-section-title">🧠 Oculus Brain</div>
-                <div class="brain-drawer-content" id="brainDrawerContent" style="padding:0; max-height:none; flex:none;">
-                    <div class="brain-loading">Loading brain state…</div>
-                </div>
-            </div>
-
-            <!-- 4. Style & Behavior Notes View -->
-            <div class="panel-view" id="view-notes" style="display:none;">
-                <div class="sidebar-section-title">🧠 Style & Behavior Notes</div>
-                <div class="brain-notes-content" id="brainNotesContent" style="padding:0; max-height:none; flex:none;">
-                    <div class="brain-loading">Loading notes…</div>
-                </div>
-            </div>
-
-            <!-- 5. Action Log View -->
-            <div class="panel-view" id="view-actions" style="display:none;">
-                <div class="sidebar-section-title">⚡ Action Log</div>
-                <div class="actions-log-content" id="actionsLogContent" style="padding: 10px 0;">
-                    <div class="actions-loading" style="font-size:12.5px; color:var(--text-muted);">Loading actions history…</div>
-                </div>
-            </div>
-
-            <!-- 6. Generated Documents View -->
-            <div class="panel-view" id="view-docs" style="display:none;">
-                <div class="sidebar-section-title">📁 Generated Documents</div>
-                <div style="display:flex; gap:6px; margin-bottom:8px;">
-                    <input
-                        type="text"
-                        id="generatedDocsSearch"
-                        placeholder="Search proposals, emails…"
-                        style="flex:1; background:var(--bg-3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font-sans); font-size:12px; padding:5px 10px; outline:none;"
-                        onkeydown="if(event.key==='Enter') searchGeneratedDocs()"
-                    >
-                    <button
-                        onclick="searchGeneratedDocs()"
-                        style="background:var(--accent); color:#fff; border:none; border-radius:6px; padding:5px 10px; font-size:11px; cursor:pointer; font-family:var(--font-sans); white-space:nowrap;"
-                    >Search</button>
-                </div>
-                <div id="generatedDocsContent" style="padding: 4px 0; max-height: 400px; overflow-y: auto;">
-                    <div style="font-size:12px; color:var(--text-muted); padding:8px 0;">Loading…</div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <div class="sidebar-overlay" id="sidebarOverlay" onclick="closePanel()"></div>
-    
-    <!-- ── Right Sidebar (Workspace Documents Browser) ── -->
-    <div class="right-sidebar" id="rightSidebar">
-        <div class="sidebar-header">
-            <div class="sidebar-header-title">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" style="color: var(--accent); margin-right: 6px; display: inline-block; vertical-align: middle;">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                </svg>
-                <strong>Workspace Documents</strong>
-            </div>
-            <button class="sidebar-close-btn" onclick="toggleRightSidebar()" aria-label="Close">×</button>
-        </div>
-        <div class="sidebar-body">
-            <div class="sidebar-section-title">Ingest Document (PDF / DOCX)</div>
-            <div class="doc-upload-area" id="docUploadArea" onclick="triggerDocSelect()">
-                <div class="doc-upload-icon">📤</div>
-                <div class="doc-upload-text">Click or drag PDF/DOCX here to ingest</div>
-                <input type="file" id="docFileInput" style="display: none;" accept=".pdf,.docx" onchange="handleDocSelect(event)" multiple>
-            </div>
-            
-            <div class="sidebar-section-title" style="margin-top: 25px;">Uploaded Documents</div>
-            <div class="documents-list-content" id="documentsListContent">
-                <div class="docs-loading" style="font-size:12.5px; color:var(--text-muted); padding: 4px;">Loading workspace documents…</div>
-            </div>
-        </div>
-    </div>
-    <div class="sidebar-overlay" id="rightSidebarOverlay" onclick="toggleRightSidebar()"></div>
-
     <!-- ── App Shell ── -->
     <div class="app-shell">
-        <div class="main-chat-container">
-        <header>
-            <div style="display:flex;align-items:center;gap:10px;">
-                <button class="sidebar-toggle-btn" onclick="togglePanel('brain')" title="Oculus Brain">
+
+        <!-- ── Sidebar Dock ── -->
+        <div class="sidebar-dock" id="sidebarDock">
+            <div class="dock-group top-group">
+                <div class="dock-logo">
+                    <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+                </div>
+                <button class="dock-btn" onclick="togglePanel('models')" id="dock-btn-models" title="AI Models">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
                         stroke-linejoin="round">
-                        <line x1="3" y1="6" x2="21" y2="6" />
-                        <line x1="3" y1="12" x2="21" y2="12" />
-                        <line x1="3" y1="18" x2="21" y2="18" />
+                        <circle cx="12" cy="12" r="10" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                        <path
+                            d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
                     </svg>
+                    <span class="dock-tooltip">AI Models</span>
                 </button>
-                <div class="logo-mark">
-                    <div class="logo-icon">
-                        <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+                <button class="dock-btn" onclick="togglePanel('settings')" id="dock-btn-settings"
+                    title="Workspace Settings">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                    </svg>
+                    <span class="dock-tooltip">Workspace Settings</span>
+                </button>
+                <button class="dock-btn" onclick="togglePanel('brain')" id="dock-btn-brain" title="Oculus Brain">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path
+                            d="M9.5 2.03a10.5 10.5 0 0 1 10.47 10.47c0 4.88-3.95 8.8-8.8 8.8a8.8 8.8 0 0 1-8.8-8.8C2.37 7.74 6 3.65 9.5 2.03z" />
+                        <path d="M12 2.03v20" />
+                    </svg>
+                    <span class="dock-tooltip">Oculus Brain</span>
+                </button>
+            </div>
+            <div class="dock-group bottom-group">
+                <button class="dock-btn" onclick="togglePanel('notes')" id="dock-btn-notes"
+                    title="Style & Behavior Notes">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                    </svg>
+                    <span class="dock-tooltip">Style & Behavior Notes</span>
+                </button>
+                <button class="dock-btn" onclick="togglePanel('actions')" id="dock-btn-actions" title="Action Log">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                    <span class="dock-tooltip">Action Log</span>
+                </button>
+                <button class="dock-btn" onclick="togglePanel('docs')" id="dock-btn-docs" title="Generated Documents">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+                    </svg>
+                    <span class="dock-tooltip">Generated Documents</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- ── Sliding Panel Drawer ── -->
+        <div class="sliding-panel" id="slidingPanel">
+            <div class="panel-header">
+                <h3 id="panelTitle">Oculus Brain</h3>
+                <button class="panel-close-btn" onclick="closePanel()">×</button>
+            </div>
+            <div class="panel-body">
+                <!-- 1. AI Models View -->
+                <div class="panel-view" id="view-models" style="display:none;">
+                    <div class="sidebar-section-title">AI Model</div>
+                    <div class="model-card-list" id="modelCardList">
+                        {% for m in model_options %}
+                        <div class="model-card {% if m.id == active_model %}active{% endif %}"
+                            onclick="setModel('{{ m.id }}')" data-model-id="{{ m.id }}">
+                            <div class="model-card-radio"></div>
+                            <div class="model-card-info">
+                                <div class="model-card-name">{{ m.name }}</div>
+                                <div class="model-card-tag">{{ m.tag }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
-                    <div class="logo-text" style="position: relative;">
-                        <strong>Oculus AI</strong>
-                        <div class="workspace-trigger-container">
-                            <span class="workspace-selector-trigger" id="workspaceTrigger" onclick="toggleWorkspaceDropdown(event)">
-                                <span id="currentWorkspaceName">Personal Workspace</span>
-                                <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="10" height="10">
-                                    <polyline points="6 9 12 15 18 9"></polyline>
-                                </svg>
-                            </span>
-                            <!-- Dropdown Menu -->
-                            <div class="workspace-dropdown" id="workspaceDropdown">
-                                <div class="workspace-dropdown-header">SWITCH WORKSPACE</div>
-                                <div class="workspace-list" id="workspaceList"></div>
-                                <div class="workspace-dropdown-divider"></div>
-                                <div class="workspace-create-btn-wrap">
-                                    <button class="workspace-dropdown-btn add-ws-btn" onclick="showCreateWorkspaceModal(event)">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="12" height="12" style="margin-right: 5px;">
-                                            <line x1="12" y1="5" x2="12" y2="19"></line>
-                                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                                        </svg>
-                                        Create Workspace
-                                    </button>
+                </div>
+
+                <!-- 2. Workspace Settings View -->
+                <div class="panel-view" id="view-settings" style="display:none;">
+                    <div class="sidebar-section-title">Workspace Settings</div>
+                    <div class="settings-toggle-card"
+                        style="background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-bottom: 12px; transition: border-color 0.2s ease;">
+                        <div style="display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 13px; font-weight: 500; color: var(--text);">Self-Reflection
+                                Pass</span>
+                            <label class="switch-toggle"
+                                style="position: relative; display: inline-block; width: 36px; height: 20px;">
+                                <input type="checkbox" id="reflectionToggle" onchange="toggleSelfReflection(this)"
+                                    style="opacity: 0; width: 0; height: 0;">
+                                <span class="slider-toggle"
+                                    style="position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: var(--border); transition: .2s; border-radius: 20px;"></span>
+                            </label>
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-top: 6px; line-height: 1.45;">
+                            Enables a 2-pass reflection step to audit memory alignment, accuracy, and tone consistency.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 3. Oculus Brain View -->
+                <div class="panel-view" id="view-brain" style="display:none;">
+                    <div class="sidebar-section-title">🧠 Oculus Brain</div>
+                    <div class="brain-drawer-content" id="brainDrawerContent"
+                        style="padding:0; max-height:none; flex:none;">
+                        <div class="brain-loading">Loading brain state…</div>
+                    </div>
+                </div>
+
+                <!-- 4. Style & Behavior Notes View -->
+                <div class="panel-view" id="view-notes" style="display:none;">
+                    <div class="sidebar-section-title">🧠 Style & Behavior Notes</div>
+                    <div class="brain-notes-content" id="brainNotesContent"
+                        style="padding:0; max-height:none; flex:none;">
+                        <div class="brain-loading">Loading notes…</div>
+                    </div>
+                </div>
+
+                <!-- 5. Action Log View -->
+                <div class="panel-view" id="view-actions" style="display:none;">
+                    <div class="sidebar-section-title">⚡ Action Log</div>
+                    <div class="actions-log-content" id="actionsLogContent" style="padding: 10px 0;">
+                        <div class="actions-loading" style="font-size:12.5px; color:var(--text-muted);">Loading actions
+                            history…</div>
+                    </div>
+                </div>
+
+                <!-- 6. Generated Documents View -->
+                <div class="panel-view" id="view-docs" style="display:none;">
+                    <div class="sidebar-section-title">📁 Generated Documents</div>
+                    <div style="display:flex; gap:6px; margin-bottom:8px;">
+                        <input type="text" id="generatedDocsSearch" placeholder="Search proposals, emails…"
+                            style="flex:1; background:var(--bg-3); border:1px solid var(--border); border-radius:6px; color:var(--text); font-family:var(--font-sans); font-size:12px; padding:5px 10px; outline:none;"
+                            onkeydown="if(event.key==='Enter') searchGeneratedDocs()">
+                        <button onclick="searchGeneratedDocs()"
+                            style="background:var(--accent); color:#fff; border:none; border-radius:6px; padding:5px 10px; font-size:11px; cursor:pointer; font-family:var(--font-sans); white-space:nowrap;">Search</button>
+                    </div>
+                    <div id="generatedDocsContent" style="padding: 4px 0; max-height: 400px; overflow-y: auto;">
+                        <div style="font-size:12px; color:var(--text-muted); padding:8px 0;">Loading…</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="sidebar-overlay" id="sidebarOverlay" onclick="closePanel()"></div>
+
+        <!-- ── Right Sidebar (Workspace Documents Browser) ── -->
+        <div class="right-sidebar" id="rightSidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-header-title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                        stroke-linejoin="round" width="16" height="16"
+                        style="color: var(--accent); margin-right: 6px; display: inline-block; vertical-align: middle;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    <strong>Workspace Documents</strong>
+                </div>
+                <button class="sidebar-close-btn" onclick="toggleRightSidebar()" aria-label="Close">×</button>
+            </div>
+            <div class="sidebar-body">
+                <div class="sidebar-section-title">Ingest Document (PDF / DOCX)</div>
+                <div class="doc-upload-area" id="docUploadArea" onclick="triggerDocSelect()">
+                    <div class="doc-upload-icon">📤</div>
+                    <div class="doc-upload-text">Click or drag PDF/DOCX here to ingest</div>
+                    <input type="file" id="docFileInput" style="display: none;" accept=".pdf,.docx"
+                        onchange="handleDocSelect(event)" multiple>
+                </div>
+
+                <div class="sidebar-section-title" style="margin-top: 25px;">Uploaded Documents</div>
+                <div class="documents-list-content" id="documentsListContent">
+                    <div class="docs-loading" style="font-size:12.5px; color:var(--text-muted); padding: 4px;">Loading
+                        workspace documents…</div>
+                </div>
+            </div>
+        </div>
+        <div class="sidebar-overlay" id="rightSidebarOverlay" onclick="toggleRightSidebar()"></div>
+
+        <div class="main-chat-container">
+            <header>
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <button class="sidebar-toggle-btn" onclick="togglePanel('brain')" title="Oculus Brain">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="3" y1="6" x2="21" y2="6" />
+                            <line x1="3" y1="12" x2="21" y2="12" />
+                            <line x1="3" y1="18" x2="21" y2="18" />
+                        </svg>
+                    </button>
+                    <div class="logo-mark">
+                        <div class="logo-icon">
+                            <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+                        </div>
+                        <div class="logo-text" style="position: relative;">
+                            <strong>Oculus AI</strong>
+                            <div class="workspace-trigger-container">
+                                <span class="workspace-selector-trigger" id="workspaceTrigger"
+                                    onclick="toggleWorkspaceDropdown(event)">
+                                    <span id="currentWorkspaceName">Personal Workspace</span>
+                                    <svg class="chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="10"
+                                        height="10">
+                                        <polyline points="6 9 12 15 18 9"></polyline>
+                                    </svg>
+                                </span>
+                                <!-- Dropdown Menu -->
+                                <div class="workspace-dropdown" id="workspaceDropdown">
+                                    <div class="workspace-dropdown-header">SWITCH WORKSPACE</div>
+                                    <div class="workspace-list" id="workspaceList"></div>
+                                    <div class="workspace-dropdown-divider"></div>
+                                    <div class="workspace-create-btn-wrap">
+                                        <button class="workspace-dropdown-btn add-ws-btn"
+                                            onclick="showCreateWorkspaceModal(event)">
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                                stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                                                width="12" height="12" style="margin-right: 5px;">
+                                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                            </svg>
+                                            Create Workspace
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="header-actions">
-                <!-- Active model pill — clicking opens sidebar -->
-                <button class="active-model-pill" onclick="togglePanel('models')" title="Switch model" id="activeModelPill">
-                    <span class="dot"></span>
-                    <span id="activeModelName">{{ active_name }}</span>
-                </button>
-                <!-- Documents Toggle Button -->
-                <button class="docs-toggle-btn" onclick="toggleRightSidebar()" title="Workspace Documents">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="14" height="14" style="margin-right:4px;">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                        <polyline points="14 2 14 8 20 8"></polyline>
-                    </svg>
-                    <span>Docs</span>
-                </button>
-                <span class="user-email">{{ email | esc }}</span>
-                <button class="clear-btn" onclick="clearChat()">Clear</button>
-                <form method="POST" action="/logout" style="margin:0">
-                    <button class="logout-btn" type="submit">Sign out</button>
-                </form>
-            </div>
-        </header>
+                <div class="header-actions">
+                    <!-- Active model pill — clicking opens sidebar -->
+                    <button class="active-model-pill" onclick="togglePanel('models')" title="Switch model"
+                        id="activeModelPill">
+                        <span class="dot"></span>
+                        <span id="activeModelName">{{ active_name }}</span>
+                    </button>
+                    <!-- Documents Toggle Button -->
+                    <button class="docs-toggle-btn" onclick="toggleRightSidebar()" title="Workspace Documents">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" width="14" height="14"
+                            style="margin-right:4px;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                        </svg>
+                        <span>Docs</span>
+                    </button>
+                    <span class="user-email">{{ email | esc }}</span>
+                    <button class="clear-btn" onclick="clearChat()">Clear</button>
+                    <form method="POST" action="/logout" style="margin:0">
+                        <button class="logout-btn" type="submit">Sign out</button>
+                    </form>
+                </div>
+            </header>
 
-        <div class="chat-feed" id="chatFeed">
-            {% if chat_history %}
-            <div class="date-divider">Today</div>
-            {% for m in chat_history %}
-            {% if m.role == 'user' %}
-            <div class="bubble-row user-row">
-                <div class="bubble user-bubble">
-                    <p>{{ m.text | esc }}</p>
-                </div>
-                <div class="avatar user-avatar">
-                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="8" r="4" fill="currentColor" />
-                        <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="2"
-                            stroke-linecap="round" />
-                    </svg>
-                </div>
-            </div>
-            {% else %}
-            <div class="bubble-row ai-row">
-                <div class="avatar ai-avatar">
-                    <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
-                </div>
-                <div class="bubble ai-bubble">{{ m.text | format_ai_response | safe }}</div>
-            </div>
-            {% endif %}
-            {% endfor %}
-            {% else %}
-            <div class="empty-state">
-                <div class="empty-icon">
-                    <img src="/static/oculus_avatar.svg" width="80" height="80" alt="Oculus">
-                </div>
-                <h3>{{ greeting }}</h3>
-                <p>Code, copy, strategy, ads — whatever you need, let's get into it.</p>
-                <div class="suggestion-chips">
-                    <div class="chip" onclick="fillMsg(this)">Write a Python script</div>
-                    <div class="chip" onclick="fillMsg(this)">Debug my code</div>
-                    <div class="chip" onclick="fillMsg(this)">Write a Facebook ad</div>
-                    <div class="chip" onclick="fillMsg(this)">Red Rooms ad</div>
-                    <div class="chip" onclick="fillMsg(this)">Build a REST API</div>
-                    <div class="chip" onclick="fillMsg(this)">Help with a customer reply</div>
-                </div>
-            </div>
-            {% endif %}
-
-            <div class="typing-indicator" id="typingIndicator">
-                <div class="avatar ai-avatar">
-                    <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
-                </div>
-                <div class="typing-text">
-                    <div class="typing-dots">
-                        <span></span><span></span><span></span>
+            <div class="chat-feed" id="chatFeed">
+                {% if chat_history %}
+                <div class="date-divider">Today</div>
+                {% for m in chat_history %}
+                {% if m.role == 'user' %}
+                <div class="bubble-row user-row">
+                    <div class="bubble user-bubble">
+                        <p>{{ m.text | esc }}</p>
                     </div>
-                    Oculus is thinking
+                    <div class="avatar user-avatar">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <circle cx="12" cy="8" r="4" fill="currentColor" />
+                            <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" />
+                        </svg>
+                    </div>
+                </div>
+                {% else %}
+                <div class="bubble-row ai-row">
+                    <div class="avatar ai-avatar">
+                        <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+                    </div>
+                    <div class="bubble ai-bubble">{{ m.text | format_ai_response | safe }}</div>
+                </div>
+                {% endif %}
+                {% endfor %}
+                {% else %}
+                <div class="empty-state">
+                    <div class="empty-icon">
+                        <img src="/static/oculus_avatar.svg" width="80" height="80" alt="Oculus">
+                    </div>
+                    <h3>{{ greeting }}</h3>
+                    <p>Code, copy, strategy, ads — whatever you need, let's get into it.</p>
+                    <div class="suggestion-chips">
+                        <div class="chip" onclick="fillMsg(this)">Write a Python script</div>
+                        <div class="chip" onclick="fillMsg(this)">Debug my code</div>
+                        <div class="chip" onclick="fillMsg(this)">Write a Facebook ad</div>
+                        <div class="chip" onclick="fillMsg(this)">Red Rooms ad</div>
+                        <div class="chip" onclick="fillMsg(this)">Build a REST API</div>
+                        <div class="chip" onclick="fillMsg(this)">Help with a customer reply</div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="typing-indicator" id="typingIndicator">
+                    <div class="avatar ai-avatar">
+                        <img src="/static/oculus_avatar.svg" width="22" height="22" alt="Oculus">
+                    </div>
+                    <div class="typing-text">
+                        <div class="typing-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                        Oculus is thinking
+                    </div>
+                </div>
+
+                <div id="streamRow" style="display:none">
+                    <div class="avatar ai-avatar">O</div>
+                    <div id="streamBubble"></div>
                 </div>
             </div>
 
-            <div id="streamRow" style="display:none">
-                <div class="avatar ai-avatar">O</div>
-                <div id="streamBubble"></div>
+            <div class="input-area">
+                <div class="upload-chips-container" id="uploadChipsContainer" style="display:none;"></div>
+                <div class="input-wrap">
+                    <button class="attach-btn" onclick="triggerFileSelect()" type="button" title="Attach files">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                                d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-3.31 2.69-6 6-6s6 2.69 6 6v10.5c0 4.42-3.58 8-8 8s-8-3.58-8-8V6h2v9.5c0 3.31 2.69 6 6 6s6-2.69 6-6V5c0-2.21-1.79-4-4-4s-4 1.79-4 4v12.5c0 1.1.9 2 2 2s2-.9 2-2V6h2z" />
+                        </svg>
+                    </button>
+                    <input type="file" id="fileInput" style="display:none;" multiple onchange="handleFileSelect(event)">
+                    <textarea id="msgInput" placeholder="Message Oculus AI…" autocomplete="off"
+                        onkeydown="handleKey(event)" rows="1"></textarea>
+                    <button class="send-btn" onclick="sendMessage()" title="Send">
+                        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="input-hint">Oculus can make mistakes. Verify important info.</div>
+            </div> <!-- end of main-chat-container -->
+        </div> <!-- end of app-shell -->
+
+        <!-- Legacy Brain Drawer (kept for JS compat, hidden) -->
+        <div class="brain-drawer" id="brainDrawer" style="display:none;">
+            <div class="brain-drawer-header">
+                <h3>🧠 Oculus Brain</h3>
+                <button class="close-drawer-btn" onclick="toggleBrain()">×</button>
+            </div>
+            <div class="brain-drawer-content"></div>
+        </div>
+        <div class="brain-overlay" id="brainOverlay"></div>
+
+        <!-- Interactive Code Sandbox -->
+        <div class="sandbox-overlay" id="sandboxOverlay">
+            <div class="sandbox-window">
+                <div class="sandbox-header">
+                    <div class="sandbox-title-wrap">
+                        <span class="sandbox-title-icon">💻</span>
+                        <span class="sandbox-title">Interactive Sandbox</span>
+                        <span class="sandbox-lang-badge" id="sandboxLangBadge">HTML</span>
+                    </div>
+                    <div class="sandbox-actions">
+                        <button class="sandbox-btn run-btn" onclick="runSandbox()" title="Run Code (Ctrl+Enter)">⚡
+                            Run</button>
+                        <button class="sandbox-btn copy-code-btn" onclick="copySandboxCode()" title="Copy Code">📋
+                            Copy</button>
+                        <button class="sandbox-btn save-btn" onclick="saveSandboxToProject()" title="Save to Project">💾
+                            Save to Project</button>
+                        <button class="sandbox-close-btn" onclick="closeSandbox()" title="Close Sandbox">×</button>
+                    </div>
+                </div>
+                <div class="sandbox-path-bar">
+                    <span class="path-label">Save Path:</span>
+                    <input type="text" id="sandboxSavePath" placeholder="e.g. index.html or static/demo.html"
+                        value="index.html">
+                </div>
+                <div class="sandbox-body">
+                    <div class="sandbox-editor-pane">
+                        <div class="sandbox-editor-lines" id="sandboxEditorLines"></div>
+                        <textarea id="sandboxEditor" spellcheck="false" onkeydown="handleSandboxKeys(event)"
+                            oninput="syncSandboxLineNumbers()"></textarea>
+                    </div>
+                    <div class="sandbox-preview-pane">
+                        <iframe id="sandboxPreview" sandbox="allow-scripts" title="Code Live Preview"></iframe>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="input-area">
-            <div class="upload-chips-container" id="uploadChipsContainer" style="display:none;"></div>
-            <div class="input-wrap">
-                <button class="attach-btn" onclick="triggerFileSelect()" type="button" title="Attach files">
-                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path
-                            d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-3.31 2.69-6 6-6s6 2.69 6 6v10.5c0 4.42-3.58 8-8 8s-8-3.58-8-8V6h2v9.5c0 3.31 2.69 6 6 6s6-2.69 6-6V5c0-2.21-1.79-4-4-4s-4 1.79-4 4v12.5c0 1.1.9 2 2 2s2-.9 2-2V6h2z" />
-                    </svg>
-                </button>
-                <input type="file" id="fileInput" style="display:none;" multiple onchange="handleFileSelect(event)">
-                <textarea id="msgInput" placeholder="Message Oculus AI…" autocomplete="off" onkeydown="handleKey(event)"
-                    rows="1"></textarea>
-                <button class="send-btn" onclick="sendMessage()" title="Send">
-                    <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-                    </svg>
-                </button>
-            </div>
-            <div class="input-hint">Oculus can make mistakes. Verify important info.</div>
-        </div> <!-- end of main-chat-container -->
-    </div>
-
-    <!-- Legacy Brain Drawer (kept for JS compat, hidden) -->
-    <div class="brain-drawer" id="brainDrawer" style="display:none;">
-        <div class="brain-drawer-header">
-            <h3>🧠 Oculus Brain</h3>
-            <button class="close-drawer-btn" onclick="toggleBrain()">×</button>
-        </div>
-        <div class="brain-drawer-content"></div>
-    </div>
-    <div class="brain-overlay" id="brainOverlay"></div>
-
-    <!-- Interactive Code Sandbox -->
-    <div class="sandbox-overlay" id="sandboxOverlay">
-        <div class="sandbox-window">
-            <div class="sandbox-header">
-                <div class="sandbox-title-wrap">
-                    <span class="sandbox-title-icon">💻</span>
-                    <span class="sandbox-title">Interactive Sandbox</span>
-                    <span class="sandbox-lang-badge" id="sandboxLangBadge">HTML</span>
+        <!-- Create Workspace Modal -->
+        <div class="modal-overlay" id="workspaceModalOverlay">
+            <div class="modal-card">
+                <div class="modal-header">
+                    <h3>Create New Workspace</h3>
+                    <button class="modal-close-btn" onclick="hideCreateWorkspaceModal()">×</button>
                 </div>
-                <div class="sandbox-actions">
-                    <button class="sandbox-btn run-btn" onclick="runSandbox()" title="Run Code (Ctrl+Enter)">⚡
-                        Run</button>
-                    <button class="sandbox-btn copy-code-btn" onclick="copySandboxCode()" title="Copy Code">📋
-                        Copy</button>
-                    <button class="sandbox-btn save-btn" onclick="saveSandboxToProject()" title="Save to Project">💾
-                        Save to Project</button>
-                    <button class="sandbox-close-btn" onclick="closeSandbox()" title="Close Sandbox">×</button>
+                <div class="modal-body">
+                    <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
+                        Workspaces are fully isolated environments with dedicated memory, profiles, chat history, and
+                        saved sandbox files.
+                    </p>
+                    <div class="modal-input-group">
+                        <label for="newWorkspaceName">Workspace Name</label>
+                        <input type="text" id="newWorkspaceName" placeholder="e.g. Acme Corp, Personal Project"
+                            autocomplete="off">
+                    </div>
                 </div>
-            </div>
-            <div class="sandbox-path-bar">
-                <span class="path-label">Save Path:</span>
-                <input type="text" id="sandboxSavePath" placeholder="e.g. index.html or static/demo.html"
-                    value="index.html">
-            </div>
-            <div class="sandbox-body">
-                <div class="sandbox-editor-pane">
-                    <div class="sandbox-editor-lines" id="sandboxEditorLines"></div>
-                    <textarea id="sandboxEditor" spellcheck="false" onkeydown="handleSandboxKeys(event)"
-                        oninput="syncSandboxLineNumbers()"></textarea>
-                </div>
-                <div class="sandbox-preview-pane">
-                    <iframe id="sandboxPreview" sandbox="allow-scripts" title="Code Live Preview"></iframe>
+                <div class="modal-actions">
+                    <button class="modal-btn cancel-btn" onclick="hideCreateWorkspaceModal()">Cancel</button>
+                    <button class="modal-btn confirm-btn" onclick="createWorkspace()">Create</button>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Create Workspace Modal -->
-    <div class="modal-overlay" id="workspaceModalOverlay">
-        <div class="modal-card">
-            <div class="modal-header">
-                <h3>Create New Workspace</h3>
-                <button class="modal-close-btn" onclick="hideCreateWorkspaceModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 15px;">
-                    Workspaces are fully isolated environments with dedicated memory, profiles, chat history, and saved sandbox files.
-                </p>
-                <div class="modal-input-group">
-                    <label for="newWorkspaceName">Workspace Name</label>
-                    <input type="text" id="newWorkspaceName" placeholder="e.g. Acme Corp, Personal Project" autocomplete="off">
+        <!-- Delete Workspace Confirmation Modal -->
+        <div class="modal-overlay" id="deleteWorkspaceModalOverlay">
+            <div class="modal-card delete-card">
+                <div class="modal-header">
+                    <h3>Delete Workspace</h3>
+                    <button class="modal-close-btn" onclick="hideDeleteWorkspaceModal()">×</button>
+                </div>
+                <div class="modal-body">
+                    <p style="color: var(--text); font-size: 14px; margin-bottom: 10px;">
+                        Are you sure you want to delete <strong id="deleteWorkspaceNameSpan"></strong>?
+                    </p>
+                    <p style="color: var(--red); font-size: 12px; font-weight: 500;">
+                        WARNING: This will permanently delete all chat history, memory states, configurations, and saved
+                        sandbox files for this workspace. This action cannot be undone.
+                    </p>
+                    <input type="hidden" id="deleteWorkspaceIdInput">
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-btn cancel-btn" onclick="hideDeleteWorkspaceModal()">Cancel</button>
+                    <button class="modal-btn delete-btn" onclick="deleteWorkspace()">Delete Workspace</button>
                 </div>
             </div>
-            <div class="modal-actions">
-                <button class="modal-btn cancel-btn" onclick="hideCreateWorkspaceModal()">Cancel</button>
-                <button class="modal-btn confirm-btn" onclick="createWorkspace()">Create</button>
-            </div>
         </div>
-    </div>
 
-    <!-- Delete Workspace Confirmation Modal -->
-    <div class="modal-overlay" id="deleteWorkspaceModalOverlay">
-        <div class="modal-card delete-card">
-            <div class="modal-header">
-                <h3>Delete Workspace</h3>
-                <button class="modal-close-btn" onclick="hideDeleteWorkspaceModal()">×</button>
-            </div>
-            <div class="modal-body">
-                <p style="color: var(--text); font-size: 14px; margin-bottom: 10px;">
-                    Are you sure you want to delete <strong id="deleteWorkspaceNameSpan"></strong>?
-                </p>
-                <p style="color: var(--red); font-size: 12px; font-weight: 500;">
-                    WARNING: This will permanently delete all chat history, memory states, configurations, and saved sandbox files for this workspace. This action cannot be undone.
-                </p>
-                <input type="hidden" id="deleteWorkspaceIdInput">
-            </div>
-            <div class="modal-actions">
-                <button class="modal-btn cancel-btn" onclick="hideDeleteWorkspaceModal()">Cancel</button>
-                <button class="modal-btn delete-btn" onclick="deleteWorkspace()">Delete Workspace</button>
-            </div>
-        </div>
-    </div>
-
-    <script src="/static/oculus.js"></script>
+        <script src="/static/oculus.js"></script>
 </body>
 
 </html>
