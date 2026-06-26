@@ -455,6 +455,22 @@ def ask():
                     "created_at":   datetime.utcnow().isoformat() + "Z",
                 })
 
+                # Save the AI's full drafted content into the action's arguments
+                # so document generators can use it as the body (not just the brief user input)
+                try:
+                    ai_draft_text = full_text  # full text before the [[ACTION_PROPOSAL]] block
+                    # Strip the [[ACTION_PROPOSAL]] block if present
+                    ap_idx = ai_draft_text.find("[[ACTION_PROPOSAL]]:")
+                    if ap_idx != -1:
+                        ai_draft_text = ai_draft_text[:ap_idx].strip()
+
+                    merged_args = {**action_data.get("arguments", {}), "ai_draft": ai_draft_text}
+                    supabase.table("oculus_actions").update({
+                        "arguments": merged_args
+                    }).eq("id", action_id).execute()
+                except Exception as _e:
+                    print(f"[Chat] Failed to save ai_draft to action {action_id}: {_e}")
+
             # Summarise in background after responding and saving
             import threading
             threading.Thread(

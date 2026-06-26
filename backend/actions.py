@@ -254,6 +254,11 @@ def _execute_generate_proposal(user_id: str, workspace_id: str, args: dict) -> s
     proposal_title = args.get("proposal_title", "Proposal").replace("/", "_").replace("\\", "_").replace(" ", "_")
     amount = args.get("amount") or "TBD"
     details = args.get("details") or "Details to be finalized."
+
+    # Use AI's full drafted content if available (richer than user's brief input)
+    ai_draft = (args.get("ai_draft") or "").strip()
+    # Use ai_draft as body if it's meaningfully longer than 'details'
+    body_content = ai_draft if len(ai_draft) > len(details) + 50 else details
     
     doc = Document()
     
@@ -306,9 +311,49 @@ def _execute_generate_proposal(user_id: str, workspace_id: str, args: dict) -> s
     run_s2.font.bold = True
     run_s2.font.color.rgb = PRIMARY_COLOR
     
-    p_desc = doc.add_paragraph(details)
-    p_desc.style.font.name = "Arial"
-    p_desc.style.font.size = Pt(11)
+    # Render body_content line-by-line into the DOCX preserving structure
+    # Handles ## headings, - bullet points, **bold**, and regular paragraphs
+    import re as _re
+    for raw_line in body_content.split("\n"):
+        line = raw_line.rstrip()
+        if not line:
+            doc.add_paragraph("")  # blank spacer
+            continue
+
+        # Section heading: ## Heading or # Heading
+        heading_match = _re.match(r"^#{1,3}\s+(.+)", line)
+        if heading_match:
+            p_h = doc.add_paragraph()
+            run_h = p_h.add_run(heading_match.group(1))
+            run_h.font.name = "Arial"
+            run_h.font.size = Pt(13)
+            run_h.font.bold = True
+            run_h.font.color.rgb = PRIMARY_COLOR
+            continue
+
+        # Bullet point: - item or * item
+        bullet_match = _re.match(r"^[-*]\s+(.+)", line)
+        if bullet_match:
+            p_b = doc.add_paragraph(style="List Bullet")
+            run_b = p_b.add_run(bullet_match.group(1))
+            run_b.font.name = "Arial"
+            run_b.font.size = Pt(11)
+            continue
+
+        # Regular paragraph — strip **bold** markers for DOCX bold runs
+        p_body = doc.add_paragraph()
+        p_body.style.font.name = "Arial"
+        p_body.style.font.size = Pt(11)
+        # Split on **...** for bold rendering
+        parts = _re.split(r"\*\*(.+?)\*\*", line)
+        for i, part in enumerate(parts):
+            if not part:
+                continue
+            run = p_body.add_run(part)
+            run.font.name = "Arial"
+            run.font.size = Pt(11)
+            if i % 2 == 1:  # odd parts are bold (between **)
+                run.font.bold = True
     
     # Section 3: Investment
     p_s3 = doc.add_paragraph()
@@ -624,8 +669,14 @@ def _execute_send_email(user_id: str, workspace_id: str, args: dict) -> str:
     to_contact = args.get("to", "Unknown")
     subject = args.get("subject", "No Subject")
     body = args.get("body", "")
-    
+
+    # Use the AI's full drafted email body if it's richer than the brief typed body
+    ai_draft = (args.get("ai_draft") or "").strip()
+    if len(ai_draft) > len(body) + 50:
+        body = ai_draft
+
     smtp_enabled = os.environ.get("ENABLE_SMTP_DELIVERY", "false").lower() == "true"
+
     
     html_content = f"""<!DOCTYPE html>
 <html>

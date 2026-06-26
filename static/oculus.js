@@ -202,16 +202,31 @@ function renderMarkdown(text) {
 
   // 5. Links — [text](url) and bare https:// URLs
   html = html.replace(/\[([^\]]+)\]\((https?:\/\/[^\s\)]+|\/[^\s\)]+)\)/g, (match, text, url) => {
-    if (url.includes('/api/sandbox/download')) {
-      const ext = url.split('.').pop().toLowerCase();
-      let btnLabel = "Download File";
-      if (ext.startsWith('docx')) btnLabel = "Download DOCX";
-      else if (ext.startsWith('html')) btnLabel = "Preview HTML";
+    // Detect download links: local sandbox API OR Supabase Storage signed URLs
+    const isDownloadUrl = url.includes('/api/sandbox/download')
+      || url.includes('/api/generated-docs/')
+      || url.includes('supabase.co/storage')
+      || url.includes('/storage/v1/s3')
+      || url.includes('/storage/v1/object/sign');
 
+    if (isDownloadUrl) {
+      const ext = url.split('?')[0].split('.').pop().toLowerCase();
+      let btnLabel = text || "Download File";
+      // If the link text already has a good label, use it, otherwise pick one from extension
+      if (btnLabel === text && text.length < 50) {
+        btnLabel = text;
+      } else if (ext === 'docx') {
+        btnLabel = "Download DOCX";
+      } else if (ext === 'pdf') {
+        btnLabel = "Download PDF";
+      } else if (ext === 'html') {
+        btnLabel = "Preview HTML";
+      }
       return `<a href="${url}" class="sandbox-download-btn" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="11" height="11"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg><span>${btnLabel}</span></a>`;
     }
     return `<a href="${url}" target="_blank" rel="noopener noreferrer">${text}</a>`;
   });
+
   html = html.replace(/(?<!["\(])(https?:\/\/[^\s<>")\]]+)/g,
     '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
 
@@ -642,12 +657,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Load generated documents panel
   loadGeneratedDocs();
 
-  // Rehydrate action cards from Supabase (fixes download links after page refresh)
-  rehydrateChatState();
-
-  // Initialize AI Action Engine hooks
+  // Initialize AI Action Engine hooks — MUST run before rehydrateChatState
+  // so action card DOM elements exist when we update their status
   activateHistoricalProposals();
   loadActionHistoryLog();
+
+  // Rehydrate action cards from Supabase (fixes download links after page refresh)
+  // Runs AFTER activateHistoricalProposals so cards are in the DOM
+  rehydrateChatState();
 
   // Initialize drag & drop for documents panel upload zone
   const docUploadArea = document.getElementById('docUploadArea');
