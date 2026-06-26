@@ -380,6 +380,25 @@ function insertAiBubble(rawText) {
     <div class="bubble ai-bubble rendered">${renderMarkdown(rawText)}</div>`;
   feed.insertBefore(row, document.getElementById('typingIndicator'));
   row.querySelectorAll('.code-block pre code').forEach(el => highlight(el));
+  
+  // Cooldown and Feedback widget logic
+  if (!rawText.startsWith('**Error:**') && !rawText.startsWith('_No response')) {
+    let responseCount = parseInt(localStorage.getItem('ai_response_count') || '0') + 1;
+    localStorage.setItem('ai_response_count', responseCount);
+    
+    if (responseCount % 4 === 0) {
+      const bubble = row.querySelector('.ai-bubble');
+      const feedbackHtml = `
+        <div class="style-feedback-widget" style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.06); font-size: 11px; display: flex; align-items: center; gap: 8px; color: var(--text-muted); clear: both;">
+          <span>Did this response match your style?</span>
+          <button class="style-feedback-btn yes" onclick="submitStyleFeedback(this, 'positive')" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 10.5px; cursor: pointer; transition: all 0.15s;">Yes</button>
+          <button class="style-feedback-btn no" onclick="showStyleCorrectionInput(this)" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 10.5px; cursor: pointer; transition: all 0.15s;">No</button>
+        </div>
+      `;
+      bubble.insertAdjacentHTML('beforeend', feedbackHtml);
+    }
+  }
+
   scrollToBottom();
 }
 
@@ -505,6 +524,23 @@ async function sendMessage() {
       // Final pass: full markdown rendering now that we have the complete text
       bubble.innerHTML = renderMarkdown(accumulated);
       bubble.querySelectorAll('.code-block pre code').forEach(el => highlight(el));
+      
+      // Cooldown and Feedback widget logic
+      if (!accumulated.startsWith('**Error:**') && !accumulated.startsWith('_No response')) {
+        let responseCount = parseInt(localStorage.getItem('ai_response_count') || '0') + 1;
+        localStorage.setItem('ai_response_count', responseCount);
+        
+        if (responseCount % 4 === 0) {
+          const feedbackHtml = `
+            <div class="style-feedback-widget" style="margin-top: 12px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.06); font-size: 11px; display: flex; align-items: center; gap: 8px; color: var(--text-muted); clear: both;">
+              <span>Did this response match your style?</span>
+              <button class="style-feedback-btn yes" onclick="submitStyleFeedback(this, 'positive')" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 10.5px; cursor: pointer; transition: all 0.15s;">Yes</button>
+              <button class="style-feedback-btn no" onclick="showStyleCorrectionInput(this)" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 10.5px; cursor: pointer; transition: all 0.15s;">No</button>
+            </div>
+          `;
+          bubble.insertAdjacentHTML('beforeend', feedbackHtml);
+        }
+      }
       scrollToBottom();
     }
 
@@ -2907,5 +2943,74 @@ async function deleteWorkspaceDocument(docId, event) {
   } catch (err) {
     alert("Error deleting document: " + err.message);
     if (itemEl) itemEl.innerHTML = originalHtml;
+  }
+}
+
+// ── Style Feedback Handlers ─────────────────
+function showStyleCorrectionInput(btn) {
+  const widget = btn.closest('.style-feedback-widget');
+  if (!widget) return;
+  widget.innerHTML = `
+    <div class="style-correction-container" style="display: flex; gap: 6px; align-items: center; width: 100%;">
+      <span style="white-space: nowrap;">How can we adjust?</span>
+      <input type="text" placeholder="e.g. less salesy, more dry" style="flex: 1; background: var(--bg-2); border: 1px solid var(--border); color: var(--text); padding: 3px 6px; border-radius: 4px; font-size: 11px; outline: none; font-family: var(--font-sans);">
+      <button onclick="submitStyleFeedback(this, 'negative')" style="background: var(--accent); border: none; color: #fff; border-radius: 4px; padding: 3px 8px; font-size: 10.5px; cursor: pointer; font-weight: 500; font-family: var(--font-sans);">Submit</button>
+      <button onclick="cancelStyleCorrection(this)" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 11px;">Cancel</button>
+    </div>
+  `;
+  const input = widget.querySelector('input');
+  if (input) input.focus();
+}
+
+function cancelStyleCorrection(btn) {
+  const widget = btn.closest('.style-feedback-widget');
+  if (!widget) return;
+  widget.innerHTML = `
+    <span>Did this response match your style?</span>
+    <button class="style-feedback-btn yes" onclick="submitStyleFeedback(this, 'positive')" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 10.5px; cursor: pointer; transition: all 0.15s;">Yes</button>
+    <button class="style-feedback-btn no" onclick="showStyleCorrectionInput(this)" style="background: var(--bg-3); border: 1px solid var(--border); color: var(--text); border-radius: 4px; padding: 2px 8px; font-size: 10.5px; cursor: pointer; transition: all 0.15s;">No</button>
+  `;
+}
+
+async function submitStyleFeedback(element, type) {
+  const widget = element.closest('.style-feedback-widget');
+  if (!widget) return;
+  
+  let correction = "";
+  if (type === 'negative') {
+    const input = widget.querySelector('input');
+    if (input) {
+      correction = input.value.trim();
+      if (!correction) return;
+    }
+  }
+  
+  widget.innerHTML = `<span style="color: var(--text-muted);">Saving style preference...</span>`;
+  
+  try {
+    const resp = await fetch('/api/memory/style_feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ feedback: type, correction: correction })
+    });
+    
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.status === 'ok' && data.memory) {
+        if (typeof currentBrainMemory !== 'undefined') {
+          currentBrainMemory = data.memory;
+          const content = document.getElementById('notesDrawerContent') || document.querySelector('.notes-drawer-content');
+          if (content) {
+            renderNotesIntoEl(content, currentBrainMemory);
+          }
+        }
+      }
+      widget.innerHTML = `<span style="color: #a6e3a1; font-weight: 500;">✓ Style preference ${type === 'positive' ? 'reinforced' : 'updated'}</span>`;
+    } else {
+      throw new Error("Feedback submission failed");
+    }
+  } catch (err) {
+    widget.innerHTML = `<span style="color: #f38ba8;">Error: ${err.message}</span>`;
+    setTimeout(() => cancelStyleCorrection(element), 2000);
   }
 }

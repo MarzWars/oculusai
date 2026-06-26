@@ -494,7 +494,7 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
             if add_profile_field_with_conflict_check(current_memory, field, new_val, confidence, reasoning, source_type, last_reinforced):
                 changed = True
 
-    # Helper for standard lists: preferences, clients, important_facts, ai_notes, topics_discussed
+    # Helper for standard lists: preferences, clients, important_facts, topics_discussed
     def merge_list_field(key, max_len):
         nonlocal changed
         updates_list = updates.get(key, [])
@@ -539,11 +539,70 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                     current_memory[key] = current_memory[key][-max_len:]
                 changed = True
 
+    # Dedicated merging helper for ai_notes (with category and user_explicit protection support)
+    def merge_ai_notes(max_len):
+        nonlocal changed
+        updates_list = updates.get("ai_notes", [])
+        if not isinstance(updates_list, list):
+            return
+
+        for item in updates_list:
+            if not item:
+                continue
+            val = (item.get("value") if isinstance(item, dict) else item) or ""
+            val = str(val).strip()
+            if not val:
+                continue
+
+            category = item.get("category", "tone") if isinstance(item, dict) else "tone"
+            proposed_conf = item.get("confidence") if isinstance(item, dict) and item.get("confidence") is not None else 0.85
+            proposed_reasoning = item.get("reasoning") if isinstance(item, dict) else "Inferred from discussion"
+            proposed_source = item.get("source_type") if isinstance(item, dict) else "conversation"
+            proposed_reinforced = item.get("last_reinforced") if isinstance(item, dict) and item.get("last_reinforced") else now_date
+
+            existing_item = next((i for i in current_memory.get("ai_notes", []) if str(i.get("value", "")).lower() == val.lower()), None)
+
+            if existing_item:
+                # Merge logic with user_explicit protection
+                is_existing_explicit = existing_item.get("source_type") == "user_explicit"
+                is_proposed_explicit = proposed_source == "user_explicit"
+
+                if is_existing_explicit and not is_proposed_explicit:
+                    # Protect existing explicit notes from regular inferred updates
+                    continue
+
+                # Otherwise, reinforce or update confidence/reasoning
+                old_conf = existing_item.get("confidence", 0.75)
+                # Boost confidence slightly
+                new_conf = min(1.0, max(old_conf, proposed_conf) + 0.05)
+                existing_item["confidence"] = round(new_conf, 3)
+                existing_item["reasoning"] = f"Reinforced. {proposed_reasoning}"
+                existing_item["source_type"] = proposed_source
+                existing_item["last_reinforced"] = proposed_reinforced
+                existing_item["last_seen"] = now_date
+                existing_item["category"] = category
+                changed = True
+            else:
+                current_memory["ai_notes"].append({
+                    "value": val,
+                    "category": category,
+                    "confidence": proposed_conf,
+                    "source_type": proposed_source,
+                    "last_reinforced": proposed_reinforced,
+                    "reasoning": proposed_reasoning,
+                    "added": now_date,
+                    "last_seen": now_date
+                })
+                changed = True
+
+        if len(current_memory["ai_notes"]) > max_len:
+            current_memory["ai_notes"] = current_memory["ai_notes"][-max_len:]
+
     merge_list_field("preferences", 15)
     merge_list_field("clients", 20)
     merge_list_field("important_facts", 20)
     merge_list_field("topics_discussed", 30)
-    merge_list_field("ai_notes", 15)
+    merge_ai_notes(15)
 
     # 3. Projects
     project_updates = updates.get("projects", [])
@@ -744,11 +803,114 @@ def consolidate_memory_llm(current_memory: dict, preferred_model: str = None) ->
         print(f"[Memory Consolidation Error] LLM consolidation failed: {e}")
     return current_memory
 
-def extract_memory_async(user_id: str, user_message: str, history: list = None, preferred_model: str = None):
+def run_style_inference(user_id: str, mem: dict, history: list, preferred_model: str = None) -> bool:
+    if not history:
+        return False
+    
+    # Analyze the last 12 turns of dialog
+    recent_history = history[-12:]
+    recent_turns = []
+    for msg in recent_history:
+        role = "User" if msg.get("role") == "user" else "Oculus"
+        text = msg.get("text") or msg.get("text_content") or ""
+        if text:
+            recent_turns.append(f"{role}: {text}")
+            
+    history_text = "\n".join(recent_turns)
+    current_ai_notes = mem.get("ai_notes", [])
+    
+    from backend.prompts import STYLE_INFERENCE_PROMPT_TEMPLATE
+    prompt = STYLE_INFERENCE_PROMPT_TEMPLATE.format(
+        history_text=history_text,
+        current_ai_notes_json=json.dumps(current_ai_notes, indent=2)
+    )
+    
+    try:
+        # Use low-temperature extraction helper (Llama 3.3 70B primary cheap option)
+        raw_res = query_openrouter_extraction(prompt, preferred_model=preferred_model)
+        cleaned = raw_res.strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```(?:json)?\n", "", cleaned)
+            cleaned = re.sub(r"\n```$", "", cleaned)
+        cleaned = cleaned.strip()
+        
+        res_data = json.loads(cleaned)
+        if isinstance(res_data, dict):
+            inferred_notes = res_data.get("inferred_style_notes", [])
+            if not isinstance(inferred_notes, list):
+                return False
+                
+            changed = False
+            now_date = datetime.now().strftime("%Y-%m-%d")
+            
+            for item in inferred_notes:
+                val = item.get("value")
+                if not val:
+                    continue
+                category = item.get("category", "tone")
+                conf = float(item.get("confidence", 0.75))
+                reasoning = item.get("reasoning", "Inferred from discussion")
+                source_type = item.get("source_type", "conversation")
+                
+                existing_item = next((i for i in mem.setdefault("ai_notes", []) if str(i.get("value", "")).lower() == val.lower()), None)
+                
+                if existing_item:
+                    # Protect user_explicit items from degradation/override
+                    is_existing_explicit = existing_item.get("source_type") == "user_explicit"
+                    is_proposed_explicit = source_type == "user_explicit"
+                    if is_existing_explicit and not is_proposed_explicit:
+                        continue
+                        
+                    old_conf = existing_item.get("confidence", 0.75)
+                    new_conf = min(1.0, max(old_conf, conf) + 0.05)
+                    existing_item["confidence"] = round(new_conf, 3)
+                    existing_item["reasoning"] = f"Reinforced by style analyzer. {reasoning}"
+                    existing_item["last_reinforced"] = now_date
+                    existing_item["last_seen"] = now_date
+                    existing_item["category"] = category
+                    changed = True
+                else:
+                    mem["ai_notes"].append({
+                        "value": val,
+                        "category": category,
+                        "confidence": conf,
+                        "source_type": source_type,
+                        "last_reinforced": now_date,
+                        "reasoning": reasoning,
+                        "added": now_date,
+                        "last_seen": now_date
+                    })
+                    changed = True
+                    
+            return changed
+    except Exception as e:
+        print(f"[Async Style Inference Error] Periodic style analyzer failed: {e}")
+        
+    return False
+
+def extract_memory_async(user_id: str, user_message: str, history: list = None, preferred_model: str = None, workspace_id: str = None):
     """Background task to run LLM memory extraction, deconfliction, and save to Supabase."""
     try:
         mem = load_memory(user_id)
         changed = extract_memory_llm(user_message, mem, history=history, preferred_model=preferred_model)
+        
+        # Periodic Style Inference: check configurable interval
+        style_interval = 10
+        if workspace_id:
+            try:
+                res = supabase.table("oculus_workspaces").select("settings").eq("id", workspace_id).execute()
+                if res.data:
+                    settings = res.data[0].get("settings") or {}
+                    style_interval = int(settings.get("style_inference_interval", 10))
+            except Exception as e:
+                print(f"[Async Memory] Failed to fetch workspace settings for style inference: {e}")
+        
+        msg_count = mem.get("message_count", 0)
+        if msg_count > 0 and msg_count % style_interval == 0:
+            print(f"[Async Style Inference] Running periodic style analyzer (interval: {style_interval}) for user: {user_id}...")
+            style_changed = run_style_inference(user_id, mem, history, preferred_model)
+            if style_changed:
+                changed = True
         
         should_consolidate = changed and (
             mem.get("message_count", 0) % 5 == 0 or
@@ -1109,3 +1271,65 @@ def run_decay_api():
     mem["last_decay_run"] = datetime.now().strftime("%Y-%m-%d")
     save_memory(uid, mem)
     return jsonify({"status": "ok", "memory": mem})
+
+@memory_bp.route("/api/memory/style_feedback", methods=["POST"])
+@login_required
+def style_feedback_api():
+    uid = current_user_id()
+    data = request.get_json() or {}
+    feedback = data.get("feedback")  # "positive" or "negative"
+    correction = data.get("correction", "").strip()
+    
+    mem = load_memory(uid)
+    changed = False
+    now_date = datetime.now().strftime("%Y-%m-%d")
+    
+    if feedback == "positive":
+        # Reinforce all style notes: positive feedback boosts notes by +0.05
+        for note in mem.setdefault("ai_notes", []):
+            old_conf = note.get("confidence", 0.75)
+            note["confidence"] = round(min(1.0, old_conf + 0.05), 3)
+            note["last_reinforced"] = now_date
+            note["reasoning"] = f"Reinforced by positive user style feedback. {note.get('reasoning', '')}".split(". ")[-1]
+            changed = True
+    elif feedback == "negative" and correction:
+        # Lower confidence of current inferred style notes by -0.1 (except user_explicit notes)
+        for note in mem.setdefault("ai_notes", []):
+            if note.get("source_type") != "user_explicit" or note.get("confidence", 1.0) < 1.0:
+                old_conf = note.get("confidence", 0.75)
+                note["confidence"] = round(max(0.1, old_conf - 0.1), 3)
+                note["reasoning"] = f"Adjusted due to negative style feedback. {note.get('reasoning', '')}".split(". ")[-1]
+                changed = True
+        
+        # Determine correction category (simple keyword detection or generic tone)
+        category = "tone"
+        lower_corr = correction.lower()
+        if "format" in lower_corr or "bullet" in lower_corr or "list" in lower_corr or "paragraph" in lower_corr or "spacing" in lower_corr:
+            category = "formatting"
+        elif "avoid" in lower_corr or "don't" in lower_corr or "dont" in lower_corr or "never" in lower_corr or "stop" in lower_corr:
+            category = "forbidden"
+        elif "word" in lower_corr or "spelling" in lower_corr or "phrase" in lower_corr or "term" in lower_corr:
+            category = "vocabulary"
+        elif "client" in lower_corr or "for " in lower_corr:
+            category = "client_specific"
+            
+        # Add correction note as a new high-confidence (0.9), user_explicit note
+        mem["ai_notes"].append({
+            "value": f"Style correction: {correction}",
+            "category": category,
+            "confidence": 0.9,
+            "source_type": "user_explicit",
+            "last_reinforced": now_date,
+            "reasoning": "Explicit style correction from user feedback",
+            "added": now_date,
+            "last_seen": now_date
+        })
+        changed = True
+        
+    if changed:
+        if len(mem["ai_notes"]) > 15:
+            mem["ai_notes"] = mem["ai_notes"][-15:]
+        save_memory(uid, mem)
+        return jsonify({"status": "ok", "memory": mem})
+        
+    return jsonify({"status": "no_change", "memory": mem})

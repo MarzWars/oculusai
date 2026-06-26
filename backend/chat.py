@@ -534,7 +534,7 @@ def ask():
             # Run deep LLM extraction in background with conversation context
             threading.Thread(
                 target=extract_memory_async,
-                args=(uid, user_message, history.copy(), preferred_model)
+                args=(uid, user_message, history.copy(), preferred_model, wid)
             ).start()
         except Exception as e:
             error = f"\n[Error: {str(e)}]"

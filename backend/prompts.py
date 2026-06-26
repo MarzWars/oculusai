@@ -207,7 +207,7 @@ Recent Conversation History:
 {recent_history}
 
 User Latest Message:
-"{user_message}"
+{user_message}
 
 Current Memory State:
 {current_memory_json}
@@ -234,7 +234,7 @@ Output your proposed updates and conflicts in a raw JSON structure as follows:
      ],
      "important_facts": ["list of general facts"],
      "topics_discussed": ["list of topics"],
-     "ai_notes": ["list of style/behavioral observations"]
+     "ai_notes": ["list of style/behavioral observations or explicit tone/style directives (e.g., 'When writing for Red Rooms, use a bold, seductive tone')"]
   }},
   "proposed_conflicts": [
      {{
@@ -265,16 +265,20 @@ Proposed Raw Updates/Conflicts (from Stage 1):
 
 For every fact/update you validate, you MUST assign:
 1. "confidence": A score between 0.0 and 1.0:
-   - 1.0: Explicit direct user statements (e.g. "I work at Lex Digitals", "My name is Alex").
+   - 1.0: Explicit direct user statements or style training rules (e.g. "When writing for Red Rooms, use a bold, seductive tone", "My name is Alex").
    - 0.7 - 0.9: Clear inferences or statements with minor ambiguity (e.g. "I'm styling the page in React" -> prefers React).
    - 0.4 - 0.6: Vague or indirect statements (e.g. "We might use Node.js later").
 2. "source_type": One of:
-   - "user_explicit": Direct user profile or preference statement.
+   - "user_explicit": Direct user profile, preference statement, or explicit tone/style directives.
    - "conversation": Inferred from regular chat discussion.
-   - "document": Extracted from uploaded client/workspace documents (not applicable here unless mentioned).
+   - "document": Extracted from uploaded client/workspace documents.
    - "manual": Manually set (used for manual UI updates, not here).
 3. "reasoning": A brief, one-sentence justification explaining how the confidence score was derived based on the conversation text.
 4. "last_reinforced": Current date: {current_date}
+
+IMPORTANT RULES FOR QUALITY AUDITING:
+- Prioritize existing "user_explicit" items heavily. If an item in the current memory state has "source_type" equal to "user_explicit" (especially style guidelines), protect it. Do NOT overwrite it or degrade its confidence score with inferred conversation updates, unless the user's latest message explicitly contradicts or corrects it.
+- Assign a "category" field ONLY for "ai_notes" entries. The "category" MUST be one of: "tone", "formatting", "vocabulary", "client_specific", "forbidden".
 
 Format the output exactly as a JSON object:
 {{
@@ -301,7 +305,7 @@ Format the output exactly as a JSON object:
         {{ "value": "...", "confidence": 0.8, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
      ],
      "ai_notes": [
-        {{ "value": "...", "confidence": 0.75, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
+        {{ "value": "...", "category": "tone", "confidence": 0.75, "source_type": "conversation", "last_reinforced": "{current_date}", "reasoning": "..." }}
      ]
   }},
   "conflicts": [
@@ -345,3 +349,44 @@ Format your output exactly as follows (keep the critique concise, and make sure 
 - Metacognitive Adjustments: [What specific changes are needed to go from the draft to the perfect response?]
 </think>
 [Your revised final response here]"""
+
+
+STYLE_INFERENCE_PROMPT_TEMPLATE = """You are an expert copywriter and behavioral style analyst for Oculus AI.
+Analyze the following recent conversation history between the User and Oculus.
+Your goal is to infer deep stylistic and behavioral preferences of the user.
+
+Recent Conversation History:
+{history_text}
+
+Current Style Notes (ai_notes) in memory:
+{current_ai_notes_json}
+
+Your task:
+Identify tone, formatting preferences, specific vocabulary preferences, client-specific styles, or forbidden phrases/actions.
+Specifically look for:
+- "tone": e.g., dry, seductive, professional, bold, aggressive.
+- "formatting": e.g., using bullet points, short paragraphs, code comment structures.
+- "vocabulary": e.g., preferred words or spelling rules.
+- "client_specific": e.g., when writing for client X, use a specific style.
+- "forbidden": e.g., "avoid buzzwords", "no preachy warnings", "do not use 'Certainly!'".
+
+Ensure you:
+1. Compare new observations against the current style notes in memory to avoid duplicate guidelines.
+2. Resolve style contradictions. If there is a change in style, update the note.
+3. Prioritize user_explicit notes. Do NOT contradict or suggest overriding notes with source_type "user_explicit" unless the conversation shows a direct instruction to change it.
+
+Format your output exactly as a JSON object:
+{{
+  "inferred_style_notes": [
+    {{
+      "value": "The preference or behavior rule",
+      "category": "one of: tone, formatting, vocabulary, client_specific, forbidden",
+      "confidence": 0.8,
+      "source_type": "conversation",
+      "reasoning": "The explanation of how this was inferred from history"
+    }}
+  ]
+}}
+
+Do NOT include any markdown code wrappers (like ```json), intro, or explanation. Output raw JSON only."""
+
