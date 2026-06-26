@@ -20,8 +20,10 @@ def _add_unique(lst: list, item: str, max_len: int = 30) -> bool:
     item = item.strip()
     if not item:
         return False
-    if any(e.lower() == item.lower() for e in lst):
-        return False
+    for e in lst:
+        val = (e.get("value") or e.get("name") or e.get("item") or "") if isinstance(e, dict) else e
+        if str(val).lower() == item.lower():
+            return False
     lst.append(item)
     if len(lst) > max_len:
         lst[:] = lst[-max_len:]
