@@ -21,6 +21,7 @@ class Config:
     # Unmoderated/general models fallback list
     OR_MODELS = [
         "nousresearch/hermes-3-llama-3.1-70b",                       # PAID - fast, cheap, unmoderated
+        "deepseek/deepseek-v4-flash",                                # PAID - fast, cheap, unmoderated
         "nvidia/nemotron-3-super-120b-a12b",                         # PAID - fast, cheap, moderated
         "meta-llama/llama-3.3-70b-instruct",                         # PAID - balanced, moderated
         "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, unmoderated
@@ -33,11 +34,12 @@ class Config:
     # Models shown in manual switcher UI
     MODEL_OPTIONS = [
         {"id": "nousresearch/hermes-3-llama-3.1-70b",   "name": "Hermes 3 70B",          "tag": "Unmoderated · Fast · Cheap"},
-        {"id": "nvidia/nemotron-3-super-120b-a12b",    "name": "Nemotron 3 Super 120B", "tag": "Moderated · Fast · Cheap"},
-        {"id": "meta-llama/llama-3.3-70b-instruct",    "name": "Llama 3.3 70B",         "tag": "Moderated · Balanced"},
-        {"id": "nousresearch/hermes-3-llama-3.1-405b", "name": "Hermes 3 405B",          "tag": "Unmoderated · Powerful"},
+        {"id": "deepseek/deepseek-v4-flash",            "name": "Deepseek V4 Flash",     "tag": "Unmoderated · Fast · Cheap"},
+        {"id": "nvidia/nemotron-3-super-120b-a12b",     "name": "Nemotron 3 Super 120B",   "tag": "Moderated · Fast · Cheap"},
+        {"id": "meta-llama/llama-3.3-70b-instruct",     "name": "Llama 3.3 70B",           "tag": "Moderated · Balanced"},
+        {"id": "nousresearch/hermes-3-llama-3.1-405b",  "name": "Hermes 3 405B",           "tag": "Unmoderated · Powerful"},
         {"id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
-                                                       "name": "Dolphin Mistral 24B",    "tag": "Uncensored · Free"},
+                                                        "name": "Dolphin Mistral 24B",       "tag": "Uncensored · Free"},
     ]
     
     DEFAULT_MODEL = "nousresearch/hermes-3-llama-3.1-70b"
