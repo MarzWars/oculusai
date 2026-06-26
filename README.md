@@ -4,8 +4,8 @@
 
 <br><br>
 
-**A custom-built artificial intelligence operating system for real work.**  
-Code. Copy. Strategy. Memory. Documents. Actions. All in one.
+**A custom-built AI operating system for running a digital agency.**
+Memory that persists. Actions that execute. Code that runs. Guardrails that don't get in the way.
 
 <br>
 
@@ -28,122 +28,179 @@ Code. Copy. Strategy. Memory. Documents. Actions. All in one.
 
 ---
 
+## Contents
+
+- [What is Oculus?](#what-is-oculus)
+- [Why Oculus Exists](#why-oculus-exists)
+- [How Oculus Compares](#how-oculus-compares)
+- [Core Capabilities](#core-capabilities)
+- [Recent Upgrades (26 June 2026)](#recent-upgrades-26-june-2026)
+- [Architecture](#architecture)
+- [Deployment](#deployment)
+- [Project Structure](#project-structure)
+- [Design Philosophy](#design-philosophy)
+- [User Guide](#user-guide)
+
+---
+
 ## What is Oculus?
 
-Oculus is an **AI Knowledge Workspace & Actions Engine** designed specifically for running a digital agency. Unlike generic chat wrappers that forget context, return empty placeholders, or block copy generation for diverse marketing campaigns, Oculus functions as an integrated **AI Operating System**. It layers LLM intelligence directly over client databases, documents, persistent memories, a live browser code sandbox, and an interactive confirmation engine to let you execute actual work.
+Oculus is an **AI Knowledge Workspace & Actions Engine**, purpose-built for running a digital agency. Most AI chat tools forget context between sessions, hand back advice instead of finished work, or refuse entire categories of client copy. Oculus is built differently — it layers an LLM directly over isolated client workspaces, persistent memory, live document intelligence, an in-chat code sandbox, and an actions engine that actually executes: compiling proposals, drafting emails, and scheduling tasks instead of just describing them.
 
 ---
 
-## ⚡ The Problems Oculus Solves
+## Why Oculus Exists
 
-### 1. The Context-Switching Tax
-* **The Problem:** In a typical agency, you are constantly swapping between different clients. Chat logs get cluttered, attachment lists get mixed up, and sandbox files overwrite each other.
-* **The Solution:** **Isolated Client Workspaces**. Oculus creates distinct digital sandboxes for every client project. Swapping a workspace switches the active chat history, file uploads, and directory files on the server, keeping Acme Corp assets completely isolated from Lex Digitals internals.
-
-### 2. The "Forgetting" Problem
-* **The Problem:** LLM chats have static context windows. If you tell an AI your styling rules, client emails, or task deadlines on Monday, it will forget them by Friday.
-* **The Solution:** **Unified Long-Term Memory (Oculus Brain)**. A background pipeline reads conversations, extracts client profiles, preferences, and deadlines, and consolidates them in Supabase. This compiled Brain is injected into every chat request automatically, ensuring Oculus remembers everything that matters across sessions.
-
-### 3. Passive Conversation vs. Active Execution
-* **The Problem:** Chatbots only give advice. If you ask them to create a task, draft a proposal, or write an email, they just give you a block of markdown text that you have to copy, paste, and compile yourself.
-* **The Solution:** **AI Actions Engine**. Oculus classifies intent and renders interactive **action proposal cards** directly in the chat feed. You can review parameters, edit content, and click **Confirm & Execute**. The system compiles standard `.docx` proposals, saves `.html` email draft previews to the sandbox, or writes task deadlines to the database.
-
-### 4. Placeholder Code and "Pseudo-Logic"
-* **The Problem:** AI models frequently write incomplete code, adding comments like `// TODO: Implement styling here` or leaving you to copy-paste scripts into local test files.
-* **The Solution:** **Interactive Live Sandbox**. Oculus intercepts HTML, CSS, JavaScript, and SVG blocks and renders them in a split-screen live preview iframe. You can edit the code, run it, review rendering output in real time, and save the finalized code directly to your server workspace.
-
-### 5. Corporate Censorship and Guardrail Blocks
-* **The Problem:** Commercial AI interfaces (like ChatGPT) block copy generation for adult entertainment marketing, Locanto campaigns, or dating ads.
-* **The Solution:** **OpenRouter Model Gateway**. Bypasses strict filters using unmoderated open models (like Llama 3.3 70B, Nemotron 3 120B, and Dolphin Mistral) to write copy for real clients in high-conversion campaigns (e.g. Red Rooms ads, operator recruitment copies) without blocking.
-
----
-
-## ⚙️ Core Capabilities
-
-| Capability | Description |
+| Problem | Oculus's Fix |
 |---|---|
-| 🏢 **Client Workspaces** | Switch between isolated workspaces. Isolates chat histories, sandbox code files, and active attachments, while maintaining a unified long-term memory across workspaces. |
-| 🔐 **Multi-User Auth & Security** | Register, login, and logout — each user's data is fully isolated in Supabase. Enforces strict backend workspace and action ownership checks to prevent cross-user data leakage. |
-| 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences, and key facts across sessions. A background LLM pipeline extracts, consolidates, and deconflicts information automatically. |
-| 🧠 **Oculus Brain UI** | Dynamic sliding drawer panel with live view of your memory — edit profiles, add facts, manage projects, clients, and deadlines in real time, accessed from the vertical left dock. |
-| ⚡ **AI Actions Engine** | Generates proposals, exports documents (DOCX, PDF, TXT), sends emails, schedules tasks, and logs workflow history. Uses low-temperature function extraction with OpenRouter to produce active proposals. Includes confirmation, cancellation, and deletion controls. |
-| 📄 **Advanced RAG & Doc Intel** | Semantic search over PDFs and DOCX files. Ingests, chunks, embeds (via OpenRouter), and indexes documents in Supabase. Classifies documents, auto-summarizes them using OpenRouter, and supports hybrid (vector + full-text search) retrieval with RRF ranking and citations. |
-| 🔄 **Real-Time Streaming** | Token-by-token streaming so responses appear word-by-word as the model generates. |
-| 🔬 **Deep Self-Reflection** | A 2-pass metacognitive review pass checks drafts against memory, facts, and the Oculus persona. This thinking trace is buffered and completely hidden on the backend for a polished user experience. |
-| 🌐 **Live Web Search** | Automatically pulls real-time information via Tavily Search when the query requires current data. |
-| 💻 **Interactive Code Sandbox** | HTML, CSS, JavaScript, and SVG snippets open in a live split-screen iframe sandbox directly in the chat — edit, run, and preview without leaving the app. |
-| 🗂️ **File Upload & Parsing** | Drag-and-drop or select plaintext and code files (.py, .js, .json, .css, etc.). Content is injected into the prompt automatically and cleared after each submit. |
-| 🗺️ **Left Dock Layout** | Vertical navigation bar on the left providing instant access to Model selection, Workspace Settings, Oculus Brain, Style & Behavior Notes, Action Log, and Generated Documents. |
-| ⚙️ **Manual Model Selection** | Pin any supported model via the Models dock panel (e.g. Nemotron 3 Super 120B, Llama 3.3 70B, Hermes 3 405B, Dolphin Mistral 24B). |
-| 🔄 **Model Fallback Chain** | If the pinned model is rate-limited, returns an error, or times out, the system automatically tries the next model in the chain — no failed requests. |
-| 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns to stay within model context windows. |
+| **Context-switching tax** — chat logs, attachments, and sandbox files bleed between clients. | **Isolated Client Workspaces.** Every client gets its own chat history, files, and sandbox folder, while long-term memory stays shared globally. |
+| **The "forgetting" problem** — LLMs lose your styling rules, client facts, and deadlines once the context window resets. | **Oculus Brain.** A background pipeline extracts and consolidates facts into persistent memory, auto-injected into every request. |
+| **Advice instead of action** — most chatbots hand you markdown you still have to copy, format, and send yourself. | **AI Actions Engine.** Oculus proposes the task, proposal, or email as an editable card; you confirm, it executes. |
+| **Placeholder code** — `// TODO: add logic here` isn't a deliverable. | **Live Code Sandbox.** HTML/CSS/JS/SVG renders in a split-screen preview you can edit, run, and save to the project. |
+| **Guardrail blocks on legitimate campaigns** — mainstream tools refuse entire ad categories outright. | **OpenRouter Model Gateway.** Routes through lightly-moderated open models so client copy for those campaigns actually gets written. |
 
 ---
 
-## 🧠 Major Memory & Intelligence Upgrades (26 June 2026)
+## How Oculus Compares
 
-Oculus's core intelligence, long-term memory capabilities, and user style adaptation have been heavily upgraded. The memory system is now divided into three major architectural pillars implemented throughout June 2026:
+Oculus isn't trying to out-reason GPT-5.5 or Grok — it's solving a different problem: **turning a chat window into a working agency operating system.** Here's how it stacks up against general-purpose assistants and typical AI chat-wrapper SaaS tools:
 
-### 1. Confidence Scoring & Quality Control (Phase 1)
-* **Metadata-Rich Memory Schema**: Every memorized item (preferences, important facts, projects, deadlines, clients) now contains metadata attributes: `confidence` score (0.0 to 1.0), `source_type` (`conversation` or `user_explicit`), `last_reinforced` date, and extraction `reasoning` justification.
-* **Badges & Tooltips**: The Oculus Brain UI renders confidence score badges (High, Medium, Low) for all items. Hovering over a badge reveals a tooltip explaining why Oculus extracted that fact, its source type, and the date it was reinforced.
-* **Self-Conflict Resolution UI**: When you tell Oculus something that contradicts an existing memory item, a red **Resolve Memory Conflict** card appears at the top of the Brain drawer, allowing you to choose whether to keep the existing fact, use the new fact, or keep both.
-* **Automatic Decay Auditing**: An active memory decay audit system reduces confidence by `-0.05` per week of inactivity, floored at `0.1`, forcing outdated facts to decay naturally unless reinforced.
+| Capability | **Oculus AI** | **ChatGPT** (Plus/Team) | **Grok** | Typical AI Wrapper SaaS |
+|---|---|---|---|---|
+| Persistent cross-session memory | ✅ Full "Brain" — confidence scoring, decay, conflict resolution | ✅ Rolling memory + chat-history reference | ✅ Basic editable memories | ⚠️ Rare — most reset every session |
+| Isolated multi-client workspaces | ✅ Native — separate chat, files & sandbox per client; memory stays global | ⚠️ "Projects" group chats/files, no DB or sandbox isolation | ⚠️ "Projects" sidebar, similar limits | ❌ Usually one flat workspace |
+| Executes real work, not just text | ✅ Actions Engine compiles `.docx`/`.pdf`, drafts emails, books deadlines via confirm-and-run cards | ⚠️ Tasks & emerging Agent mode; Custom GPT Actions need setup | ⚠️ Early Agent mode can run code / use a sandboxed computer | ❌ Almost always copy-paste output |
+| Document RAG with citations | ✅ Hybrid vector + full-text search, RRF ranking, page-level citations | ✅ File Q&A in chat/projects | ✅ File uploads in projects | ⚠️ Inconsistent, often absent |
+| Live in-chat code sandbox | ✅ Split-screen HTML/CSS/JS/SVG editor — edit, run, save to project | ⚠️ Python code interpreter; no live HTML/CSS preview pane | ⚠️ Agent mode gets sandboxed compute, still maturing | ❌ Not supported |
+| Open / lightly-moderated model routing | ✅ OpenRouter gateway — Nemotron, Llama 3.3, Hermes 3, Dolphin Mistral, etc. | ❌ Fixed GPT models, standard moderation | ⚠️ "Spicy Mode" loosens tone; image/video stay tightly moderated | ⚠️ Depends entirely on the wrapper |
+| Data ownership | ✅ Deployed on your own Supabase/Render accounts | ❌ Hosted entirely by OpenAI | ❌ Hosted entirely by xAI | ⚠️ Varies by vendor |
+| Built specifically for agency/client work | ✅ Purpose-built | ❌ General-purpose assistant | ❌ General-purpose assistant | ⚠️ A handful of vertical tools exist |
+| Pricing | 💰 Pay only for API usage (OpenRouter/Supabase/Tavily credits) — no seat fees | 💳 Per-seat subscription (~$20–$200+/mo) | 💳 Per-seat subscription (SuperGrok/Premium+) | 💳 Usually subscription/seat-based |
 
-### 2. Style & Behavior Notes (Phase 2)
-* **AI Style Inference**: A background style analyzer reads your recent conversation logs every few turns (default 10, configurable) to infer formatting guidelines, tone preferences, vocabulary directives, and forbidden styles.
-* **Categorized AI Notes**: Inferred observations are saved in the **Style & Behavior Notes** drawer, split into `"tone"`, `"formatting"`, `"vocabulary"`, `"client_specific"`, and `"forbidden"` rules.
-* **Interactive Cooldown Widget**: After every 4 assistant responses, an interactive feedback widget ("Did this response match your style? (Yes/No)") renders at the bottom of the chat bubble.
-  - Clicking **Yes** reinforces the notes (confidence $+0.05$).
-  - Clicking **No** allows you to input an explicit correction, creating a high-confidence (`0.9`) `user_explicit` style rule.
-* **Prefix Directives**: Prefixing prompts with `"Style preference:"` or `"style note:"` bypasses normal conversation flow and writes style rules directly to memory.
-
-### 3. Superior Context Ranking & Conversation Intelligence (Phase 3)
-* **Weighted Scored Context Ranking Engine**: When you query Oculus, memory items are ranked by a weighted scoring formula:
-  $$\text{final\_score} = (\text{relevance} \times 0.45) + (\text{confidence} \times 0.25) + (\text{recency} \times 0.20) + (\text{importance} \times 0.10)$$
-  Relevance is calculated using OpenAI's `text-embedding-3-small` vector embeddings to measure semantic similarity.
-* **Sub-Millisecond Embedding Cache**: High-performance in-memory caching mapping strings to embedding vectors ensures zero API latency when loading memory.
-* **Token Budget & Hashed LLM Summary Compression**: Memory context injected into chat is limited to a strict token budget (default `1500` tokens, configurable in settings). Low-priority facts are compressed into a single dense summary paragraph using a hashed LLM call that only triggers when facts change.
-* **Memory Control Commands**: You can issue explicit instructions like *"forget everything about Vue"*, *"stop using formal tone"*, or *"pin Acme mockup deadline"* in conversation. Oculus intercepts these semantically, updates your memory database, and reloads the Brain UI instantly.
-* **UI Pinning**: Click 📌 on any list item in the Brain or Notes panel to pin it, giving it maximum importance boost (`importance = 1.0` plus `+0.3` score boost).
-* **Developer Debug Panel**: A collapsible panel at the bottom of the Brain drawer showing timestamp, query, estimated tokens, pruning status, score breakdown details for each memory item, and the final prompt block.
+> Claude.ai and Gemini land in roughly the same column as ChatGPT — strong general reasoning and project-style organization, but no agency-specific actions engine, workspace isolation, or uncensored model routing. Feature sets for all hosted assistants move quickly; this table reflects general positioning as of mid-2026, not an exhaustive audit.
 
 ---
 
-## 📖 User Guides & Prompts
+## Core Capabilities
 
-For user guides and step-by-step feature walkthroughs (Features 1–9, Power User Tips, and the Prompt Testing scenarios), see the new guide document:
+<details>
+<summary><strong>🧠 Memory & Intelligence</strong></summary>
+<br>
 
-### 🔗 [Oculus How-To Manual & Prompt Testing Guide](file:///c:/Oculusai/oculusai/How%20To.md)
+| Capability | What it does |
+|---|---|
+| **Long-Term Memory** | Stores your profile, clients, preferences, and key facts across sessions. Extraction, consolidation, and conflict resolution run automatically in the background. |
+| **Oculus Brain UI** | A sliding drawer with a live view of memory — edit profiles, add facts, manage clients and deadlines in real time. |
+| **Deep Self-Reflection** | A hidden 2-pass metacognitive review checks every draft against memory and persona before you see the response. |
+| **Conversation History** | Keeps recent turns in full and auto-summarises older ones to stay inside the model's context window. |
+
+</details>
+
+<details>
+<summary><strong>🏢 Workspaces & Security</strong></summary>
+<br>
+
+| Capability | What it does |
+|---|---|
+| **Client Workspaces** | Switch between isolated workspaces — separate chat history, sandbox files, and attachments per client, with one shared long-term memory underneath. |
+| **Multi-User Auth & Security** | Register, log in, log out — every user's data is isolated in Supabase, with backend ownership checks preventing cross-user leakage. |
+
+</details>
+
+<details>
+<summary><strong>⚡ Actions & Code</strong></summary>
+<br>
+
+| Capability | What it does |
+|---|---|
+| **AI Actions Engine** | Generates proposals, exports documents (DOCX/PDF/TXT), drafts emails, schedules tasks, and logs every action. Confirm, cancel, or undo from an inline card. |
+| **Interactive Code Sandbox** | HTML/CSS/JS/SVG snippets open in a live split-screen iframe — edit, run, and save directly to your workspace. |
+
+</details>
+
+<details>
+<summary><strong>📄 Documents & Search</strong></summary>
+<br>
+
+| Capability | What it does |
+|---|---|
+| **Advanced RAG & Doc Intel** | Ingests, chunks, embeds, and indexes PDFs/DOCX in Supabase. Auto-classifies and summarises documents, with hybrid vector + full-text retrieval and RRF ranking. |
+| **Live Web Search** | Pulls real-time information via Tavily automatically whenever a query needs current data. |
+| **File Upload & Parsing** | Drag-and-drop plaintext/code files — content is injected into the prompt and cleared after each submit. |
+
+</details>
+
+<details>
+<summary><strong>⚙️ Models & Infrastructure</strong></summary>
+<br>
+
+| Capability | What it does |
+|---|---|
+| **Manual Model Selection** | Pin any supported model — Nemotron 3 Super 120B, Llama 3.3 70B, Hermes 3 405B, Dolphin Mistral 24B, and more. |
+| **Model Fallback Chain** | If the pinned model is rate-limited or times out, Oculus automatically tries the next one in the chain — no failed requests. |
+| **Real-Time Streaming** | Token-by-token streaming so responses appear word-by-word as they generate. |
+| **Left Dock Layout** | One vertical nav bar for Model selection, Workspace Settings, Oculus Brain, Style Notes, Action Log, and Generated Documents. |
+
+</details>
 
 ---
 
-## 🏗️ Architecture
+## Recent Upgrades (26 June 2026)
+
+<details>
+<summary><strong>Click to expand — Memory & Intelligence overhaul, Phases 1–3</strong></summary>
+<br>
+
+Oculus's memory system was rebuilt across three phases throughout June 2026:
+
+**1. Confidence Scoring & Quality Control**
+- Every memory item now carries a `confidence` score (0–1), `source_type` (`conversation` vs `user_explicit`), `last_reinforced` date, and extraction `reasoning`.
+- The Brain UI shows High/Medium/Low confidence badges with hover tooltips explaining each extraction.
+- Contradictions trigger a **Resolve Memory Conflict** card — keep the old fact, the new one, or both.
+- An automatic decay audit drops confidence by `-0.05` per week of inactivity (floor `0.1`) unless reinforced.
+
+**2. Style & Behavior Notes**
+- A background analyzer reads recent conversations (every 10 turns, configurable) to infer tone, formatting, vocabulary, and forbidden styles.
+- Notes are categorised as `tone`, `formatting`, `vocabulary`, `client_specific`, or `forbidden`.
+- A feedback widget appears every 4 responses ("Did this match your style?"). **Yes** reinforces it; **No** lets you correct it, creating a high-confidence (`0.9`) `user_explicit` rule.
+- Prefix any prompt with `"Style preference:"` to write a rule directly to memory.
+
+**3. Context Ranking & Conversation Intelligence**
+- Memory is ranked by `(relevance × 0.45) + (confidence × 0.25) + (recency × 0.20) + (importance × 0.10)`, using OpenAI's `text-embedding-3-small` for relevance.
+- A sub-millisecond in-memory embedding cache removes API latency on lookup.
+- Context injection is capped at a configurable token budget (default `1500`); overflow facts compress into one dense summary, only re-running when facts change.
+- Plain-language memory commands work in chat — *"forget everything about Vue"*, *"pin Acme mockup deadline"* — and update the Brain UI instantly.
+- Pin anything with 📌 for a permanent importance boost (`importance = 1.0`, `+0.3` score); a developer debug panel shows the full scoring breakdown per request.
+
+</details>
+
+---
+
+## Architecture
 
 ```
 Oculus AI
 │
-├── Flask              → Web server, routing, session-based auth, client workspaces
+├── Flask              → Web server, routing, session auth, client workspaces
 ├── Actions Engine     → Intent classifier (Llama 3.3), execution wrapper, audit logs
 ├── RAG Pipeline       → PDF/DOCX extractors, semantic chunker, vector embeddings (OpenRouter)
 ├── OpenRouter API     → AI model gateway (OpenAI-compatible)
-│   ├── Nemotron 3 Super 120B       → Primary (Default) — fast, cheap, unmoderated
-│   ├── Llama 3.3 70B               → Fallback 1 — balanced, reliable
-│   ├── Hermes 3 405B               → Fallback 2 — powerful, unmoderated
-│   ├── Dolphin Mistral 24B         → Fallback 3 / Switcher — uncensored
-│   └── Free Fallbacks              → (Nemotron 3, Llama 3.3, Hermes 3 405B)
-├── Supabase Auth      → User registration, login, logout
-├── Supabase DB        → Persistent memory (user-scoped), workspaces config, chat history (workspace-isolated), action log audit trail, document RAG vectors
+│   ├── Nemotron 3 Super 120B   → Primary — fast, cheap, unmoderated
+│   ├── Llama 3.3 70B           → Fallback 1 — balanced, reliable
+│   ├── Hermes 3 405B           → Fallback 2 — powerful, unmoderated
+│   ├── Dolphin Mistral 24B     → Fallback 3 / switcher — uncensored
+│   └── Free fallbacks          → Nemotron 3, Llama 3.3, Hermes 3 405B
+├── Supabase Auth      → Registration, login, logout
+├── Supabase DB        → Memory, workspace config, chat history, action log, RAG vectors
 ├── Tavily Search      → Live web search injected into prompt context
-└── Prompt Engine      → Injects memory, active workspace context, search results, and date/time into every request
+└── Prompt Engine      → Injects memory, workspace context, search results, date/time
 ```
 
 ---
 
-## 🚀 Deployment
+## Deployment
 
 ### Requirements
-
 - Python 3.10+
 - A [Supabase](https://supabase.com) account
 - A [Render](https://render.com) account (or any Python host)
@@ -175,9 +232,13 @@ SMTP_USER=your_email@gmail.com
 SMTP_PASSWORD=your_app_password
 ```
 
-### Supabase table setup
+### Database setup
 
-Run this script in your Supabase SQL editor:
+<details>
+<summary><strong>Click to expand — full Supabase SQL setup script</strong></summary>
+<br>
+
+Run this in your Supabase SQL editor:
 
 ```sql
 -- Enable vector extension
@@ -342,6 +403,8 @@ $$;
 
 Then go to **Supabase → Authentication → Settings** and disable **"Enable email confirmations"** so users can log in immediately after registering.
 
+</details>
+
 ### Run locally
 
 ```bash
@@ -350,47 +413,92 @@ python app.py
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
-* [app.py](file:///c:/Oculusai/oculusai/app.py) — Entry point: instantiates Flask, registers blueprints, runs server
-* [config.py](file:///c:/Oculusai/oculusai/config.py) — Environment variables, model list, timeout settings
-* [requirements.txt](file:///c:/Oculusai/oculusai/requirements.txt) — Python dependencies
-* **`backend/`** — Core python blueprints:
-  * [backend/\_\_init\_\_.py](file:///c:/Oculusai/oculusai/backend/__init__.py) — Exposes all Blueprints from the backend package
-  * [backend/extensions.py](file:///c:/Oculusai/oculusai/backend/extensions.py) — Initialises Supabase & Tavily API clients
-  * [backend/auth.py](file:///c:/Oculusai/oculusai/backend/auth.py) — Auth routes, login/register/logout, @login_required decorator
-  * [backend/workspaces.py](file:///c:/Oculusai/oculusai/backend/workspaces.py) — Workspaces API lifecycle (create, delete, list, switch)
-  * [backend/memory.py](file:///c:/Oculusai/oculusai/backend/memory.py) — Memory DB read/write, LLM-based extraction and consolidation
-  * [backend/chat.py](file:///c:/Oculusai/oculusai/backend/chat.py) — Home route, chat submission, clear, model switching
-  * [backend/files.py](file:///c:/Oculusai/oculusai/backend/files.py) — File upload handling, allowed types, prompt injection, sandbox download
-  * [backend/search.py](file:///c:/Oculusai/oculusai/backend/search.py) — Tavily query refinement and search trigger logic
-  * [backend/models.py](file:///c:/Oculusai/oculusai/backend/models.py) — OpenRouter streaming gateway and model fallback chain
-  * [backend/actions.py](file:///c:/Oculusai/oculusai/backend/actions.py) — AI Actions Engine, classification prompts, execution wrappers
-  * [backend/rag.py](file:///c:/Oculusai/oculusai/backend/rag.py) — PDF/DOCX extractors, chunkers, embeds, hybrid rankers
-* **`templates/`** — HTML files:
-  * [templates/index.html](file:///c:/Oculusai/oculusai/templates/index.html) — Main chat interface (Jinja2)
-  * [templates/login.html](file:///c:/Oculusai/oculusai/templates/login.html) — Login page
-  * [templates/register.html](file:///c:/Oculusai/oculusai/templates/register.html) — Registration page
-* **`static/`** — Static front-end assets:
-  * [static/oculus.js](file:///c:/Oculusai/oculusai/static/oculus.js) — Frontend routing, streaming, markdown render, code sandbox, drawers, action cards
-  * [static/style.css](file:///c:/Oculusai/oculusai/static/style.css) — Dark terminal theme styling, animations, UI responsive rules, layout grids
-  * [static/oculus_logo.svg](file:///c:/Oculusai/oculusai/static/oculus_logo.svg) — SVG logo with wordmark
-  * [static/oculus_avatar.svg](file:///c:/Oculusai/oculusai/static/oculus_avatar.svg) — Avatar icon for chat bubbles
-  * [static/manifest.json](file:///c:/Oculusai/oculusai/static/manifest.json) — Progressive Web App manifest
-  * [static/sw.js](file:///c:/Oculusai/oculusai/static/sw.js) — Service worker for offline asset caching
-* **`workspaces/`** — Local sandbox folders isolated per workspace ID (git-ignored)
+```
+oculusai/
+├── app.py                 # Entry point — Flask instantiation, blueprints, server
+├── config.py               # Env vars, model list, timeout settings
+├── requirements.txt
+├── backend/
+│   ├── __init__.py         # Exposes all blueprints
+│   ├── extensions.py       # Supabase & Tavily client init
+│   ├── auth.py              # Login/register/logout, @login_required
+│   ├── workspaces.py        # Workspace lifecycle (create/delete/list/switch)
+│   ├── memory.py             # Memory DB read/write, LLM extraction & consolidation
+│   ├── chat.py                # Home route, chat submission, model switching
+│   ├── files.py                # Upload handling, prompt injection, sandbox download
+│   ├── search.py                # Tavily query refinement & trigger logic
+│   ├── models.py                 # OpenRouter streaming gateway, fallback chain
+│   ├── actions.py                 # Actions Engine — classification, execution
+│   └── rag.py                      # PDF/DOCX extraction, chunking, hybrid ranking
+├── templates/
+│   ├── index.html           # Main chat interface (Jinja2)
+│   ├── login.html
+│   └── register.html
+├── static/
+│   ├── oculus.js             # Frontend routing, streaming, sandbox, drawers
+│   ├── style.css               # Dark terminal theme, animations, layout
+│   ├── oculus_logo.svg
+│   ├── oculus_avatar.svg
+│   ├── manifest.json            # PWA manifest
+│   └── sw.js                     # Service worker, offline caching
+└── workspaces/                    # Per-client sandbox folders (git-ignored)
+```
+
+<details>
+<summary><strong>File-by-file reference (with links)</strong></summary>
+<br>
+
+- [app.py](app.py) — Entry point: instantiates Flask, registers blueprints, runs server
+- [config.py](config.py) — Environment variables, model list, timeout settings
+- [requirements.txt](requirements.txt) — Python dependencies
+- **`backend/`** — Core Python blueprints:
+  - [backend/\_\_init\_\_.py](backend/__init__.py) — Exposes all Blueprints from the backend package
+  - [backend/extensions.py](backend/extensions.py) — Initialises Supabase & Tavily API clients
+  - [backend/auth.py](backend/auth.py) — Auth routes, login/register/logout, `@login_required` decorator
+  - [backend/workspaces.py](backend/workspaces.py) — Workspaces API lifecycle (create, delete, list, switch)
+  - [backend/memory.py](backend/memory.py) — Memory DB read/write, LLM-based extraction and consolidation
+  - [backend/chat.py](backend/chat.py) — Home route, chat submission, clear, model switching
+  - [backend/files.py](backend/files.py) — File upload handling, allowed types, prompt injection, sandbox download
+  - [backend/search.py](backend/search.py) — Tavily query refinement and search trigger logic
+  - [backend/models.py](backend/models.py) — OpenRouter streaming gateway and model fallback chain
+  - [backend/actions.py](backend/actions.py) — AI Actions Engine, classification prompts, execution wrappers
+  - [backend/rag.py](backend/rag.py) — PDF/DOCX extractors, chunkers, embeds, hybrid rankers
+- **`templates/`** — HTML files:
+  - [templates/index.html](templates/index.html) — Main chat interface (Jinja2)
+  - [templates/login.html](templates/login.html) — Login page
+  - [templates/register.html](templates/register.html) — Registration page
+- **`static/`** — Static front-end assets:
+  - [static/oculus.js](static/oculus.js) — Frontend routing, streaming, markdown render, code sandbox, drawers, action cards
+  - [static/style.css](static/style.css) — Dark terminal theme styling, animations, UI responsive rules, layout grids
+  - [static/oculus_logo.svg](static/oculus_logo.svg) — SVG logo with wordmark
+  - [static/oculus_avatar.svg](static/oculus_avatar.svg) — Avatar icon for chat bubbles
+  - [static/manifest.json](static/manifest.json) — Progressive Web App manifest
+  - [static/sw.js](static/sw.js) — Service worker for offline asset caching
+- **`workspaces/`** — Local sandbox folders isolated per workspace ID (git-ignored)
+
+</details>
 
 ---
 
-## ⚡ Design Philosophy
+## Design Philosophy
 
 - **Clarity over fluff** — responses are direct and useful, never padded.
 - **Function over theory** — it does the work, not just talks about it.
 - **Memory that actually works** — context survives across sessions and deploys.
-- **Code that runs** — no pseudocode, no placeholders, no "add your logic here".
+- **Code that runs** — no pseudocode, no placeholders, no "add your logic here."
 - **Private by design** — every user's data is fully isolated, no crossover.
-- **Uncensored by design** — models chosen specifically for minimal guardrails on adult and creative content.
+- **Uncensored by design** — models chosen specifically for minimal guardrails on legitimate creative and marketing copy.
 - **Premium UX** — real-time word-by-word streaming, animated reasoning blocks, live code sandbox.
+
+---
+
+## User Guide
+
+For step-by-step feature walkthroughs, prompt-testing scenarios, and power-user tips, see the full guide:
+
+### 🔗 [Oculus How-To Manual & Prompt Testing Guide](GUIDE.md)
 
 ---
 
