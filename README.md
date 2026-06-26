@@ -63,17 +63,18 @@ Oculus is an **AI Knowledge Workspace & Actions Engine** designed specifically f
 | Capability | Description |
 |---|---|
 | 🏢 **Client Workspaces** | Switch between isolated workspaces. Isolates chat histories, sandbox code files, and active attachments, while maintaining a unified long-term memory across workspaces. |
-| 🔐 **Multi-User Auth** | Register, login, and logout — each user's data is fully isolated in Supabase. |
+| 🔐 **Multi-User Auth & Security** | Register, login, and logout — each user's data is fully isolated in Supabase. Enforces strict backend workspace and action ownership checks to prevent cross-user data leakage. |
 | 🧠 **Long-Term Memory** | Stores your profile, projects, clients, preferences, and key facts across sessions. A background LLM pipeline extracts, consolidates, and deconflicts information automatically. |
-| 🧠 **Oculus Brain UI** | Sliding sidebar drawer panel with live view of your memory — edit profiles, add facts, manage projects, clients, and deadlines in real time. |
-| ⚡ **AI Actions Engine** | Generates proposals, exports documents (DOCX, PDF, TXT), sends emails, schedules tasks, and logs workflow history. Uses low-temperature function extraction with OpenRouter to produce active proposals. Includes interactive sidebar confirmation, cancellation, and deletion controls. |
+| 🧠 **Oculus Brain UI** | Dynamic sliding drawer panel with live view of your memory — edit profiles, add facts, manage projects, clients, and deadlines in real time, accessed from the vertical left dock. |
+| ⚡ **AI Actions Engine** | Generates proposals, exports documents (DOCX, PDF, TXT), sends emails, schedules tasks, and logs workflow history. Uses low-temperature function extraction with OpenRouter to produce active proposals. Includes confirmation, cancellation, and deletion controls. |
 | 📄 **Advanced RAG & Doc Intel** | Semantic search over PDFs and DOCX files. Ingests, chunks, embeds (via OpenRouter), and indexes documents in Supabase. Classifies documents, auto-summarizes them using OpenRouter, and supports hybrid (vector + full-text search) retrieval with RRF ranking and citations. |
 | 🔄 **Real-Time Streaming** | Token-by-token streaming so responses appear word-by-word as the model generates. |
-| 🔬 **Collapsible Thinking** | Internal model reasoning streams live in a greyed-out block, then folds into a collapsible summary when the final response begins. |
+| 🔬 **Deep Self-Reflection** | A 2-pass metacognitive review pass checks drafts against memory, facts, and the Oculus persona. This thinking trace is buffered and completely hidden on the backend for a polished user experience. |
 | 🌐 **Live Web Search** | Automatically pulls real-time information via Tavily Search when the query requires current data. |
 | 💻 **Interactive Code Sandbox** | HTML, CSS, JavaScript, and SVG snippets open in a live split-screen iframe sandbox directly in the chat — edit, run, and preview without leaving the app. |
 | 🗂️ **File Upload & Parsing** | Drag-and-drop or select plaintext and code files (.py, .js, .json, .css, etc.). Content is injected into the prompt automatically and cleared after each submit. |
-| ⚙️ **Manual Model Selection** | Pin any supported model via the sidebar panel (e.g. Nemotron 3 Super 120B, Llama 3.3 70B, Hermes 3 405B, Dolphin Mistral 24B). |
+| 🗺️ **Left Dock Layout** | Vertical navigation bar on the left providing instant access to Model selection, Workspace Settings, Oculus Brain, Style & Behavior Notes, Action Log, and Generated Documents. |
+| ⚙️ **Manual Model Selection** | Pin any supported model via the Models dock panel (e.g. Nemotron 3 Super 120B, Llama 3.3 70B, Hermes 3 405B, Dolphin Mistral 24B). |
 | 🔄 **Model Fallback Chain** | If the pinned model is rate-limited, returns an error, or times out, the system automatically tries the next model in the chain — no failed requests. |
 | 🗂️ **Conversation History** | Keeps recent context in memory and auto-summarises older turns to stay within model context windows. |
 
@@ -90,7 +91,7 @@ This section covers every major feature in detail. Think of this as a field manu
 Oculus remembers things so you do not have to repeat yourself. Every conversation is passively scanned in the background and key facts — names, preferences, clients, deadlines — are extracted and stored in your **Brain**. This Brain is injected into every future request, so Oculus always knows the full picture.
 
 **Opening the Brain Panel:**  
-Click the **☰ menu icon** in the top-right header. The settings sidebar will slide out. Scroll down to see **Oculus Brain** — your live memory card. You can edit profile fields directly, delete individual facts, and manage project/client entries in real time.
+Click the **Oculus Brain** button in the vertical Sidebar Dock on the left. The panel will slide out from the left showing your live memory card. You can edit profile fields directly, delete individual facts, and manage project/client entries in real time.
 
 **How memory is built — example prompts to teach Oculus about you:**
 
@@ -364,7 +365,7 @@ Oculus weaves the live search results naturally into the answer — it will not 
 Oculus is not locked to one model. You can pin any model for specific tasks.
 
 **Opening Model Settings:**  
-Click the **☰ menu icon** in the header → scroll to **Model** in the sidebar panel → select from the dropdown.
+Click the **Models** button in the vertical Sidebar Dock on the left → select from the model switcher list.
 
 **Model guide:**
 
@@ -433,7 +434,7 @@ Attach files to your prompt for Oculus to read, analyse, or modify.
 Every action Oculus proposes — whether confirmed, pending, or cancelled — is logged in the **Action Log**.
 
 **Opening the Action Log:**  
-Click the **⚡ Actions** button in the header. The left sidebar will slide out showing all logged actions grouped by status: `PENDING`, `EXECUTED`, `CANCELLED`, `UNDONE`.
+Click the **Action Log** button in the vertical Sidebar Dock on the left. The panel will slide out from the left showing all logged actions grouped by status: `PENDING`, `EXECUTED`, `CANCELLED`, `UNDONE`.
 
 **What you can do in the Action Log:**
 - **Confirm a pending action** that you missed in chat by clicking the **✅ checkmark** button next to it.
