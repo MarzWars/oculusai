@@ -175,31 +175,34 @@ Oculus's memory system was rebuilt across three phases throughout June 2026:
 </details>
 
 <details>
-<summary><strong>Click to expand — Memory Quality & Backend Cleanup, Phases 4–7</strong></summary>
+<summary><strong>Click to expand — Backend Architecture & Quality Fixes (Late June 2026)</strong></summary>
 <br>
 
-Oculus's backend was refined and hardened in late June 2026:
+Oculus's backend was refined and hardened in late June 2026 to support the new memory intelligence features:
 
-**4. Memory Quality & Caps**
+**1. Normalized Memory Storage (JSONB Migration)**
+- Migrated the monolithic `oculus_memory` JSONB blob into a structured, indexed relational table (`oculus_memory_items`).
+- Provides safe concurrent writes (eliminating race conditions) and allows fine-grained updates without locking the entire user profile.
+
+**2. Memory Quality & Caps**
 - Regex-extracted facts (name, role, company) now default to 0.55 confidence instead of 1.0, preventing accidental overrides of user-set facts.
 - Category limits raised significantly (e.g., 50 clients, 40 topics).
-- Switched from dumb FIFO truncation to score-based eviction (`confidence × 0.5 + recency × 0.5`).
+- Switched from pure FIFO truncation to score-based eviction (`confidence × 0.5 + recency × 0.5`).
 - Consolidation safety checks added: rejects LLM merges that lose >20% of items to prevent silent data loss.
 
-**5. 2-Pass Self-Reflection**
-- Added `_should_run_reflection()` to skip heavy critique passes on trivial messages (<80 chars).
+**3. 2-Pass Self-Reflection**
+- Added heuristic filtering to skip heavy critique passes on trivial messages (<80 chars) unless they involve actions or financial figures.
 - The critique prompt now receives the exact same RAG, Web, and File context as the draft to eliminate hallucinations.
-- Introduced `reflection_model` in workspace settings, allowing you to use a cheaper/faster model for the critique pass while using an expensive model for the draft.
+- Introduced `reflection_model` in workspace settings, allowing the use of a faster model for the critique pass.
 
-**6. Conversation History Digest**
+**4. Conversation History Digest**
 - Background summarisation now uses an LLM to generate a structured bullet-point digest (topics, decisions, facts) instead of a raw text slice.
 - Cleanly caps at 600 characters along sentence boundaries (`.`, `!`, `?`).
-- Safely falls back to text-combining if the LLM call fails.
 
-**7. Backend Refactoring & Caching**
+**5. Backend Refactoring & Caching**
 - Removed redundant Supabase fetches from the `ask()` and `build_prompt()` chain, saving 2 network roundtrips per message.
-- Replaced the unbounded `EMBEDDING_CACHE` dictionary with a memory-safe `collections.OrderedDict` LRU cache capped at 2,000 entries.
-- Dropped unused templates and orphaned dead code.
+- Replaced the unbounded embedding dictionary with a memory-safe `collections.OrderedDict` LRU cache capped at 2,000 entries.
+- Fixed a cross-user state leak in the developer debug panel.
 
 </details>
 
