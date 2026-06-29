@@ -111,32 +111,55 @@ def apply_memory_decay(mem: dict) -> bool:
     return changed
 
 def load_memory(user_id: str) -> dict:
+    """
+    Phase 3 cutover: reads primarily from oculus_memory_items (normalized rows).
+    Falls back to the legacy oculus_memory JSONB blob if the new table returns
+    no data (belt-and-suspenders safety net during the transition).
+    Shadow-comparison logging runs on every load so divergences are visible.
+    """
     now_date = datetime.now().strftime("%Y-%m-%d")
+
+    # --- Primary read: normalized oculus_memory_items ---
+    try:
+        from backend.memory_items import load_memory_items, _diff_mem_dicts
+        new_mem = load_memory_items(user_id)
+        new_has_data = bool(
+            any(v for v in new_mem.get("profile", {}).values() if isinstance(v, dict) and v.get("value"))
+            or any(new_mem.get(cat) for cat in ["clients", "projects", "deadlines", "preferences",
+                                                "important_facts", "ai_notes", "topics_discussed"])
+            or new_mem.get("message_count", 0) > 0
+        )
+    except Exception as e:
+        print(f"[Phase3] load_memory_items failed for {user_id[:8]}: {e} — falling back to blob")
+        new_mem = None
+        new_has_data = False
+
+    # --- Fallback / shadow read: legacy JSONB blob ---
     try:
         res = supabase.table("oculus_memory").select("memory").eq("user_id", user_id).execute()
-        mem = res.data[0].get("memory", {}) if res.data else {}
+        old_raw = res.data[0].get("memory", {}) if res.data else {}
     except Exception as e:
-        print("Memory load error:", e)
-        mem = {}
-        
-    merged = json.loads(json.dumps(MEMORY_DEFAULT))
-    for key, val in mem.items():
-        if key in merged:
-            merged[key] = val
-            
-    # Normalize profile fields
-    profile = merged.setdefault("profile", {})
+        print("[Phase3] Legacy blob read error:", e)
+        old_raw = {}
+
+    old_merged = json.loads(json.dumps(MEMORY_DEFAULT))
+    for key, val in old_raw.items():
+        if key in old_merged:
+            old_merged[key] = val
+
+    # Normalize the old blob's profile fields (same logic as before)
+    profile = old_merged.setdefault("profile", {})
     for field in ["name", "role", "company", "location", "email", "phone"]:
         val = profile.get(field)
         if val is None:
-            profile[field] = {"value": "", "confidence": 1.0, "source_type": "manual", "last_reinforced": now_date, "reasoning": "Unspecified"}
+            profile[field] = {"value": "", "confidence": 1.0, "source_type": "manual",
+                              "last_reinforced": now_date, "reasoning": "Unspecified"}
         elif isinstance(val, str):
-            profile[field] = {"value": val, "confidence": 1.0, "source_type": "manual", "last_reinforced": now_date, "reasoning": "Legacy profile item"}
+            profile[field] = {"value": val, "confidence": 1.0, "source_type": "manual",
+                              "last_reinforced": now_date, "reasoning": "Legacy profile item"}
         elif isinstance(val, dict):
             conf = val.get("confidence") if val.get("confidence") is not None else 1.0
-            source = val.get("source_type")
-            if not source:
-                source = "user_explicit" if conf >= 1.0 else "conversation"
+            source = val.get("source_type") or ("user_explicit" if conf >= 1.0 else "conversation")
             profile[field] = {
                 "value": val.get("value") or "",
                 "confidence": conf,
@@ -145,83 +168,89 @@ def load_memory(user_id: str) -> dict:
                 "reasoning": val.get("reasoning") or "Saved profile item"
             }
 
-    # Normalize list-based fields
-    list_keys = ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]
-    for key in list_keys:
-        normalized = []
-        for item in merged.get(key, []):
-            norm = normalize_fact(item, default_confidence=0.85, default_reasoning="Legacy memory item")
-            if norm:
-                normalized.append(norm)
-        merged[key] = normalized
+    # Normalize list-based fields in old blob
+    for key in ["preferences", "important_facts", "clients", "topics_discussed", "ai_notes"]:
+        normalized = [normalize_fact(item, default_confidence=0.85, default_reasoning="Legacy memory item")
+                      for item in old_merged.get(key, [])]
+        old_merged[key] = [n for n in normalized if n]
 
-    # Normalize projects
-    now_date = datetime.now().strftime("%Y-%m-%d")
+    # Normalize projects in old blob
     normalized_projects = []
-    for item in merged.get("projects", []):
+    for item in old_merged.get("projects", []):
         if isinstance(item, str):
-            normalized_projects.append({
-                "name": item,
-                "value": item,
-                "confidence": 0.85,
-                "reasoning": "Legacy project item",
-                "added": now_date,
-                "last_seen": now_date
-            })
+            normalized_projects.append({"name": item, "value": item, "confidence": 0.85,
+                                        "reasoning": "Legacy project item", "added": now_date, "last_seen": now_date})
         elif isinstance(item, dict):
             name = item.get("name") or item.get("value") or ""
-            normalized_projects.append({
-                "name": name,
-                "value": name,
-                "confidence": item.get("confidence") if item.get("confidence") is not None else 0.85,
-                "reasoning": item.get("reasoning") or "Saved project item",
-                "added": item.get("added") or now_date,
-                "last_seen": item.get("last_seen") or item.get("added") or now_date
-            })
-    merged["projects"] = normalized_projects
+            normalized_projects.append({"name": name, "value": name,
+                                        "confidence": item.get("confidence") if item.get("confidence") is not None else 0.85,
+                                        "reasoning": item.get("reasoning") or "Saved project item",
+                                        "added": item.get("added") or now_date,
+                                        "last_seen": item.get("last_seen") or item.get("added") or now_date})
+    old_merged["projects"] = normalized_projects
 
-    # Normalize deadlines
+    # Normalize deadlines in old blob
     normalized_deadlines = []
-    for item in merged.get("deadlines", []):
+    for item in old_merged.get("deadlines", []):
         if isinstance(item, str):
-            normalized_deadlines.append({
-                "item": item,
-                "value": item,
-                "date": "Not specified",
-                "confidence": 0.85,
-                "reasoning": "Legacy deadline item",
-                "added": now_date,
-                "last_seen": now_date
-            })
+            normalized_deadlines.append({"item": item, "value": item, "date": "Not specified",
+                                         "confidence": 0.85, "reasoning": "Legacy deadline item",
+                                         "added": now_date, "last_seen": now_date})
         elif isinstance(item, dict):
             task_name = item.get("item") or item.get("value") or ""
-            normalized_deadlines.append({
-                "item": task_name,
-                "value": task_name,
-                "date": item.get("date") or "Not specified",
-                "confidence": item.get("confidence") if item.get("confidence") is not None else 0.85,
-                "reasoning": item.get("reasoning") or "Saved deadline item",
-                "added": item.get("added") or now_date,
-                "last_seen": item.get("last_seen") or item.get("added") or now_date
-            })
-    merged["deadlines"] = normalized_deadlines
+            normalized_deadlines.append({"item": task_name, "value": task_name,
+                                         "date": item.get("date") or "Not specified",
+                                         "confidence": item.get("confidence") if item.get("confidence") is not None else 0.85,
+                                         "reasoning": item.get("reasoning") or "Saved deadline item",
+                                         "added": item.get("added") or now_date,
+                                         "last_seen": item.get("last_seen") or item.get("added") or now_date})
+    old_merged["deadlines"] = normalized_deadlines
 
-    # Ensure conflicts list exists
-    if "conflicts" not in merged or not isinstance(merged["conflicts"], list):
-        merged["conflicts"] = []
+    if "conflicts" not in old_merged or not isinstance(old_merged["conflicts"], list):
+        old_merged["conflicts"] = []
 
-    # Bounded daily decay run
+    # --- Shadow comparison log (runs on every load) ---
+    if new_has_data and new_mem is not None:
+        try:
+            diffs = _diff_mem_dicts(old_merged, new_mem)
+            if diffs:
+                print(f"[ShadowDiff] user={user_id[:8]} — {len(diffs)} diff(s):")
+                for d in diffs:
+                    print(d)
+            else:
+                print(f"[ShadowDiff] user={user_id[:8]} — CLEAN (no diffs)")
+        except Exception as e:
+            print(f"[ShadowDiff] comparison error for {user_id[:8]}: {e}")
+
+    # --- Choose which result to return ---
+    # Use new table if it has data; otherwise fall back to old blob.
+    # In practice after a successful backfill new_has_data should always be True.
+    merged = new_mem if new_has_data else old_merged
+
+    # Carry conflicts from old blob if the new table has none yet
+    # (conflicts added before cutover would not have been migrated by backfill)
+    if not merged.get("conflicts") and old_merged.get("conflicts"):
+        merged["conflicts"] = old_merged["conflicts"]
+
+    # --- Bounded daily decay run (dual-write) ---
     today_str = datetime.now().strftime("%Y-%m-%d")
     if merged.get("last_decay_run") != today_str:
-        decay_changed = apply_memory_decay(merged)
+        apply_memory_decay(merged)
         merged["last_decay_run"] = today_str
+        # Write decay back to old table (keeps it in sync as a warm backup)
         try:
             supabase.table("oculus_memory").upsert({
                 "user_id": user_id,
                 "memory":  merged
             }).execute()
         except Exception as e:
-            print("Failed to save decayed memory:", e)
+            print("Failed to save decayed memory to blob:", e)
+        # Write decay to new table too
+        try:
+            from backend.memory_items import save_memory_items
+            save_memory_items(user_id, merged)
+        except Exception as e:
+            print(f"[Phase3] Failed to save decayed memory to items table: {e}")
 
     return merged
 

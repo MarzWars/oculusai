@@ -94,13 +94,14 @@ def flatten_mem_to_rows(user_id: str, mem_dict: dict) -> list:
         if not obj:
             continue
         if isinstance(obj, str):
-            val_str = obj
+            # Legacy: profile field stored as a plain string (e.g. "Owner", "Margate")
+            val_str = obj.strip()
             conf = 1.0
             src = "manual"
             reasoning = "Legacy profile string"
             reinforced = today
         elif isinstance(obj, dict):
-            val_str = obj.get("value", "")
+            val_str = obj.get("value", "").strip() if isinstance(obj.get("value"), str) else str(obj.get("value", "")).strip()
             conf = float(obj.get("confidence", 1.0))
             src = obj.get("source_type", "manual")
             reasoning = obj.get("reasoning", "")
@@ -258,6 +259,29 @@ def flatten_mem_to_rows(user_id: str, mem_dict: dict) -> list:
             "updated_at": now,
         })
 
+    # ---- Conflicts -------------------------------------------------------
+    # Store each conflict as its own row so they survive the cutover.
+    for conflict in mem_dict.get("conflicts", []):
+        if not isinstance(conflict, dict):
+            continue
+        cid = conflict.get("id", "")
+        if not cid:
+            continue
+        rows.append({
+            "user_id": user_id,
+            "workspace_id": None,
+            "item_type": "conflict",
+            "key": f"conflict::{cid}",
+            "value": conflict,
+            "confidence": 1.0,
+            "source_type": "system",
+            "importance": 0.0,
+            "pinned": False,
+            "last_reinforced": now,
+            "reasoning": "Pending conflict awaiting user resolution",
+            "updated_at": now,
+        })
+
     # ---- Metadata (session / message counts, timestamps) -----------------
     meta_value = {
         "first_seen":     mem_dict.get("first_seen", ""),
@@ -293,28 +317,40 @@ def flatten_mem_to_rows(user_id: str, mem_dict: dict) -> list:
 
 def save_memory_items(user_id: str, mem_dict: dict) -> None:
     """
-    Upsert all memory items for a user into oculus_memory_items.
+    Write all memory items for a user into oculus_memory_items.
 
-    Each row is identified by (user_id, item_type, key) — matched by the
-    unique partial index in Postgres.  Rows without a key (key IS NULL) are
-    always inserted, not deduped — but all our generated rows have a key, so
-    this branch doesn't apply here.
+    Strategy: DELETE existing rows for this user, then INSERT fresh rows.
+    This is safe because each call captures the full current memory state,
+    so there is never a case where we would want stale rows to survive.
+    It also sidesteps the need for the unique index on ON CONFLICT clauses.
 
     Errors are logged and suppressed so a failure here never breaks the
-    existing JSONB write path during Phase 2 dual-write.
+    existing JSONB write path during Phase 2/3 dual-write.
     """
     try:
         rows = flatten_mem_to_rows(user_id, mem_dict)
         if not rows:
             return
 
-        # Supabase Python SDK upsert with on_conflict handles the
-        # INSERT ... ON CONFLICT (user_id, item_type, key) DO UPDATE
-        # The unique index is: idx_omi_user_type_key (user_id, item_type, key) WHERE key IS NOT NULL
-        supabase.table("oculus_memory_items").upsert(
-            rows,
-            on_conflict="user_id,item_type,key"
-        ).execute()
+        # Delete all existing rows for this user, then re-insert fresh.
+        # Done per item_type so other users are never touched.
+        item_types = list({r["item_type"] for r in rows})
+        for itype in item_types:
+            try:
+                supabase.table("oculus_memory_items") \
+                    .delete() \
+                    .eq("user_id", user_id) \
+                    .eq("item_type", itype) \
+                    .execute()
+            except Exception as del_err:
+                print(f"[MemoryItems] delete failed for {user_id[:8]} type={itype}: {del_err}")
+                # Continue — the insert below will either succeed or fail independently
+
+        # Insert in batches of 50
+        BATCH = 50
+        for i in range(0, len(rows), BATCH):
+            supabase.table("oculus_memory_items").insert(rows[i:i + BATCH]).execute()
+
         print(f"[MemoryItems] Saved {len(rows)} rows for user {user_id[:8]}...")
     except Exception as e:
         print(f"[MemoryItems] save_memory_items failed for user {user_id[:8]}...: {e}")
@@ -404,6 +440,9 @@ def load_memory_items(user_id: str) -> dict:
             mem_key = type_to_key[item_type]
             mem[mem_key].append(value)
 
+        elif item_type == "conflict":
+            mem["conflicts"].append(value)
+
         elif item_type == "metadata":
             mem["first_seen"]     = value.get("first_seen", "")
             mem["last_seen"]      = value.get("last_seen", "")
@@ -415,7 +454,58 @@ def load_memory_items(user_id: str) -> dict:
             if value.get("low_priority_summary"):
                 mem["low_priority_summary"] = value["low_priority_summary"]
 
-        # conflicts are not stored in oculus_memory_items (they live in the
-        # JSONB blob and will be migrated in a later sub-task if needed)
-
     return mem
+
+
+# ---------------------------------------------------------------------------
+# _diff_mem_dicts  (used by the shadow comparison log in load_memory())
+# ---------------------------------------------------------------------------
+
+def _diff_mem_dicts(old: dict, new: dict) -> list:
+    """
+    Compare two memory dicts (old = from JSONB blob, new = from normalized rows).
+    Returns a list of human-readable diff strings.  Only flags meaningful
+    differences (populated values, not empty defaults).
+    """
+    diffs = []
+
+    # Profile fields: compare non-empty values only
+    old_profile = old.get("profile", {})
+    new_profile = new.get("profile", {})
+    for field in ["name", "role", "company", "location", "email", "phone"]:
+        old_val = (old_profile.get(field) or {}).get("value", "") if isinstance(old_profile.get(field), dict) else old_profile.get(field, "")
+        new_val = (new_profile.get(field) or {}).get("value", "") if isinstance(new_profile.get(field), dict) else new_profile.get(field, "")
+        old_val = str(old_val).strip()
+        new_val = str(new_val).strip()
+        if old_val and old_val != new_val:
+            diffs.append(f"  profile.{field}: OLD={old_val!r} NEW={new_val!r}")
+
+    # List categories: compare sorted value strings
+    list_cats = {
+        "clients":          lambda i: (i.get("value") or i.get("name") or "") if isinstance(i, dict) else str(i),
+        "projects":         lambda i: (i.get("name")  or i.get("value") or "") if isinstance(i, dict) else str(i),
+        "deadlines":        lambda i: (i.get("item")  or i.get("value") or "") if isinstance(i, dict) else str(i),
+        "preferences":      lambda i: (i.get("value") or "") if isinstance(i, dict) else str(i),
+        "important_facts":  lambda i: (i.get("value") or "") if isinstance(i, dict) else str(i),
+        "topics_discussed": lambda i: (i.get("value") or "") if isinstance(i, dict) else str(i),
+        "ai_notes":         lambda i: (i.get("value") or "") if isinstance(i, dict) else str(i),
+    }
+    for cat, extractor in list_cats.items():
+        old_vals = sorted(extractor(i).strip().lower() for i in old.get(cat, []) if extractor(i).strip())
+        new_vals = sorted(extractor(i).strip().lower() for i in new.get(cat, []) if extractor(i).strip())
+        if old_vals != new_vals:
+            only_old = sorted(set(old_vals) - set(new_vals))
+            only_new = sorted(set(new_vals) - set(old_vals))
+            if only_old:
+                diffs.append(f"  {cat}: only in OLD: {only_old[:3]}{'...' if len(only_old)>3 else ''}")
+            if only_new:
+                diffs.append(f"  {cat}: only in NEW: {only_new[:3]}{'...' if len(only_new)>3 else ''}")
+
+    # Metadata counts (non-zero only)
+    for meta_key in ["session_count", "message_count"]:
+        o = old.get(meta_key, 0)
+        n = new.get(meta_key, 0)
+        if o and o != n:
+            diffs.append(f"  {meta_key}: OLD={o} NEW={n}")
+
+    return diffs
