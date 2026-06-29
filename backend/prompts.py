@@ -327,6 +327,10 @@ You will run a structured self-reflection/critique on the initial draft response
 Memory Context:
 {memory_context}
 
+{file_context}
+{rag_context}
+{web_context}
+
 User Message:
 {user_message}
 

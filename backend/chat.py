@@ -114,7 +114,7 @@ def maybe_summarise_history(user_id: str, history: list):
         pass
 
 
-def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list) -> str:
+def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list, workspace_settings: dict = None) -> dict:
     # Format uploaded files context
     from backend.files import UPLOADED_FILES_CACHE
     uploaded_files = UPLOADED_FILES_CACHE.get(workspace_id, [])
@@ -144,16 +144,26 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
         f"Time: {now.strftime('%H:%M')} SAST (UTC+2)"
     )
 
-    # Load active workspace info
+    # Use provided workspace info or defaults
     workspace_name = "Default Workspace"
-    workspace_settings = {}
-    try:
-        res = supabase.table("oculus_workspaces").select("name, settings").eq("id", workspace_id).execute()
-        if res.data:
-            workspace_name = res.data[0].get("name", "Default Workspace")
-            workspace_settings = res.data[0].get("settings") or {}
-    except Exception as e:
-        print("[Prompt Engine] Error loading workspace info:", e)
+    if not workspace_settings:
+        workspace_settings = {}
+        try:
+            res = supabase.table("oculus_workspaces").select("name, settings").eq("id", workspace_id).execute()
+            if res.data:
+                workspace_name = res.data[0].get("name", "Default Workspace")
+                workspace_settings = res.data[0].get("settings") or {}
+        except Exception as e:
+            print("[Prompt Engine] Error loading workspace info:", e)
+    else:
+        # We don't have the name if passed in from ask(), but it's rarely used outside the prompt header
+        # so we'll just query it or use default
+        try:
+            res = supabase.table("oculus_workspaces").select("name").eq("id", workspace_id).execute()
+            if res.data:
+                workspace_name = res.data[0].get("name", "Default Workspace")
+        except:
+            pass
 
     memory_token_budget = int(workspace_settings.get("memory_token_budget", 1500))
     uid = current_user_id()
@@ -309,7 +319,13 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
         # Check budget
         if approx_tokens <= 6000:
             print(f"[Token Budget] Prompt assembled: {approx_tokens} tokens (approx). Limit: 6000.")
-            return prompt_str
+            return {
+                "prompt_str": prompt_str,
+                "web_context": web_context,
+                "rag_context": rag_context,
+                "file_context": file_context,
+                "mem_context": mem_context
+            }
             
         # Pruning sequence:
         if verbatim_turns > 1:
@@ -326,7 +342,13 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list)
             print(f"[Token Budget Warning] Prompt size {approx_tokens} exceeds 6000. Truncating web search context to {web_length_limit} chars...")
         else:
             print(f"[Token Budget Danger] Prompt size {approx_tokens} exceeds 6000 and cannot be pruned further. Returning best effort.")
-            return prompt_str
+            return {
+                "prompt_str": prompt_str,
+                "web_context": web_context,
+                "rag_context": rag_context,
+                "file_context": file_context,
+                "mem_context": mem_context
+            }
 
 
 @chat_bp.route("/")
@@ -397,6 +419,25 @@ def clear():
     return jsonify({"status": "cleared"})
 
 
+def _should_run_reflection(user_message: str, action_data: dict) -> bool:
+    """Issue 7: Logic to determine if self-reflection should block the response."""
+    msg_len = len(user_message)
+    if action_data:
+        return True
+    # Look for financial figures: R1,000 / $500 / ZAR 100
+    if re.search(r"(?:R|ZAR|\$)\s*\d+(?:,\d{3})*(?:\.\d{2})?", user_message, re.IGNORECASE):
+        return True
+        
+    if msg_len < 80:
+        return False
+        
+    if msg_len > 300:
+        return True
+    if len(user_message.split()) > 40:
+        return True
+    return False
+
+
 @chat_bp.route("/ask", methods=["POST"])
 @login_required
 def ask():
@@ -445,17 +486,21 @@ def ask():
     if action_data:
         action_id = log_proposed_action(uid, wid, action_data["action_type"], action_data["arguments"])
 
-    # Load settings from supabase oculus_workspaces to check if self-reflection is enabled
+    # Load settings from supabase oculus_workspaces once
+    workspace_settings = {}
     self_reflection_enabled = False
+    reflection_model = "meta-llama/llama-3.1-8b-instruct"
     try:
         res = supabase.table("oculus_workspaces").select("settings").eq("id", wid).execute()
         if res.data:
-            settings = res.data[0].get("settings") or {}
-            self_reflection_enabled = settings.get("self_reflection_enabled", False)
+            workspace_settings = res.data[0].get("settings") or {}
+            self_reflection_enabled = workspace_settings.get("self_reflection_enabled", False)
+            reflection_model = workspace_settings.get("reflection_model", "meta-llama/llama-3.1-8b-instruct")
     except Exception as e:
         print("[Chat] Failed to load workspace settings:", e)
 
-    prompt = build_prompt(wid, user_message, memory, history)
+    prompt_data = build_prompt(wid, user_message, memory, history, workspace_settings=workspace_settings)
+    prompt = prompt_data["prompt_str"]
     # Clear uploaded files cache immediately
     from backend.files import UPLOADED_FILES_CACHE
     UPLOADED_FILES_CACHE.pop(wid, None)
@@ -465,28 +510,25 @@ def ask():
     msg_index_before = len(history) - 1  # the user message was just appended
 
     def generate():
+        nonlocal preferred_model
         try:
             stream_prompt = prompt
-            if self_reflection_enabled:
-                print("[Chat Reflection] Running 2-pass self-reflection critique...")
+            if self_reflection_enabled and _should_run_reflection(user_message, action_data):
+                print(f"[Chat Reflection] Running 2-pass self-reflection critique using model: {reflection_model}")
                 try:
                     draft = query_openrouter(prompt, preferred_model=preferred_model)
                     if draft:
                         from backend.prompts import CRITIQUE_PROMPT_TEMPLATE
-                        ws_settings = {}
-                        try:
-                            ws_res = supabase.table("oculus_workspaces").select("settings").eq("id", wid).execute()
-                            if ws_res.data:
-                                ws_settings = ws_res.data[0].get("settings") or {}
-                        except Exception:
-                            pass
-                        memory_token_budget = int(ws_settings.get("memory_token_budget", 1500))
-                        memory_context = memory_to_context(memory, user_message, memory_budget=memory_token_budget, preferred_model=preferred_model, user_id=uid)
                         stream_prompt = CRITIQUE_PROMPT_TEMPLATE.format(
-                            memory_context=memory_context,
+                            memory_context=prompt_data["mem_context"],
+                            file_context=prompt_data["file_context"],
+                            rag_context=prompt_data["rag_context"],
+                            web_context=prompt_data["web_context"],
                             user_message=user_message,
                             draft=draft
                         )
+                        # Switch to the critique model for the second pass
+                        preferred_model = reflection_model
                 except Exception as ex:
                     print("[Chat Reflection Error] Draft generation failed, falling back:", ex)
 
