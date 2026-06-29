@@ -14,7 +14,12 @@ Memory that persists. Actions that execute. Code that runs. Guardrails that don'
 ![OpenRouter](https://img.shields.io/badge/AI-OpenRouter-6366F1?style=flat-square&logoColor=white)
 ![Supabase](https://img.shields.io/badge/Supabase-Memory-3ECF8E?style=flat-square&logo=supabase&logoColor=white)
 ![Render](https://img.shields.io/badge/Deployed-Render-46E3B7?style=flat-square&logo=render&logoColor=white)
+![Lines of Code](https://img.shields.io/badge/Lines_of_Code-15k+-blue?style=flat-square)
 ![License](https://img.shields.io/badge/License-Private-red?style=flat-square)
+
+<br>
+
+> *Currently sitting at **~15,600+ lines of code**, and still growing!*
 
 <br>
 
