@@ -145,7 +145,7 @@ Oculus isn't trying to out-reason GPT-5.5 or Grok — it's solving a different p
 
 ---
 
-## Recent Upgrades (26 June 2026)
+## Recent Upgrades (June 2026)
 
 <details>
 <summary><strong>Click to expand — Memory & Intelligence overhaul, Phases 1–3</strong></summary>
@@ -171,6 +171,35 @@ Oculus's memory system was rebuilt across three phases throughout June 2026:
 - Context injection is capped at a configurable token budget (default `1500`); overflow facts compress into one dense summary, only re-running when facts change.
 - Plain-language memory commands work in chat — *"forget everything about Vue"*, *"pin Acme mockup deadline"* — and update the Brain UI instantly.
 - Pin anything with 📌 for a permanent importance boost (`importance = 1.0`, `+0.3` score); a developer debug panel shows the full scoring breakdown per request.
+
+</details>
+
+<details>
+<summary><strong>Click to expand — Memory Quality & Backend Cleanup, Phases 4–7</strong></summary>
+<br>
+
+Oculus's backend was refined and hardened in late June 2026:
+
+**4. Memory Quality & Caps**
+- Regex-extracted facts (name, role, company) now default to 0.55 confidence instead of 1.0, preventing accidental overrides of user-set facts.
+- Category limits raised significantly (e.g., 50 clients, 40 topics).
+- Switched from dumb FIFO truncation to score-based eviction (`confidence × 0.5 + recency × 0.5`).
+- Consolidation safety checks added: rejects LLM merges that lose >20% of items to prevent silent data loss.
+
+**5. 2-Pass Self-Reflection**
+- Added `_should_run_reflection()` to skip heavy critique passes on trivial messages (<80 chars).
+- The critique prompt now receives the exact same RAG, Web, and File context as the draft to eliminate hallucinations.
+- Introduced `reflection_model` in workspace settings, allowing you to use a cheaper/faster model for the critique pass while using an expensive model for the draft.
+
+**6. Conversation History Digest**
+- Background summarisation now uses an LLM to generate a structured bullet-point digest (topics, decisions, facts) instead of a raw text slice.
+- Cleanly caps at 600 characters along sentence boundaries (`.`, `!`, `?`).
+- Safely falls back to text-combining if the LLM call fails.
+
+**7. Backend Refactoring & Caching**
+- Removed redundant Supabase fetches from the `ask()` and `build_prompt()` chain, saving 2 network roundtrips per message.
+- Replaced the unbounded `EMBEDDING_CACHE` dictionary with a memory-safe `collections.OrderedDict` LRU cache capped at 2,000 entries.
+- Dropped unused templates and orphaned dead code.
 
 </details>
 
