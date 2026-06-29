@@ -1,0 +1,57 @@
+/* ─────────────────────────────────────────
+   OCULUS AI — style.css
+   Premium dark interface · Glassmorphic · Polished
+   ───────────────────────────────────────── */
+
+:root {
+  --bg: #09090c;
+  --bg-2: #111115;
+  --bg-3: #18181e;
+  --bg-4: #202027;
+  --border: #252530;
+  --border-light: #32323f;
+
+  --text: #ebebf5;
+  --text-muted: #8080a0;
+  --text-faint: #4a4a62;
+
+  --accent: #7c6af7;
+  --accent-bright: #9d8dff;
+  --accent-glow: rgba(124, 106, 247, 0.22);
+  --accent-dim: rgba(124, 106, 247, 0.09);
+  --accent-subtle: rgba(124, 106, 247, 0.05);
+
+  --code-bg: #08080b;
+  --code-header: #0e0e12;
+  --code-border: #1f1f2a;
+
+  /* Syntax token colours */
+  --syn-keyword: #c792ea;
+  --syn-string: #c3e88d;
+  --syn-number: #f78c6c;
+  --syn-comment: #546e7a;
+  --syn-function: #82aaff;
+  --syn-type: #ffcb6b;
+  --syn-attr: #89ddff;
+  --syn-operator: #89ddff;
+  --syn-tag: #f07178;
+  --syn-builtin: #f78c6c;
+  --syn-variable: #ebebf5;
+
+  --green: #a6e3a1;
+  --red: #f38ba8;
+  --purple: #cba6f7;
+
+  --radius: 14px;
+  --radius-sm: 9px;
+  --radius-xs: 6px;
+
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Syne', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
+
+  --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 8px 30px rgba(0, 0, 0, 0.55);
+  --shadow-glow: 0 0 20px rgba(124, 106, 247, 0.15);
+}
+

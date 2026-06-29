@@ -457,20 +457,36 @@ oculusai/
 │   ├── extensions.py       # Supabase & Tavily client init
 │   ├── auth.py              # Login/register/logout, @login_required
 │   ├── workspaces.py        # Workspace lifecycle (create/delete/list/switch)
-│   ├── memory.py             # Memory DB read/write, LLM extraction & consolidation
+│   ├── memory.py             # Memory aggregator (imports from IO, LLM, Ranking, API)
+│   ├── memory_io.py          # Database reads/writes, decay, backfill
+│   ├── memory_llm.py         # AI extraction, style inference, consolidation
+│   ├── memory_ranking.py     # Vector embeddings, RAG scoring, context assembly
+│   ├── memory_api.py         # Memory Flask endpoints
 │   ├── chat.py                # Home route, chat submission, model switching
 │   ├── files.py                # Upload handling, prompt injection, sandbox download
 │   ├── search.py                # Tavily query refinement & trigger logic
 │   ├── models.py                 # OpenRouter streaming gateway, fallback chain
 │   ├── actions.py                 # Actions Engine — classification, execution
+│   ├── document_builder.py         # Actions Engine — PDF/DOCX generation
 │   └── rag.py                      # PDF/DOCX extraction, chunking, hybrid ranking
 ├── templates/
 │   ├── index.html           # Main chat interface (Jinja2)
 │   ├── login.html
 │   └── register.html
 ├── static/
-│   ├── oculus.js             # Frontend routing, streaming, sandbox, drawers
-│   ├── style.css               # Dark terminal theme, animations, layout
+│   ├── css/
+│   │   ├── variables.css      # Theme colors, spacing, typography
+│   │   ├── layout.css         # Shell, headers, sidebars
+│   │   ├── chat.css           # Bubbles, feed, markdown
+│   │   ├── sandbox.css        # Live editor iframe layout
+│   │   └── components.css     # Buttons, modals, cards
+│   ├── js/
+│   │   ├── main.js            # Entry point, initialization
+│   │   ├── api.js             # Network requests, streaming
+│   │   ├── ui.js              # DOM state, sidebars, interactions
+│   │   ├── markdown.js        # Markdown & syntax rendering
+│   │   ├── sandbox.js         # Editor iframe, download logic
+│   │   └── workspaces.js      # Workspace management
 │   ├── oculus_logo.svg
 │   ├── oculus_avatar.svg
 │   ├── manifest.json            # PWA manifest
@@ -490,20 +506,25 @@ oculusai/
   - [backend/extensions.py](backend/extensions.py) — Initialises Supabase & Tavily API clients
   - [backend/auth.py](backend/auth.py) — Auth routes, login/register/logout, `@login_required` decorator
   - [backend/workspaces.py](backend/workspaces.py) — Workspaces API lifecycle (create, delete, list, switch)
-  - [backend/memory.py](backend/memory.py) — Memory DB read/write, LLM-based extraction and consolidation
+  - [backend/memory.py](backend/memory.py) — Clean aggregator file for memory sub-modules
+  - [backend/memory_io.py](backend/memory_io.py) — Database I/O, item fetching, JSONB updates
+  - [backend/memory_llm.py](backend/memory_llm.py) — AI logic for natural language extraction and consolidation
+  - [backend/memory_ranking.py](backend/memory_ranking.py) — Vector embeddings, LRU caching, RAG cosine scoring
+  - [backend/memory_api.py](backend/memory_api.py) — Flask endpoints for the Brain UI and frontend
   - [backend/chat.py](backend/chat.py) — Home route, chat submission, clear, model switching
   - [backend/files.py](backend/files.py) — File upload handling, allowed types, prompt injection, sandbox download
   - [backend/search.py](backend/search.py) — Tavily query refinement and search trigger logic
   - [backend/models.py](backend/models.py) — OpenRouter streaming gateway and model fallback chain
   - [backend/actions.py](backend/actions.py) — AI Actions Engine, classification prompts, execution wrappers
+  - [backend/document_builder.py](backend/document_builder.py) — Heavy binary rendering (DOCX and PDF generation)
   - [backend/rag.py](backend/rag.py) — PDF/DOCX extractors, chunkers, embeds, hybrid rankers
 - **`templates/`** — HTML files:
   - [templates/index.html](templates/index.html) — Main chat interface (Jinja2)
   - [templates/login.html](templates/login.html) — Login page
   - [templates/register.html](templates/register.html) — Registration page
 - **`static/`** — Static front-end assets:
-  - [static/oculus.js](static/oculus.js) — Frontend routing, streaming, markdown render, code sandbox, drawers, action cards
-  - [static/style.css](static/style.css) — Dark terminal theme styling, animations, UI responsive rules, layout grids
+  - [static/css/](static/css/) — Modular CSS broken down by domain (layout, chat, variables, etc)
+  - [static/js/](static/js/) — Modular JS files loaded sequentially (ui.js, api.js, main.js, etc)
   - [static/oculus_logo.svg](static/oculus_logo.svg) — SVG logo with wordmark
   - [static/oculus_avatar.svg](static/oculus_avatar.svg) — Avatar icon for chat bubbles
   - [static/manifest.json](static/manifest.json) — Progressive Web App manifest
