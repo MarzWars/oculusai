@@ -342,6 +342,41 @@ def add_profile_field_with_conflict_check(mem: dict, field: str, new_val: str, c
         return True
     return False
 
+def _evict_by_score(lst: list, max_len: int, category: str, val_key: str = "value") -> None:
+    """
+    Issue 4: Score-based eviction helper.  Keeps the highest-scoring items up
+    to max_len.  Score = confidence * 0.5 + recency_score * 0.5, where
+    recency_score decays 0.05 per week of inactivity (min 0.0).
+
+    Modifies lst in-place.  Logs every item dropped.
+    """
+    if len(lst) <= max_len:
+        return
+
+    now = datetime.now()
+
+    def _score(item: dict) -> float:
+        conf = float(item.get("confidence", 0.85))
+        last_str = item.get("last_seen") or item.get("last_reinforced") or item.get("added") or ""
+        try:
+            last_date = datetime.strptime(str(last_str).split()[0][:10], "%Y-%m-%d")
+            weeks_inactive = max(0, (now - last_date).days // 7)
+            recency = max(0.0, 1.0 - weeks_inactive * 0.05)
+        except Exception:
+            recency = 0.5
+        return conf * 0.5 + recency * 0.5
+
+    scored = sorted(lst, key=_score, reverse=True)
+    kept = set(id(x) for x in scored[:max_len])
+    evicted = [x for x in lst if id(x) not in kept]
+    for item in evicted:
+        label = item.get(val_key) or item.get("value") or item.get("name") or str(item)[:60]
+        print(f"[MemEvict] category={category} dropped: {label!r} "
+              f"(conf={item.get('confidence', '?')}, "
+              f"last_seen={item.get('last_seen') or item.get('added', '?')})")
+    lst[:] = scored[:max_len]
+
+
 def extract_memory_regex(text: str, mem: dict) -> bool:
     if is_ad_content(text):
         return False
@@ -385,6 +420,14 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
                     changed = True
             return changed
 
+    # ------------------------------------------------------------------ #
+    # Issue 3 fix: pattern-matched fields get confidence=0.55 / source   #
+    # type='regex_heuristic' so the decay system and quality audit can    #
+    # treat them with appropriate scepticism.  Email and phone are        #
+    # high-precision patterns → 0.85.  Style-prefix commands             #
+    # (handled above) keep 1.0 / 'user_explicit'.                        #
+    # ------------------------------------------------------------------ #
+
     for pat in [
         r"(?:my name is|i(?:'m| am) called|call me|i go by)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)",
         r"^([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)\s+here[,.]",
@@ -393,7 +436,11 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         if m:
             candidate = m.group(1).strip()
             if candidate.lower() not in {"the", "a", "an", "this", "that", "here"}:
-                if add_profile_field_with_conflict_check(mem, "name", candidate, 1.0, "Direct statement."):
+                if add_profile_field_with_conflict_check(
+                    mem, "name", candidate,
+                    confidence=0.55, reasoning="Regex heuristic match.",
+                    source_type="regex_heuristic"
+                ):
                     changed = True
                 break
 
@@ -403,7 +450,11 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
     ]:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
-            if add_profile_field_with_conflict_check(mem, "company", m.group(1).strip()[:80], 1.0, "Direct statement."):
+            if add_profile_field_with_conflict_check(
+                mem, "company", m.group(1).strip()[:80],
+                confidence=0.55, reasoning="Regex heuristic match.",
+                source_type="regex_heuristic"
+            ):
                 changed = True
             break
 
@@ -415,7 +466,11 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         if m:
             role = m.group(1).strip()
             if len(role.split()) <= 6:
-                if add_profile_field_with_conflict_check(mem, "role", role, 1.0, "Direct statement."):
+                if add_profile_field_with_conflict_check(
+                    mem, "role", role,
+                    confidence=0.55, reasoning="Regex heuristic match.",
+                    source_type="regex_heuristic"
+                ):
                     changed = True
                 break
 
@@ -424,17 +479,30 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         t, re.IGNORECASE
     )
     if m:
-        if add_profile_field_with_conflict_check(mem, "location", m.group(1).strip()[:60], 1.0, "Direct statement."):
+        if add_profile_field_with_conflict_check(
+            mem, "location", m.group(1).strip()[:60],
+            confidence=0.55, reasoning="Regex heuristic match.",
+            source_type="regex_heuristic"
+        ):
             changed = True
 
+    # Email and phone: high-precision patterns → confidence 0.85
     m = re.search(r"[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}", t)
     if m:
-        if add_profile_field_with_conflict_check(mem, "email", m.group(0), 1.0, "Explicit statement."):
+        if add_profile_field_with_conflict_check(
+            mem, "email", m.group(0),
+            confidence=0.85, reasoning="Email pattern match.",
+            source_type="regex_heuristic"
+        ):
             changed = True
 
     m = re.search(r"(?:\+27|0)[6-8]\d[\s\-]?\d{3}[\s\-]?\d{4}", t)
     if m:
-        if add_profile_field_with_conflict_check(mem, "phone", m.group(0), 1.0, "Explicit statement."):
+        if add_profile_field_with_conflict_check(
+            mem, "phone", m.group(0),
+            confidence=0.85, reasoning="Phone pattern match.",
+            source_type="regex_heuristic"
+        ):
             changed = True
 
     for pat in [
@@ -443,7 +511,7 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
     ]:
         m = re.search(pat, t, re.IGNORECASE)
         if m:
-            if _add_unique(mem["clients"], m.group(1).strip()[:60], max_len=20):
+            if _add_unique(mem["clients"], m.group(1).strip()[:60], max_len=50):
                 changed = True
 
     for pat in [
@@ -464,8 +532,8 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
                         "confidence": 0.85,
                         "reasoning": "Inferred from regex"
                     })
-                    if len(mem["projects"]) > 15:
-                        mem["projects"] = mem["projects"][-15:]
+                    _evict_by_score(mem["projects"], max_len=30, category="projects",
+                                    val_key="name")
                     changed = True
 
     m = re.search(
@@ -484,8 +552,8 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
                 "confidence": 0.85,
                 "reasoning": "Inferred from regex"
             })
-            if len(mem["deadlines"]) > 10:
-                mem["deadlines"] = mem["deadlines"][-10:]
+            _evict_by_score(mem["deadlines"], max_len=25, category="deadlines",
+                            val_key="item")
             changed = True
 
     for pat in [
@@ -497,7 +565,7 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
         if m:
             pref = m.group(0).strip()
             if len(pref) <= 100:
-                if _add_unique(mem["preferences"], pref, max_len=15):
+                if _add_unique(mem["preferences"], pref, max_len=25):
                     changed = True
 
     m = re.search(
@@ -507,7 +575,7 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
     if m:
         note = m.group(1).strip()
         if 5 < len(note) <= 120:
-            if _add_unique(mem["important_facts"], note, max_len=20):
+            if _add_unique(mem["important_facts"], note, max_len=25):
                 changed = True
 
     topic_map = {
@@ -540,7 +608,7 @@ def extract_memory_regex(text: str, mem: dict) -> bool:
     tl = t.lower()
     for topic, keywords in topic_map.items():
         if any(kw in tl for kw in keywords):
-            if _add_unique(mem["topics_discussed"], topic, max_len=30):
+            if _add_unique(mem["topics_discussed"], topic, max_len=40):
                 changed = True
 
     return changed
@@ -613,7 +681,7 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                     "last_seen": now_date
                 })
                 if len(current_memory[key]) > max_len:
-                    current_memory[key] = current_memory[key][-max_len:]
+                    _evict_by_score(current_memory[key], max_len=max_len, category=key)
                 changed = True
 
     # Dedicated merging helper for ai_notes (with category and user_explicit protection support)
@@ -673,13 +741,13 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                 changed = True
 
         if len(current_memory["ai_notes"]) > max_len:
-            current_memory["ai_notes"] = current_memory["ai_notes"][-max_len:]
+            _evict_by_score(current_memory["ai_notes"], max_len=max_len, category="ai_notes")
 
-    merge_list_field("preferences", 15)
-    merge_list_field("clients", 20)
-    merge_list_field("important_facts", 20)
-    merge_list_field("topics_discussed", 30)
-    merge_ai_notes(15)
+    merge_list_field("preferences", 25)
+    merge_list_field("clients", 50)
+    merge_list_field("important_facts", 25)
+    merge_list_field("topics_discussed", 40)
+    merge_ai_notes(20)
 
     # 3. Projects
     project_updates = updates.get("projects", [])
@@ -716,8 +784,9 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                     "added": now_date,
                     "last_seen": now_date
                 })
-                if len(current_memory["projects"]) > 15:
-                    current_memory["projects"] = current_memory["projects"][-15:]
+                if len(current_memory["projects"]) > 30:
+                    _evict_by_score(current_memory["projects"], max_len=30, category="projects",
+                                    val_key="name")
                 changed = True
 
     # 4. Deadlines
@@ -772,8 +841,9 @@ def merge_memory_updates(current_memory: dict, updates: dict) -> bool:
                     "added": now_date,
                     "last_seen": now_date
                 })
-                if len(current_memory["deadlines"]) > 10:
-                    current_memory["deadlines"] = current_memory["deadlines"][-10:]
+                if len(current_memory["deadlines"]) > 25:
+                    _evict_by_score(current_memory["deadlines"], max_len=25, category="deadlines",
+                                    val_key="item")
                 changed = True
 
     return changed
@@ -858,8 +928,19 @@ def extract_memory_llm(user_message: str, current_memory: dict, history: list = 
     return False
 
 def consolidate_memory_llm(current_memory: dict, preferred_model: str = None) -> dict:
-    """Uses LLM to clean up redundancies, resolve contradictions, and remove outdated items in memory."""
+    """Uses LLM to clean up redundancies, resolve contradictions, and remove outdated items in memory.
+
+    Issue 5 fix: validates the result before accepting it.  If any list category
+    loses more than 20% of its items (and had >3 items before), the consolidation
+    is rejected and the original is returned unchanged.
+    """
     current_date = datetime.now().strftime("%Y-%m-%d")
+    list_cats = ["clients", "projects", "preferences", "important_facts",
+                 "topics_discussed", "deadlines", "ai_notes"]
+
+    # Snapshot counts before consolidation
+    before_counts = {cat: len(current_memory.get(cat, [])) for cat in list_cats}
+
     prompt = MEMORY_CONSOLIDATION_PROMPT_TEMPLATE.format(
         current_date=current_date,
         current_memory_json=json.dumps(current_memory, indent=2)
@@ -872,10 +953,35 @@ def consolidate_memory_llm(current_memory: dict, preferred_model: str = None) ->
             cleaned = re.sub(r"^```(?:json)?\n", "", cleaned)
             cleaned = re.sub(r"\n```$", "", cleaned)
         cleaned = cleaned.strip()
-        
+
         consolidated = json.loads(cleaned)
-        if isinstance(consolidated, dict):
+        if not isinstance(consolidated, dict):
+            return current_memory
+
+        # Count items after consolidation
+        after_counts = {cat: len(consolidated.get(cat, [])) for cat in list_cats}
+        accepted = True
+        rejection_reason = ""
+
+        for cat in list_cats:
+            before = before_counts[cat]
+            after  = after_counts[cat]
+            if before > 3 and after < before * 0.8:
+                accepted = False
+                rejection_reason = (
+                    f"category '{cat}' dropped from {before} to {after} items "
+                    f"({100*(before-after)//before}% loss)"
+                )
+                break
+
+        print(
+            f"[Consolidation] before={before_counts} | after={after_counts} | "
+            f"accepted={accepted}" + (f" | REJECTED: {rejection_reason}" if not accepted else "")
+        )
+
+        if accepted:
             return consolidated
+
     except Exception as e:
         print(f"[Memory Consolidation Error] LLM consolidation failed: {e}")
     return current_memory
