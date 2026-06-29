@@ -7,7 +7,6 @@ from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet
-from backend.files import save_file_metadata
 
 def _execute_generate_proposal(user_id: str, workspace_id: str, args: dict) -> str:
     import os

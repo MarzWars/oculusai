@@ -11,13 +11,16 @@ from flask import jsonify, request, current_app
 
 from config import Config
 from backend.extensions import supabase
-from backend.models import get_llm, query_openrouter, query_openrouter_stream
-from backend.prompts import MEMORY_EXTRACTION_PROMPT, STYLE_INFERENCE_PROMPT
+from backend.models import query_openrouter, query_openrouter_stream, query_openrouter_extraction
+from backend.prompts import MEMORY_STAGE1_EXTRACTION_PROMPT, MEMORY_STAGE2_QUALITY_PROMPT, MEMORY_CONSOLIDATION_PROMPT_TEMPLATE, STYLE_INFERENCE_PROMPT_TEMPLATE
 from backend.memory_items import load_memory_items, save_memory_items
 from .memory_io import *
 from .memory_ranking import *
 from .memory_llm import *
-from backend.chat import chat_bp
+from backend.auth import login_required, current_user_id
+
+@memory_bp.route("/api/memory", methods=["GET"])
+@login_required
 def get_memory_api():
     uid = current_user_id()
     mem = load_memory(uid)
