@@ -252,6 +252,7 @@ def save_memory(user_id: str, mem: dict):
         if key in mem:
             mem[key] = [normalize_fact(item) for item in mem[key] if normalize_fact(item) is not None]
 
+    # --- Primary write: existing JSONB blob (unchanged) ---
     try:
         supabase.table("oculus_memory").upsert({
             "user_id": user_id,
@@ -259,6 +260,16 @@ def save_memory(user_id: str, mem: dict):
         }).execute()
     except Exception as e:
         print("Memory save error:", e)
+
+    # --- Dual-write: normalized oculus_memory_items table (Phase 2) ---
+    # Errors here are caught and logged separately — they must never interrupt
+    # the primary JSONB write above.  This block will be removed in Phase 3
+    # once reads are fully switched over to the new table.
+    try:
+        from backend.memory_items import save_memory_items
+        save_memory_items(user_id, mem)
+    except Exception as e:
+        print(f"[DualWrite] save_memory_items failed for user {user_id[:8]}...: {e}")
 
 def add_profile_field_with_conflict_check(mem: dict, field: str, new_val: str, confidence: float, reasoning: str, source_type: str = "conversation", last_reinforced: str = None) -> bool:
     """Safely updates a profile field or registers a conflict if it contradicts the existing value."""
