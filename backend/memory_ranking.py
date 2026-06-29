@@ -8,22 +8,12 @@ import threading
 from datetime import datetime, timezone
 from collections import OrderedDict
 from flask import jsonify, request, current_app
-from supabase import create_client, Client
-from dotenv import load_dotenv
 
-import google.generativeai as genai
-from sentence_transformers import SentenceTransformer
-from backend.models import get_llm
+from config import Config
+from backend.extensions import supabase
+from backend.models import get_llm, query_openrouter, query_openrouter_stream
 from backend.prompts import MEMORY_EXTRACTION_PROMPT, STYLE_INFERENCE_PROMPT
 from backend.memory_items import load_memory_items, save_memory_items
-
-load_dotenv()
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
-
-supabase: Client = None
-if SUPABASE_URL and SUPABASE_KEY:
-    supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 from .memory_io import *
 def get_embedding_cache_stats() -> dict:
     return {
