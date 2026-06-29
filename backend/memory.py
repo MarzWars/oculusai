@@ -1102,10 +1102,23 @@ def rank_memory_items(user_message: str, items: list, max_results: int = 5, key_
     else:
         return [x["item"] for x in scored_items[:max_results]]
 
-LATEST_RANKING_DEBUG = {}
+# Per-user ranking debug dict — keyed by user_id, max 100 entries (oldest evicted first).
+# This replaces the previous single shared global that leaked one user's debug data to others.
+_RANKING_DEBUG_BY_USER: dict = {}
+_RANKING_DEBUG_MAX_USERS = 100
+
+def _set_ranking_debug(user_id: str, data: dict):
+    """Store per-user ranking debug data, evicting the oldest entry when the limit is reached."""
+    if user_id in _RANKING_DEBUG_BY_USER:
+        # Remove first so re-insertion places it at the end (preserves insertion-order for eviction)
+        del _RANKING_DEBUG_BY_USER[user_id]
+    elif len(_RANKING_DEBUG_BY_USER) >= _RANKING_DEBUG_MAX_USERS:
+        # Evict the oldest entry (first key in insertion order)
+        oldest_key = next(iter(_RANKING_DEBUG_BY_USER))
+        del _RANKING_DEBUG_BY_USER[oldest_key]
+    _RANKING_DEBUG_BY_USER[user_id] = data
 
 def memory_to_context(mem: dict, user_message: str = "", memory_budget: int = 1500, preferred_model: str = None, user_id: str = None) -> str:
-    global LATEST_RANKING_DEBUG
 
     def get_val(item):
         if isinstance(item, dict):
@@ -1343,7 +1356,7 @@ def memory_to_context(mem: dict, user_message: str = "", memory_budget: int = 15
                 }
             })
             
-    LATEST_RANKING_DEBUG = {
+    debug_payload = {
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "query": user_message,
         "memory_budget": memory_budget,
@@ -1354,6 +1367,9 @@ def memory_to_context(mem: dict, user_message: str = "", memory_budget: int = 15
         "ranked_items": debug_ranked,
         "injected_context": context_str
     }
+    # Store debug data scoped to this user only — never in a shared global
+    if user_id:
+        _set_ranking_debug(user_id, debug_payload)
 
     return context_str
 
@@ -1367,8 +1383,10 @@ def get_memory_api():
 @memory_bp.route("/api/memory/debug", methods=["GET"])
 @login_required
 def get_ranking_debug_api():
-    global LATEST_RANKING_DEBUG
-    return jsonify(LATEST_RANKING_DEBUG)
+    # Returns only this user's own debug data — never another user's.
+    # Returns an empty dict if no ranking has been computed for this user yet.
+    uid = current_user_id()
+    return jsonify(_RANKING_DEBUG_BY_USER.get(uid, {}))
 
 @memory_bp.route("/api/memory/pin", methods=["POST"])
 @login_required
