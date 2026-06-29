@@ -92,7 +92,8 @@ def maybe_summarise_history(user_id: str, history: list):
     lines     = []
     for msg in old_chunk:
         role = "User" if msg["role"] == "user" else "Oculus"
-        lines.append(f"{role}: {msg['text'][:120]}")
+        # Issue 10: Removed msg['text'][:120] truncation to give the summariser full context
+        lines.append(f"{role}: {msg['text']}")
     chunk_text = "\n".join(lines)
     summary_prompt = (
         "Summarise the following conversation in 3-5 sentences. "
@@ -105,16 +106,50 @@ def maybe_summarise_history(user_id: str, history: list):
         if new_summary:
             existing = load_summary(user_id)
             combined = (existing + " " + new_summary).strip() if existing else new_summary
-            if len(combined) > 700:
-                combined = combined[-700:]
+            
+            # Fetch workspace settings for the cheapest model
+            reflection_model = "meta-llama/llama-3.1-8b-instruct"
+            try:
+                res = supabase.table("oculus_workspaces").select("settings").eq("id", user_id).execute()
+                if res.data:
+                    ws_settings = res.data[0].get("settings") or {}
+                    reflection_model = ws_settings.get("reflection_model", reflection_model)
+            except Exception as e:
+                print("[Summary] Error fetching workspace settings:", e)
+                
+            # Issue 10: Generate structured bullet-point digest
+            digest_prompt = (
+                "Create a structured bullet-point digest of this conversation history.\n"
+                "Include topics, decisions, and key user facts.\n"
+                "Keep it as concise as possible.\n\n"
+                f"{combined}\n\nDigest:"
+            )
+            
+            try:
+                digest = query_openrouter(digest_prompt, preferred_model=reflection_model)
+                if not digest:
+                    raise Exception("Empty digest returned")
+                combined = digest.strip()
+            except Exception as e:
+                print(f"[Summary] Digest generation failed, falling back to raw combined string: {e}")
+                
+            # Issue 10: Cap at 600 chars by cutting at the last complete sentence
+            if len(combined) > 600:
+                truncated = combined[:600]
+                last_punct = max(truncated.rfind('.'), truncated.rfind('!'), truncated.rfind('?'))
+                if last_punct > 0:
+                    combined = truncated[:last_punct+1]
+                else:
+                    combined = truncated
+                
             save_summary(user_id, combined)
         history[:] = history[half:]
         save_history(user_id, history)
-    except Exception:
-        pass
+    except Exception as e:
+        print("[Summary] Top-level summarisation error:", e)
 
 
-def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list, workspace_settings: dict = None) -> dict:
+def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list, workspace_settings: dict = None, workspace_name: str = "Default Workspace") -> dict:
     # Format uploaded files context
     from backend.files import UPLOADED_FILES_CACHE
     uploaded_files = UPLOADED_FILES_CACHE.get(workspace_id, [])
@@ -145,7 +180,6 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list,
     )
 
     # Use provided workspace info or defaults
-    workspace_name = "Default Workspace"
     if not workspace_settings:
         workspace_settings = {}
         try:
@@ -155,15 +189,6 @@ def build_prompt(workspace_id: str, user_message: str, mem: dict, history: list,
                 workspace_settings = res.data[0].get("settings") or {}
         except Exception as e:
             print("[Prompt Engine] Error loading workspace info:", e)
-    else:
-        # We don't have the name if passed in from ask(), but it's rarely used outside the prompt header
-        # so we'll just query it or use default
-        try:
-            res = supabase.table("oculus_workspaces").select("name").eq("id", workspace_id).execute()
-            if res.data:
-                workspace_name = res.data[0].get("name", "Default Workspace")
-        except:
-            pass
 
     memory_token_budget = int(workspace_settings.get("memory_token_budget", 1500))
     uid = current_user_id()
@@ -488,18 +513,20 @@ def ask():
 
     # Load settings from supabase oculus_workspaces once
     workspace_settings = {}
+    workspace_name = "Default Workspace"
     self_reflection_enabled = False
     reflection_model = "meta-llama/llama-3.1-8b-instruct"
     try:
-        res = supabase.table("oculus_workspaces").select("settings").eq("id", wid).execute()
+        res = supabase.table("oculus_workspaces").select("name, settings").eq("id", wid).execute()
         if res.data:
+            workspace_name = res.data[0].get("name", "Default Workspace")
             workspace_settings = res.data[0].get("settings") or {}
             self_reflection_enabled = workspace_settings.get("self_reflection_enabled", False)
             reflection_model = workspace_settings.get("reflection_model", "meta-llama/llama-3.1-8b-instruct")
     except Exception as e:
         print("[Chat] Failed to load workspace settings:", e)
 
-    prompt_data = build_prompt(wid, user_message, memory, history, workspace_settings=workspace_settings)
+    prompt_data = build_prompt(wid, user_message, memory, history, workspace_settings=workspace_settings, workspace_name=workspace_name)
     prompt = prompt_data["prompt_str"]
     # Clear uploaded files cache immediately
     from backend.files import UPLOADED_FILES_CACHE

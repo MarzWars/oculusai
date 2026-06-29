@@ -1120,7 +1120,22 @@ def extract_memory_async(user_id: str, user_message: str, history: list = None, 
     except Exception as e:
         print("[Async Memory Error] Failed to process memory asynchronously:", e)
 
-EMBEDDING_CACHE = {}
+import collections
+
+_EMBEDDING_CACHE_MODE = "lru"
+try:
+    EMBEDDING_CACHE = collections.OrderedDict()
+except Exception:
+    EMBEDDING_CACHE = {}
+    _EMBEDDING_CACHE_MODE = "fallback"
+    print("[Warning] Failed to initialize OrderedDict for embeddings; using unbounded dict.")
+
+def get_embedding_cache_stats() -> dict:
+    return {
+        "size": len(EMBEDDING_CACHE),
+        "max": 2000,
+        "mode": _EMBEDDING_CACHE_MODE
+    }
 
 def cosine_similarity(v1, v2) -> float:
     if not v1 or not v2:
@@ -1138,9 +1153,17 @@ def get_embeddings_cached(texts: list) -> list:
     missing_texts = []
     missing_indices = []
     
+    global _EMBEDDING_CACHE_MODE
+    
     for i, text in enumerate(texts):
         if text in EMBEDDING_CACHE:
-            results[i] = EMBEDDING_CACHE[text]
+            emb = EMBEDDING_CACHE[text]
+            if _EMBEDDING_CACHE_MODE == "lru":
+                try:
+                    EMBEDDING_CACHE.move_to_end(text)
+                except Exception:
+                    pass
+            results[i] = emb
         else:
             missing_texts.append(text)
             missing_indices.append(i)
@@ -1151,6 +1174,13 @@ def get_embeddings_cached(texts: list) -> list:
             embedded = generate_embeddings(missing_texts)
             for text, emb in zip(missing_texts, embedded):
                 EMBEDDING_CACHE[text] = emb
+                if _EMBEDDING_CACHE_MODE == "lru":
+                    try:
+                        if len(EMBEDDING_CACHE) > 2000:
+                            EMBEDDING_CACHE.popitem(last=False)
+                    except Exception as e:
+                        print(f"[Warning] Cache eviction failed, falling back to dict mode: {e}")
+                        _EMBEDDING_CACHE_MODE = "fallback"
             for idx, emb in zip(missing_indices, embedded):
                 results[idx] = emb
         except Exception as e:

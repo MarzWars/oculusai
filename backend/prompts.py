@@ -149,32 +149,6 @@ When the user asks you to write, generate, or export a document in `.docx`, `.pd
 - When in doubt between being brief and being complete: be complete
 """
 
-MEMORY_EXTRACTION_PROMPT_TEMPLATE = """You are a precise, background memory extraction agent for Oculus AI.
-Your job is to analyze the user's latest message and their current memory JSON state, and output a JSON object representing the UPDATES to apply.
-
-Analyze the user's message and determine if it contains new or updated facts, role changes, project references, company, location, clients, deadlines, preferences, or topics.
-
-Compare the message to the current memory state:
-- "profile": Extract "name", "role", "company", "location", "email", "phone". If any field is updated or revealed, include it.
-- "clients": List of client names they work with. Only include new, unique client names.
-- "projects": List of project names. Only include new projects.
-- "preferences": List of user preference strings (e.g., "likes Python", "dislikes Tailwind"). Only include new preferences.
-- "important_facts": List of important facts (e.g., "Alex's business logo is blue"). Only include new facts.
-- "deadlines": List of deadline objects, e.g., {{"item": "Launch website", "date": "by Friday"}}.
-- "topics_discussed": List of general topics mentioned (e.g., "Python", "React", "SEO", "Facebook ads").
-- "ai_notes": List of inferred observations, style guidelines, coding conventions, copy tones, or design preferences they implicitly follow or show (e.g. "prefers descriptive error blocks", "values clean logging", "prefers short function documentation", "writes copy in a bold/direct voice"). Only include new, unique inferences.
-
-Your output MUST be a single, valid JSON object matching the updates.
-Do NOT include any explanation, intro, or formatting wrappers like ```json ... ```. Just return the raw JSON string.
-If nothing should be updated, return exactly: {{}}
-
-Current Memory State:
-{current_memory_json}
-
-User Latest Message:
-"{user_message}"
-
-JSON Updates:"""
 
 MEMORY_CONSOLIDATION_PROMPT_TEMPLATE = """You are a precise memory consolidation agent for Oculus AI.
 Your job is to review the user's current memory JSON object, clean up redundancies, resolve contradictions, remove outdated deadlines, and return a consolidated JSON object with the exact same keys.
