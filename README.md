@@ -247,7 +247,7 @@ Oculus AI
 ### Install dependencies
 
 ```bash
-pip install flask openai supabase tavily-python requests python-docx pypdf docx2pdf reportlab
+pip install flask openai supabase tavily-python requests python-docx pypdf docx2pdf reportlab python-dotenv google-generativeai sentence-transformers
 ```
 
 ### Environment variables
