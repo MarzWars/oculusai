@@ -16,6 +16,7 @@ from backend.models import query_openrouter, query_openrouter_stream, query_open
 from backend.prompts import MEMORY_STAGE1_EXTRACTION_PROMPT, MEMORY_STAGE2_QUALITY_PROMPT, MEMORY_CONSOLIDATION_PROMPT_TEMPLATE, STYLE_INFERENCE_PROMPT_TEMPLATE
 from backend.memory_items import load_memory_items, save_memory_items
 from .memory_io import *
+from .memory_io import _EMBEDDING_CACHE_MODE, _add_unique, _evict_by_score
 from .memory_ranking import *
 from backend.utils import is_ad_content
 
