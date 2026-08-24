@@ -27,7 +27,8 @@ class Config:
         "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, unmoderated
         "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE - Venice uncensored
         "nvidia/nemotron-3-super-120b-a12b:free",                         # FREE fallback
-        "meta-llama/llama-3.3-70b-instruct:free",                         # FREE fallback
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "poolside/laguna-s-2.1:free",                         # FREE fallback
         "nousresearch/hermes-3-llama-3.1-405b:free",                      # FREE fallback
     ]
 
@@ -35,6 +36,7 @@ class Config:
     MODEL_OPTIONS = [
         {"id": "nousresearch/hermes-3-llama-3.1-70b",   "name": "Hermes 3 70B",          "tag": "Unmoderated · Fast · Cheap"},
         {"id": "stealth/ox-alpha",   "name": "Ox Alpha",          "tag": "Testing"},
+        {"id": "poolside/laguna-s-2.1:free",   "name": "Laguna",          "tag": "Uncensored · Free"},
         {"id": "nvidia/nemotron-3-super-120b-a12b",    "name": "Nemotron 3 Super 120B", "tag": "Moderated · Fast · Cheap"},
         {"id": "meta-llama/llama-3.3-70b-instruct",    "name": "Llama 3.3 70B",         "tag": "Moderated · Balanced"},
         {"id": "nousresearch/hermes-3-llama-3.1-405b", "name": "Hermes 3 405B",          "tag": "Unmoderated · Powerful"},
