@@ -44,7 +44,7 @@ class Config:
                                                        "name": "Dolphin Mistral 24B",    "tag": "Uncensored · Free"},
     ]
     
-    DEFAULT_MODEL = "stealth/ox-alpha"
+    DEFAULT_MODEL = "poolside/laguna-s-2.1:free"
     OR_TIMEOUT = 45  # seconds
     
     VERBATIM_TURNS = 6
