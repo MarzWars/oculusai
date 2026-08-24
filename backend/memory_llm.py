@@ -5,6 +5,7 @@ import math
 import uuid
 import os
 import threading
+import collections
 from datetime import datetime, timezone
 from collections import OrderedDict
 from flask import jsonify, request, current_app
@@ -17,6 +18,53 @@ from backend.memory_items import load_memory_items, save_memory_items
 from .memory_io import *
 from .memory_ranking import *
 from backend.utils import is_ad_content
+
+# ---------------------------------------------------------------------------
+# Module-level embedding cache (shared with memory_ranking via wildcard import)
+# ---------------------------------------------------------------------------
+_EMBEDDING_CACHE_MODE = "lru"
+try:
+    EMBEDDING_CACHE: collections.OrderedDict = collections.OrderedDict()
+except Exception:
+    EMBEDDING_CACHE = {}
+    _EMBEDDING_CACHE_MODE = "fallback"
+    print("[Warning] Failed to initialize OrderedDict for embeddings; using unbounded dict.")
+
+# ---------------------------------------------------------------------------
+# Internal list-management helpers
+# ---------------------------------------------------------------------------
+def _add_unique(lst: list, value, max_len: int = 50) -> bool:
+    """Append *value* to *lst* if not already present (string comparison),
+    then evict the oldest item if the list exceeds *max_len*.
+    Returns True if the list was modified."""
+    val_str = str(value).strip()
+    for existing in lst:
+        existing_str = (
+            str(existing.get("value") or existing.get("name") or existing.get("item") or existing).strip()
+            if isinstance(existing, dict) else str(existing).strip()
+        )
+        if existing_str.lower() == val_str.lower():
+            return False
+    lst.append(val_str)
+    if len(lst) > max_len:
+        lst.pop(0)
+    return True
+
+
+def _evict_by_score(lst: list, max_len: int, category: str = "", val_key: str = "value") -> None:
+    """If *lst* exceeds *max_len*, remove the item with the lowest confidence
+    score (falling back to FIFO order if scores are equal)."""
+    while len(lst) > max_len:
+        # Find item with lowest confidence; default 0.5 when absent
+        worst_idx = min(
+            range(len(lst)),
+            key=lambda i: (
+                lst[i].get("confidence", 0.5) if isinstance(lst[i], dict) else 0.5
+            )
+        )
+        lst.pop(worst_idx)
+
+
 def extract_memory_regex(text: str, mem: dict) -> bool:
     if is_ad_content(text):
         return False
@@ -525,12 +573,4 @@ def extract_memory_async(user_id: str, user_message: str, history: list = None, 
     except Exception as e:
         print("[Async Memory Error] Failed to process memory asynchronously:", e)
 
-
-_EMBEDDING_CACHE_MODE = "lru"
-try:
-    EMBEDDING_CACHE = collections.OrderedDict()
-except Exception:
-    EMBEDDING_CACHE = {}
-    _EMBEDDING_CACHE_MODE = "fallback"
-    print("[Warning] Failed to initialize OrderedDict for embeddings; using unbounded dict.")
 
