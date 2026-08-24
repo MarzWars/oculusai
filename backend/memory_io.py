@@ -42,6 +42,48 @@ MEMORY_DEFAULT = {
     "last_decay_run":  ""
 }
 
+# ---------------------------------------------------------------------------
+# Embedding cache (consumed by memory_ranking via wildcard import)
+# ---------------------------------------------------------------------------
+import collections as _collections
+_EMBEDDING_CACHE_MODE = "lru"
+try:
+    EMBEDDING_CACHE: _collections.OrderedDict = _collections.OrderedDict()
+except Exception:
+    EMBEDDING_CACHE = {}
+    _EMBEDDING_CACHE_MODE = "fallback"
+    print("[Warning] Failed to initialize OrderedDict for embeddings; using unbounded dict.")
+
+# ---------------------------------------------------------------------------
+# Internal list-management helpers (used here and in memory_llm / memory_ranking)
+# ---------------------------------------------------------------------------
+def _add_unique(lst: list, value, max_len: int = 50) -> bool:
+    """Append *value* to *lst* if not already present; evict oldest if over max_len.
+    Returns True if the list was modified."""
+    val_str = str(value).strip()
+    for existing in lst:
+        existing_str = (
+            str(existing.get("value") or existing.get("name") or existing.get("item") or existing).strip()
+            if isinstance(existing, dict) else str(existing).strip()
+        )
+        if existing_str.lower() == val_str.lower():
+            return False
+    lst.append(val_str)
+    if len(lst) > max_len:
+        lst.pop(0)
+    return True
+
+
+def _evict_by_score(lst: list, max_len: int, category: str = "", val_key: str = "value") -> None:
+    """Remove the lowest-confidence item from *lst* until it fits within max_len."""
+    while len(lst) > max_len:
+        worst_idx = min(
+            range(len(lst)),
+            key=lambda i: lst[i].get("confidence", 0.5) if isinstance(lst[i], dict) else 0.5
+        )
+        lst.pop(worst_idx)
+
+
 def normalize_fact(item, default_confidence=0.85, default_reasoning="Legacy memory item"):
     """Convert legacy string facts or raw dicts to structured confidence objects."""
     now_date = datetime.now().strftime("%Y-%m-%d")
