@@ -21,7 +21,7 @@ class Config:
     # Unmoderated/general models fallback list
     OR_MODELS = [
         "nousresearch/hermes-3-llama-3.1-70b",                       # PAID - fast, cheap, unmoderated
-        "openrouter/owl-alpha"
+        "stealth/ox-alpha"
         "nvidia/nemotron-3-super-120b-a12b",                         # PAID - fast, cheap, moderated
         "meta-llama/llama-3.3-70b-instruct",                         # PAID - balanced, moderated
         "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, unmoderated
@@ -34,7 +34,7 @@ class Config:
     # Models shown in manual switcher UI
     MODEL_OPTIONS = [
         {"id": "nousresearch/hermes-3-llama-3.1-70b",   "name": "Hermes 3 70B",          "tag": "Unmoderated · Fast · Cheap"},
-        {"id": "openrouter/owl-alpha",   "name": "Owl Alpha",          "tag": "Testing"},
+        {"id": "stealth/ox-alpha",   "name": "Ox Alpha",          "tag": "Testing"},
         {"id": "nvidia/nemotron-3-super-120b-a12b",    "name": "Nemotron 3 Super 120B", "tag": "Moderated · Fast · Cheap"},
         {"id": "meta-llama/llama-3.3-70b-instruct",    "name": "Llama 3.3 70B",         "tag": "Moderated · Balanced"},
         {"id": "nousresearch/hermes-3-llama-3.1-405b", "name": "Hermes 3 405B",          "tag": "Unmoderated · Powerful"},
