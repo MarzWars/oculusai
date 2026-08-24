@@ -16,6 +16,7 @@ from backend.prompts import MEMORY_STAGE1_EXTRACTION_PROMPT, MEMORY_STAGE2_QUALI
 from backend.memory_items import load_memory_items, save_memory_items
 from .memory_io import *
 from .memory_ranking import *
+from backend.utils import is_ad_content
 def extract_memory_regex(text: str, mem: dict) -> bool:
     if is_ad_content(text):
         return False

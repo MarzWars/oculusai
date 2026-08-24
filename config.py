@@ -42,7 +42,7 @@ class Config:
                                                        "name": "Dolphin Mistral 24B",    "tag": "Uncensored · Free"},
     ]
     
-    DEFAULT_MODEL = "openrouter/owl-alpha"
+    DEFAULT_MODEL = "stealth/ox-alpha"
     OR_TIMEOUT = 45  # seconds
     
     VERBATIM_TURNS = 6
