@@ -20,11 +20,11 @@ class Config:
 
     # Unmoderated/general models fallback list
     OR_MODELS = [
-        "nousresearch/hermes-3-llama-3.1-70b",                       # PAID - fast, cheap, unmoderated
-        "stealth/ox-alpha"
+        "nvidia/nemotron-3.5-lightning:free",                       # PAID - fast, cheap, unmoderated
+        "thinkingmachines/inkling-small:free"
         "nvidia/nemotron-3-super-120b-a12b",                         # PAID - fast, cheap, moderated
-        "meta-llama/llama-3.3-70b-instruct",                         # PAID - balanced, moderated
-        "nousresearch/hermes-3-llama-3.1-405b",                      # PAID - powerful, unmoderated
+        "cohere/north-mini-code:free",                         # PAID - balanced, moderated
+        "nvidia/nemotron-3-ultra-550b-a55b:free",                      # PAID - powerful, unmoderated
         "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",  # FREE - Venice uncensored
         "nvidia/nemotron-3-super-120b-a12b:free",                         # FREE fallback
         "meta-llama/llama-3.3-70b-instruct:free",
@@ -34,12 +34,12 @@ class Config:
 
     # Models shown in manual switcher UI
     MODEL_OPTIONS = [
-        {"id": "nousresearch/hermes-3-llama-3.1-70b",   "name": "Hermes 3 70B",          "tag": "Unmoderated · Fast · Cheap"},
-        {"id": "stealth/ox-alpha",   "name": "Ox Alpha",          "tag": "Testing"},
+        {"id": "nvidia/nemotron-3.5-lightning:free",   "name": "Nemo",          "tag": "Free"},
+        {"id": "thinkingmachines/inkling-small:free",   "name": "Inkling",          "tag": "Free"},
         {"id": "liquid/lfm-2.5-2.6b:free",   "name": "Liquid",          "tag": "Uncensored · Free"},
         {"id": "nvidia/nemotron-3-super-120b-a12b",    "name": "Nemotron 3 Super 120B", "tag": "Moderated · Fast · Cheap"},
-        {"id": "meta-llama/llama-3.3-70b-instruct",    "name": "Llama 3.3 70B",         "tag": "Moderated · Balanced"},
-        {"id": "nousresearch/hermes-3-llama-3.1-405b", "name": "Hermes 3 405B",          "tag": "Unmoderated · Powerful"},
+        {"id": "cohere/north-mini-code:free",    "name": "North",         "tag": "Free"},
+        {"id": "nvidia/nemotron-3-ultra-550b-a55b:free", "name": "Nemo Ultra",          "tag": "Free · Powerful"},
         {"id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
                                                        "name": "Dolphin Mistral 24B",    "tag": "Uncensored · Free"},
     ]
