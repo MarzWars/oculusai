@@ -1,0 +1,933 @@
+OCULUS CHESS — MASTER IMPLEMENTATION PLAN
+Version: 1.0
+Date: 2026-10-15
+Purpose: Build a reliable, visual, interactive chess-playing and coaching module inside the existing Oculus AI application.
+
+======================================================================
+0. PROJECT MISSION AND NON-NEGOTIABLE PRINCIPLES
+======================================================================
+
+PROJECT GOAL
+
+Build Oculus Chess as a serious chess coach, not merely a chatbot that can talk about chess. It must support legal live chess, PGN game import, game replay, Stockfish-backed analysis, understandable explanations, visual teaching on a live chessboard, interactive exercises, and eventually long-term personalized coaching based on a user's games.
+
+Core product promise:
+"Do not merely tell me that a move was bad. Show me what I missed, why it mattered, what I should have considered, what the better plan was, and how I can train to avoid the same mistake."
+
+NON-NEGOTIABLE ARCHITECTURAL RULES
+
+1. A deterministic chess library owns the canonical board state and legal move rules.
+2. Stockfish (or another explicitly approved UCI chess engine) performs objective chess calculation and evaluation.
+3. Oculus's language model explains, teaches, asks questions, and personalizes lessons. It is not the authority for legality or engine facts.
+4. The frontend board is a visualization and interaction surface. The server-side chess state is authoritative.
+5. Every user move and AI-suggested move must be validated server-side before it changes the game.
+6. Never infer the current position from a long natural-language conversation. Supply the exact current FEN and structured analysis data.
+7. Do not invent engine evaluations, principal variations, legal moves, or chess facts. If data is unavailable, state that clearly.
+8. Preserve the existing Oculus application, styling, authentication, AI routing, and database architecture where practical. Do not rewrite the application merely to simplify this feature.
+9. Build in phases. Test each phase before moving on.
+10. Prefer complete, maintainable files over unexplained snippets when making substantial changes. Avoid unnecessary duplication and oversized files.
+11. Keep secrets and provider credentials server-side. Validate all user input.
+12. Do not claim the system is production-ready until the relevant acceptance criteria and tests pass.
+
+TECHNICAL DEFAULTS
+
+- Preferred chess rules/state library: python-chess, if compatible with the existing backend.
+- Preferred engine: Stockfish via the UCI protocol, with a configurable executable path and analysis limits.
+- Frontend: use the existing Oculus frontend framework and component conventions. Choose a compatible chessboard library only after auditing the project.
+- Backend: use the existing backend framework. If the application is already Python-based, integrate python-chess there. If not, assess whether a small Python chess service is appropriate and document the operational trade-offs before implementing it.
+- Database: use the existing database and migration system. Do not introduce a new database without a clear technical reason.
+- AI: use Oculus's existing model/provider abstraction, including OpenRouter if that is already the configured route. Do not hardcode one model into the chess subsystem.
+- Design: fit Oculus's dark, premium, futuristic interface and existing purple/neon accent system.
+
+Do not assume any file paths, frameworks, environment variables, or database tables before inspecting the repository.
+
+======================================================================
+1. AGENT WORKING AGREEMENT
+======================================================================
+
+The agents must follow this workflow:
+
+A. Inspect before changing.
+B. Report the current architecture and relevant files.
+C. Propose a small, reviewable implementation plan.
+D. Implement only the approved phase or task.
+E. Run the applicable tests and checks.
+F. Fix regressions before proceeding.
+G. Report files changed, dependencies added, commands run, results, limitations, and the next proposed task.
+H. Keep a short implementation log in the repository, if an appropriate documentation location exists.
+I. Do not overwrite unrelated user changes.
+J. Do not delete or replace existing features without explicit justification and approval.
+
+If multiple agents work in parallel, assign clear file/module ownership. Avoid having two agents modify the same core files simultaneously. One coordinating agent must review integration, interfaces, and test results.
+
+At each phase gate, report:
+- What was implemented
+- Files created or changed
+- Dependencies and installation steps
+- Configuration/environment variables
+- Database migrations
+- Tests run and results
+- Known issues and limitations
+- Acceptance criteria still outstanding
+- Recommended next phase
+
+If a dependency, architecture, or hosting constraint makes a requirement infeasible, explain the issue and propose alternatives rather than silently substituting an unrelated design.
+
+======================================================================
+2. PHASE 0 — REPOSITORY AUDIT AND TECHNICAL DESIGN
+======================================================================
+
+DO NOT implement the full feature in this phase.
+
+Tasks:
+0.1 Inspect the repository, folder structure, entry points, package manifests, dependency files, and existing documentation.
+0.2 Identify frontend framework, backend framework, routing, authentication, authorization, API patterns, database, migrations, logging, tests, deployment model, and environment configuration.
+0.3 Locate Oculus's existing AI/provider abstraction, conversation context handling, streaming behavior, and any memory/personalization services.
+0.4 Identify current UI design tokens, layout conventions, reusable components, and responsive design patterns.
+0.5 Identify hosting/runtime limits relevant to Stockfish, subprocesses, persistent game storage, file uploads, and background jobs.
+0.6 Decide whether the chess rules service should run in the existing backend or in a separate service. Prefer the simplest reliable option.
+0.7 Recommend compatible board UI and Stockfish integration options. Verify licensing and deployment compatibility before adding dependencies.
+0.8 Propose database entities and API routes, without making migrations yet.
+0.9 Produce a phase-by-phase dependency map and test strategy.
+0.10 Identify security, performance, cost, and deployment risks.
+
+Deliverables:
+- Architecture audit
+- Relevant file map
+- Proposed module boundaries
+- Proposed data flow
+- Proposed API contract
+- Proposed database model
+- Dependency list
+- Risk register
+- Testing plan
+- Implementation order
+
+Acceptance criteria:
+- The existing application is understood well enough to make informed changes.
+- No major implementation changes are made during the audit.
+- Any architectural uncertainty is documented rather than guessed.
+
+PHASE GATE: Wait for approval before substantial implementation.
+
+======================================================================
+3. PHASE 1 — CHESS RULES AND CANONICAL GAME STATE
+======================================================================
+
+Goal: establish a reliable, independently testable chess core.
+
+Tasks:
+1.1 Add the selected chess rules library.
+1.2 Create a dedicated game/state service.
+1.3 Support creating a standard game and loading a validated FEN.
+1.4 Expose canonical FEN, side to move, legal moves, move history, SAN, UCI, and PGN.
+1.5 Support applying a legal move, undo, redo, and resetting a game.
+1.6 Support castling, en passant, promotion, check, checkmate, stalemate, and draw conditions.
+1.7 Keep a history of positions so the board can be reconstructed and replayed.
+1.8 Use a stable game identifier and ensure one user's game cannot be accessed by another unauthorized user.
+1.9 Validate all move input on the server.
+1.10 Ensure an invalid move does not change state.
+1.11 Define clear error responses for malformed FEN, invalid SAN/UCI, illegal moves, and missing games.
+1.12 Keep rules/state logic separate from HTTP controllers and UI code.
+
+Suggested internal operations:
+- create_game()
+- get_game()
+- get_fen()
+- load_fen()
+- get_legal_moves()
+- make_move()
+- undo_move()
+- redo_move()
+- get_move_history()
+- get_san()
+- get_uci()
+- get_pgn()
+- load_pgn()
+- get_turn()
+- get_game_status()
+
+Acceptance criteria:
+- All accepted moves are legal.
+- Rejected moves leave the game unchanged.
+- FEN round-trips correctly.
+- Move history and PGN agree with the board.
+- Special chess rules are covered by automated tests.
+- Undo/redo and replay reconstruct the correct positions.
+
+======================================================================
+4. PHASE 2 — CHESS API AND LIVE BOARD UI
+======================================================================
+
+Goal: make the chess core usable through Oculus's interface.
+
+Tasks:
+2.1 Add API routes following existing Oculus conventions.
+2.2 Add a responsive live chessboard using a compatible board component.
+2.3 Support drag-and-drop and click-to-move.
+2.4 Highlight legal destinations when appropriate.
+2.5 Show the last move, check, selected square, and game result.
+2.6 Support promotion choice, castling, and en passant through the same validated move flow.
+2.7 Add board flip/orientation controls.
+2.8 Add reset, undo, redo, and move-list controls.
+2.9 Keep frontend state synchronized with the server's canonical FEN.
+2.10 On mismatch or failed request, disable unsafe interaction and reload the authoritative server state.
+2.11 Handle loading states, API errors, duplicate submissions, and network interruptions.
+2.12 Integrate with existing Oculus styling and accessibility patterns.
+
+Possible API capabilities (adapt names to existing conventions):
+- Create game
+- Retrieve game state
+- Submit move
+- Undo/redo
+- Retrieve legal moves
+- Retrieve PGN
+- Import PGN
+
+Acceptance criteria:
+- A user can play a complete legal game through the board.
+- The server validates every move.
+- The UI cannot permanently drift from the server state.
+- The board is usable on desktop and mobile.
+- Existing Oculus pages and functionality still work.
+
+======================================================================
+5. PHASE 3 — STOCKFISH INTEGRATION
+======================================================================
+
+Goal: add objective engine analysis without allowing the LLM to fabricate results.
+
+Tasks:
+3.1 Integrate Stockfish using its supported UCI interface.
+3.2 Verify engine installation, executable path, version, license, and deployment requirements.
+3.3 Provide configurable analysis time/depth and resource limits.
+3.4 Support best move, evaluation, principal variation (PV), depth, nodes when available, and MultiPV.
+3.5 Normalize engine output into a stable internal schema.
+3.6 Define evaluation perspective explicitly: side to move, White, or another documented convention. Convert consistently.
+3.7 Represent mate scores separately from centipawn scores.
+3.8 Convert engine moves to SAN only using the matching board position.
+3.9 Validate every engine move against the position before exposing or applying it.
+3.10 Add timeouts, cancellation, cleanup, and bounded concurrency.
+3.11 Cache reusable analysis using a normalized position and relevant engine settings, such as FEN, engine version, depth/time limit, and MultiPV.
+3.12 Never run unbounded engine searches from a user request.
+3.13 Ensure the engine service can be tested independently from the UI and LLM.
+
+Analysis data should include, where available:
+- FEN
+- Side to move
+- Evaluation
+- Evaluation perspective
+- Mate score
+- Best move in UCI and SAN
+- Principal variation in UCI and SAN
+- MultiPV candidates
+- Search depth
+- Search time/nodes
+- Engine/version metadata
+
+Acceptance criteria:
+- Stockfish can analyze a supplied position and return valid structured data.
+- Evaluations have an unambiguous perspective.
+- Mate scores are handled correctly.
+- Engine failures and timeouts do not corrupt games.
+- Concurrent analysis stays within configured limits.
+
+======================================================================
+6. PHASE 4 — PGN IMPORT, VALIDATION, AND REPLAY
+======================================================================
+
+Goal: let users upload a game and replay it accurately.
+
+Tasks:
+4.1 Add PGN upload/paste support.
+4.2 Validate file size, encoding, syntax, move legality, and supported variations.
+4.3 Parse headers such as players, event, date, result, and time control when present.
+4.4 Handle malformed PGNs with useful errors; do not silently discard moves.
+4.5 Store the parsed game and reconstruct each position using the chess library.
+4.6 Store or derive FEN before and after each move.
+4.7 Preserve comments and variations where feasible, or clearly document unsupported features.
+4.8 Add move-list navigation and first/previous/play/next/last controls.
+4.9 Add autoplay and playback speed.
+4.10 Clicking a move must take the board to the correct position.
+4.11 Export a valid PGN.
+4.12 Make import idempotent where appropriate and prevent duplicate processing.
+
+Acceptance criteria:
+- Valid PGNs replay from the initial position to the correct final position.
+- Invalid PGNs produce clear errors.
+- Board state, move list, and stored PGN remain consistent.
+- The user can jump to any move and return to the end.
+
+======================================================================
+7. PHASE 5 — GAME ANALYSIS PIPELINE
+======================================================================
+
+Goal: analyze each move consistently and store the evidence needed for coaching.
+
+Tasks:
+5.1 Analyze positions before and after each played move.
+5.2 Determine the engine's preferred candidate moves and PVs.
+5.3 Evaluate the played move using a documented analysis approach. Avoid comparing scores from incompatible search conditions without acknowledging the limitation.
+5.4 Normalize evaluation changes to the player's perspective so positive/negative changes are interpreted consistently.
+5.5 Handle mate transitions separately from ordinary centipawn changes.
+5.6 Detect candidate critical moments: major evaluation swings, missed tactical chances, forced sequences, opening transitions, and endgame decisions.
+5.7 Store analysis status, engine settings, and timestamps.
+5.8 Support cancellation, retry, resumable work, and partial analysis.
+5.9 Avoid duplicate engine work when analysis already exists at equivalent settings.
+5.10 Make analysis depth/time configurable by mode: Fast, Normal, Deep, and Intensive.
+5.11 Keep raw engine facts separate from generated explanations.
+5.12 Do not imply that shallow analysis is definitive.
+
+Acceptance criteria:
+- Every analyzed move has traceable before/after positions and analysis settings.
+- Evaluation perspective is consistent.
+- Analysis can be resumed after failure.
+- Critical-moment selection is deterministic and testable where possible.
+
+======================================================================
+8. PHASE 6 — MOVE QUALITY AND MISTAKE CLASSIFICATION
+======================================================================
+
+Goal: create a transparent, configurable move-labeling system.
+
+Possible labels:
+- Best
+- Excellent
+- Strong
+- Good
+- Inaccuracy
+- Mistake
+- Blunder
+- Missed opportunity
+- Tactical error
+- Strategic/positional error
+- Opening error
+- Endgame error
+- King-safety error
+- Calculation error
+- Brilliant (only when the evidence supports a defined special criterion)
+
+Important rules:
+6.1 Do not claim to reproduce Chess.com's proprietary classifications exactly.
+6.2 Document classification thresholds and tune them through tests.
+6.3 Do not classify from raw evaluation swing alone.
+6.4 Consider position context, forced alternatives, mate, material, whether the position was already lost/won, and whether the move was practically or objectively significant.
+6.5 Distinguish objective move quality from pedagogical category. A move can be a mistake and also a strategic error.
+6.6 Be conservative with "Brilliant"; require an explicit, testable criterion such as a sound, non-obvious sacrifice or another justified feature. Do not use the label as decoration.
+6.7 Permit "uncertain/unclassified" if the analysis is insufficient.
+6.8 Store the evidence and rule/version used to assign a label.
+
+Acceptance criteria:
+- Classification rules are documented and covered by representative tests.
+- Mate-score transitions and already decisive positions are handled sensibly.
+- Labels are not presented as more precise than the engine analysis supports.
+
+======================================================================
+9. PHASE 7 — POSITION FEATURES AND CHESS MOTIFS
+======================================================================
+
+Goal: derive meaningful features that help explain why a move matters.
+
+Tactical concepts to detect where feasible:
+- Fork and double attack
+- Pin and skewer
+- Discovered attack/check
+- Deflection and attraction
+- Removing a defender
+- Zwischenzug
+- Back-rank tactic
+- Hanging or trapped piece
+- Mate threat and forced mate
+- Promotion threats
+- Sacrifices and tactical exchanges
+
+Strategic concepts to assess where feasible:
+- King safety
+- Piece activity and coordination
+- Weak squares and weak pawns
+- Pawn structure and pawn breaks
+- Open files and diagonals
+- Outposts
+- Space and central control
+- Good/bad bishops
+- Poorly placed pieces
+- Passed pawns
+- Rook activity
+- Prophylaxis and opponent-threat recognition
+
+Endgame concepts to assess where feasible:
+- King activity
+- Opposition
+- Passed-pawn races
+- Rook activity
+- Zugzwang
+- Basic theoretical endings
+- Conversion and defensive technique
+
+Implementation rules:
+7.1 Do not pretend a motif detector is infallible.
+7.2 Use deterministic rules, engine variations, and validated board features where possible.
+7.3 Treat LLM-suggested motifs as hypotheses until checked against the position and engine evidence.
+7.4 Attach confidence or evidence where practical.
+7.5 Prioritize the features required for explanations before attempting exhaustive motif detection.
+
+Acceptance criteria:
+- Each generated motif references a real position and relevant pieces/squares/line.
+- Unsupported motifs are omitted or marked uncertain.
+- Motif detection does not alter the chess state.
+
+======================================================================
+10. PHASE 8 — STRUCTURED COACHING EVENTS
+======================================================================
+
+Goal: transform engine output into a concise, verifiable event that the LLM can explain.
+
+Create a versioned internal schema containing relevant fields such as:
+- Game ID and move index
+- Player color
+- Position before and after
+- FEN before and after
+- Played move in UCI/SAN
+- Best candidate(s)
+- Evaluation before/after with perspective and mate information
+- Principal variations
+- Classification and classification evidence
+- Material changes
+- Detected threats/motifs
+- Critical squares/pieces
+- Strategic context supported by evidence
+- Confidence/analysis completeness
+- Engine version and settings
+
+Do not ask the LLM to derive facts that the backend already knows.
+
+The coaching-event builder should:
+8.1 Validate every move and position reference.
+8.2 Make evaluation perspective explicit.
+8.3 Keep objective data separate from interpretations.
+8.4 Include only the amount of data needed for the current coaching task.
+8.5 Version the schema so future changes do not silently break old lessons.
+
+Acceptance criteria:
+- Coaching events can be created without the LLM.
+- Every objective claim can be traced to engine or board data.
+- Schema validation catches missing or inconsistent fields.
+
+======================================================================
+11. PHASE 9 — OCULUS EXPLANATION ENGINE
+======================================================================
+
+Goal: turn verified chess evidence into accurate, human-level teaching.
+
+Oculus should explain:
+1. What the player played.
+2. Why it was good, inaccurate, or bad.
+3. What the opponent's move changed or threatened.
+4. What the player should have considered.
+5. The best or most instructive alternative.
+6. The likely continuation and its purpose.
+7. The chess principle involved.
+8. How to recognize the same pattern in future games.
+
+Example of the desired style:
+"Your move looks natural because it wins a pawn, but it allows your opponent to activate a piece with tempo and leaves your king-side pieces uncoordinated. The stronger move keeps the centre stable and gives you time to finish development. The issue is not simply that the engine prefers another move; it is that your move ignored the opponent's next threat."
+
+That example is illustrative only. The actual explanation must match the supplied position and engine evidence.
+
+Tasks:
+9.1 Define a strict prompt/input schema for coaching events.
+9.2 Require the model to distinguish engine facts from interpretation.
+9.3 Require SAN/UCI moves in explanations to come from supplied legal lines.
+9.4 Ask the model to avoid unsupported claims and say when evidence is insufficient.
+9.5 Support explanation depth: Beginner, Club Player, Advanced, Expert.
+9.6 Support concise, detailed, strategic, tactical, and Socratic coaching styles.
+9.7 Keep the explanation relevant to the actual position, not generic chess advice.
+9.8 Avoid overconfident claims about the user's thought process. Say "you may have overlooked..." rather than asserting what the user was thinking.
+9.9 Validate any moves returned by the model before rendering them as executable or animatable.
+9.10 Keep model output structured enough for the frontend to render text, lines, arrows, highlights, and teaching steps.
+
+Acceptance criteria:
+- Explanations cite the actual move and position.
+- The model does not invent engine scores or variations.
+- Every move used for an animation is validated.
+- Explanation output can be rendered in the UI without fragile free-form parsing.
+
+======================================================================
+12. PHASE 10 — VISUAL TEACHING ON THE LIVE BOARD
+======================================================================
+
+Goal: make the board an active teaching instrument, not a decoration.
+
+Create a reusable visual annotation/action model supporting:
+- Highlight squares
+- Highlight pieces
+- Draw arrows between squares
+- Show candidate moves
+- Mark threats
+- Mark mistakes
+- Animate a legal move sequence
+- Pause and resume a lesson
+- Return to the original position
+- Show and clear annotations
+
+Suggested semantic colors (adapt to Oculus's design system):
+- Green: recommended move
+- Red: mistake or danger
+- Yellow: threat or attention
+- Purple/blue: strategic idea
+
+A teaching sequence should be able to:
+1. Return to the position before the mistake.
+2. Highlight relevant pieces/squares.
+3. Show the player's move.
+4. Show a verified opponent response.
+5. Explain the consequence.
+6. Rewind.
+7. Show a better move.
+8. Animate a verified principal variation.
+9. Highlight the strategic/tactical point.
+10. Return control to the user.
+
+Important:
+- Every animated move must be legal from the board state at that step.
+- Annotations must not change canonical board state.
+- The user must be able to stop, step through, or skip an animation.
+- The interface must distinguish the actual game line from an engine variation.
+
+Acceptance criteria:
+- Visual lessons are synchronized with the correct FEN at every step.
+- The board can rewind and resume without losing the original game.
+- Actual moves and hypothetical variations are clearly differentiated.
+
+======================================================================
+13. PHASE 11 — INTERACTIVE / SOCRATIC COACH MODE
+======================================================================
+
+Goal: make the user think before showing the answer.
+
+Example interactions:
+- "What did your opponent's last move threaten?"
+- "Which candidate move would you choose?"
+- "Can you find the tactical idea?"
+- "What changes if you trade queens?"
+- "Try to find the strongest move without engine assistance."
+
+Tasks:
+11.1 Allow Oculus to pause at selected critical positions.
+11.2 Let the user make a move on the board or choose from candidates.
+11.3 Validate the move through the canonical chess service.
+11.4 Analyze the user's answer using the engine.
+11.5 Explain what was correct or missed.
+11.6 Offer progressive hints before revealing the answer.
+11.7 Track attempts and hint usage where useful.
+11.8 Let the user request the answer immediately.
+11.9 Ensure the exercise branch does not overwrite the original imported game.
+11.10 Let the user exit and return to the lesson.
+
+Acceptance criteria:
+- User answers are validated.
+- Exercise moves occur in an isolated branch or temporary board.
+- The original game remains unchanged.
+- Hints and feedback correspond to the actual position.
+
+======================================================================
+14. PHASE 12 — "PLAY AGAINST YOUR PAST SELF"
+======================================================================
+
+Goal: convert mistakes from a user's own games into training positions.
+
+Workflow:
+1. Open an analyzed game.
+2. Navigate to a critical position before the original move.
+3. Hide or remove the original move from the exercise branch.
+4. Ask the user to choose a move.
+5. Analyze the user's choice.
+6. Compare it with the original move and best candidate(s).
+7. Explain the difference.
+8. Show a verified continuation.
+9. Record the result as a training attempt.
+
+Acceptance criteria:
+- Original game data is never overwritten.
+- The user can retry a position.
+- The move comparison uses the same starting FEN and compatible analysis settings.
+- Exercise results are stored separately from original game moves.
+
+======================================================================
+15. PHASE 13 — GAME REPORT AND PERFORMANCE METRICS
+======================================================================
+
+Goal: provide a useful report without reducing chess to one number.
+
+Potential report sections:
+- Game result and metadata
+- Overall summary
+- Key turning points
+- Best decisions
+- Inaccuracies, mistakes, and blunders
+- Missed opportunities
+- Tactical/strategic themes
+- Opening, middlegame, and endgame observations
+- Recommended lessons
+- Suggested training positions
+
+Potential metrics:
+- Average centipawn loss
+- Counts of move classifications
+- Tactical opportunities and misses
+- Opening/middlegame/endgame performance
+- Evaluation graph
+- Engine analysis coverage and depth
+
+Rules:
+13.1 Document metric definitions.
+13.2 Do not present engine-dependent statistics as universal truth.
+13.3 Do not infer an official rating from one game.
+13.4 Do not claim that a player's move quality is equivalent to a particular rating without a defensible method.
+13.5 Separate measured facts from coaching interpretation.
+
+Acceptance criteria:
+- Report figures are reproducible from stored analysis.
+- Incomplete analysis is clearly identified.
+- Metrics can be traced to defined calculations.
+
+======================================================================
+16. PHASE 14 — PERSISTENT CHESS PROFILE AND WEAKNESS TRACKING
+======================================================================
+
+Goal: learn from multiple games without making unsupported personal claims.
+
+Track, with appropriate user consent and access controls:
+- Imported games and analysis status
+- Opening tendencies
+- Recurring tactical misses
+- Opponent-threat recognition
+- King safety
+- Piece coordination
+- Calculation patterns
+- Endgame themes
+- Recurring positional decisions
+- Training attempts and progress
+
+Tasks:
+14.1 Define a data model that links observations to specific games/positions.
+14.2 Aggregate patterns only after a reasonable amount of evidence.
+14.3 Distinguish a repeated pattern from a one-off error.
+14.4 Store the evidence behind each profile insight.
+14.5 Allow users to review or delete stored chess data according to Oculus's existing data controls.
+14.6 Avoid making psychological diagnoses or unsupported claims about motivation/intelligence.
+14.7 Recalculate trends when games are removed or reanalyzed.
+
+Acceptance criteria:
+- Each recurring weakness links to supporting positions.
+- The system communicates confidence and sample size.
+- Deleting a game updates relevant aggregates.
+
+======================================================================
+17. PHASE 15 — PERSONALIZED STUDY PLAN AND PUZZLES
+======================================================================
+
+Goal: turn identified weaknesses into practical training.
+
+Tasks:
+15.1 Rank learning priorities using evidence from analyzed games and exercise results.
+15.2 Generate exercises from positions in the user's games.
+15.3 Provide a prompt, legal moves, expected solutions, hints, and explanation.
+15.4 Verify solution moves against engine analysis.
+15.5 Support repeat attempts and track progress.
+15.6 Build weekly or session-based plans based on available training time and current weaknesses.
+15.7 Include tactical, strategic, opening, and endgame work as appropriate.
+15.8 Adjust difficulty based on performance.
+15.9 Avoid repetitive or impossible exercises.
+15.10 Distinguish a proven solution from an engine-preferred alternative when several moves are acceptable.
+
+Acceptance criteria:
+- Every puzzle has a verified starting position and solution criteria.
+- The solution line is legal.
+- Study recommendations reference actual user evidence.
+- Progress can be measured over time.
+
+======================================================================
+18. PHASE 16 — OPENING COACH
+======================================================================
+
+Goal: explain opening plans, not just recite move names.
+
+Tasks:
+16.1 Identify opening positions and ECO/opening labels where a reliable opening dataset is available.
+16.2 Explain development, centre control, pawn breaks, piece placement, and common plans.
+16.3 Compare the user's move with engine candidates and known opening principles.
+16.4 Avoid claiming that a move is a theoretical novelty unless a reliable opening source supports it.
+16.5 Explain the reason behind a move rather than requiring memorization.
+16.6 Use the user's own opening games to identify recurring decision points.
+
+Acceptance criteria:
+- Opening labels are sourced from an appropriate dataset or clearly treated as approximate.
+- Explanations are grounded in the position.
+- The coach does not fabricate opening theory.
+
+======================================================================
+19. PHASE 17 — LIVE PLAY AGAINST OCULUS
+======================================================================
+
+Goal: allow a user to play a complete game against Oculus.
+
+Modes:
+- Casual: engine-backed play with a configurable strength policy.
+- Coach: explain selected moves and critical positions.
+- Serious: strongest configured engine play within available resources.
+- Training: practice a selected theme or position.
+- Custom: configurable side, difficulty, and coaching behavior.
+
+Tasks:
+17.1 Reuse the canonical game state and board UI.
+17.2 Use Stockfish for reliable legal move selection, with strength limits when supported.
+17.3 If an LLM is invited to suggest moves, validate its suggestions and define fallback behavior. Do not use the LLM as a substitute for a chess engine's strength control.
+17.4 Validate the chosen engine move before applying it.
+17.5 Support resign, draw claims/agreements as appropriate, game result, restart, and PGN export.
+17.6 Prevent repeated or duplicate moves caused by retries.
+17.7 Keep coach commentary separate from move execution.
+17.8 Provide clear indicators when a move is engine-selected versus LLM-suggested.
+
+Acceptance criteria:
+- Complete games follow legal chess rules.
+- Game termination is correct.
+- Engine timeouts do not corrupt the game.
+- Difficulty controls behave as documented.
+
+======================================================================
+20. PHASE 18 — PERFORMANCE, RELIABILITY, AND SECURITY
+======================================================================
+
+Tasks:
+18.1 Add bounded concurrency for Stockfish.
+18.2 Add queueing or background jobs if the hosting environment requires them.
+18.3 Add cancellation, timeouts, retry limits, and cleanup.
+18.4 Cache repeat analysis safely.
+18.5 Validate upload sizes and PGN content.
+18.6 Authenticate and authorize all private game, profile, and analysis endpoints.
+18.7 Apply rate limits to expensive analysis and AI requests.
+18.8 Protect against command injection; never concatenate user input into shell commands.
+18.9 Keep API keys and secrets server-side.
+18.10 Avoid logging secrets or unnecessary private user data.
+18.11 Handle browser refreshes, lost sessions, network errors, and interrupted analysis.
+18.12 Add structured logs for game creation, move attempts, rejected moves, imports, analysis jobs, engine failures, and coach events.
+18.13 Confirm that production hosting permits the engine binary and its resource usage.
+18.14 Verify licenses for dependencies, chess piece assets, opening data, and any redistributed engine binary.
+
+Acceptance criteria:
+- Invalid inputs cannot corrupt games or execute arbitrary commands.
+- Users cannot access other users' private games.
+- Resource use is bounded.
+- Failure messages are actionable and do not expose secrets.
+- Deployment requirements are documented.
+
+======================================================================
+21. PHASE 19 — TESTING AND REGRESSION SUITE
+======================================================================
+
+Build automated tests throughout development. Do not postpone testing until the end.
+
+Rules/state tests:
+- Legal and illegal moves for each piece
+- Check and checkmate
+- Stalemate
+- Castling rights
+- En passant
+- Promotion
+- Draw conditions supported by the library
+- FEN load/export
+- PGN load/export
+- Undo/redo
+- Move history and replay
+
+Engine tests:
+- UCI startup and shutdown
+- Evaluation parsing
+- Mate score parsing
+- Best move and PV parsing
+- MultiPV parsing
+- Timeout and cancellation
+- Invalid engine output
+- Concurrent job limits
+
+API/UI tests:
+- Game creation and retrieval
+- Move submission and rejection
+- State synchronization
+- PGN upload errors
+- Replay navigation
+- Promotion UI
+- Board orientation
+- Responsive behavior
+- Authentication and authorization
+
+Coaching tests:
+- Structured event schema validation
+- Evaluation perspective normalization
+- Classification rules
+- Verified line rendering
+- LLM response schema validation
+- Illegal move rejection
+- Uncertain/insufficient-evidence handling
+- Exercise branch isolation
+- Profile aggregation and deletion behavior
+
+Regression tests:
+- Existing Oculus functionality remains intact.
+- Existing AI routes and memory features still work.
+- No chess-specific dependency breaks the application startup.
+- No secrets are exposed to the browser.
+
+Acceptance criteria:
+- Relevant automated tests pass before a phase is marked complete.
+- Manual test instructions are provided for UI behavior that cannot be automated.
+- Failures are fixed or explicitly recorded before proceeding.
+
+======================================================================
+22. PHASE 20 — PRODUCTION POLISH AND RELEASE
+======================================================================
+
+Tasks:
+20.1 Review UI consistency with Oculus.
+20.2 Add helpful empty states, loading states, progress indicators, and error recovery.
+20.3 Make large PGN analysis visibly progress and allow cancellation.
+20.4 Add keyboard/accessibility support where feasible.
+20.5 Check mobile layout and board interaction.
+20.6 Review database indexes and storage growth.
+20.7 Document installation, configuration, deployment, migrations, engine setup, and troubleshooting.
+20.8 Add a feature flag if needed for safe rollout.
+20.9 Test from a clean environment.
+20.10 Produce a release checklist and known-limitations document.
+
+Acceptance criteria:
+- A new environment can be set up from documentation.
+- The feature can be enabled and used without breaking Oculus.
+- Known limitations are transparent.
+- The release has passed the agreed test suite.
+
+======================================================================
+23. API AND DATA CONTRACT GUIDELINES
+======================================================================
+
+Final route names must follow the existing Oculus conventions. The following are conceptual capabilities, not a mandate to create these exact URLs:
+
+- Create game
+- Get game state
+- Submit move
+- Undo/redo
+- Get legal moves
+- Import PGN
+- Export PGN
+- Start analysis
+- Get analysis status/results
+- Get coaching lesson
+- Submit exercise move
+- Get/update chess profile
+- Get study plan and puzzle progress
+
+Conceptual entities may include:
+- ChessGame
+- ChessMove / GamePosition
+- EngineAnalysis
+- CoachingEvent
+- Lesson
+- ExerciseAttempt
+- ChessProfile / ProfileObservation
+- StudyPlan / Puzzle
+
+Avoid duplicating data unnecessarily. Use migrations and indexes appropriate to the existing database. Apply user ownership and authorization consistently.
+
+Version internal schemas that are persisted or passed between services.
+
+======================================================================
+24. LLM PROMPT AND RESPONSE SAFETY CONTRACT
+======================================================================
+
+Every chess-coaching request should provide the model with a bounded, structured context rather than expecting it to remember the game from chat history.
+
+Provide relevant fields such as:
+- Current FEN
+- Side to move
+- Last move
+- Actual game move
+- Legal moves when needed
+- Engine candidate moves
+- Evaluation with explicit perspective
+- Principal variation
+- Relevant material/position features
+- Detected motifs and confidence
+- The coaching question and desired explanation level
+
+The model must:
+- Use only supplied engine values as engine facts.
+- Not invent a legal line.
+- Not invent a score or claim a move was engine-best without evidence.
+- Clearly distinguish the actual game from a hypothetical variation.
+- Return a defined response schema for visual actions.
+- Mark uncertain interpretations as uncertain.
+- Never directly mutate board state.
+- Never bypass the server's move validator.
+
+If the model returns a move or line, parse and validate it against the appropriate position before displaying it as a verified line or animating it.
+
+======================================================================
+25. DEFINITION OF DONE
+======================================================================
+
+The whole project is not complete merely because a board is visible or Stockfish returns a move.
+
+Minimum useful release:
+- Live legal chessboard
+- Server-side canonical chess state
+- Stockfish analysis
+- PGN import and replay
+- Move-by-move evaluation
+- Basic mistake classification
+- Oculus explanations grounded in engine evidence
+- Visual move/variation teaching
+- Tests and deployment documentation
+
+Full vision:
+- Interactive Socratic coaching
+- Play against your past self
+- Game reports
+- Cross-game weakness tracking
+- Personalized study plans and puzzles
+- Opening coach
+- Multiple live-play modes
+- Persistent, evidence-based chess profile
+
+A phase is complete only when its acceptance criteria are met, tests are run, and known limitations are documented.
+
+======================================================================
+26. FIRST INSTRUCTION TO ANTIGRAVITY AGENTS
+======================================================================
+
+Begin with PHASE 0 ONLY.
+
+Do not immediately generate large amounts of code. Do not replace existing Oculus architecture.
+
+Inspect the repository and return a concise but thorough audit containing:
+
+1. Current project architecture
+2. Relevant existing files and entry points
+3. Frontend/backend frameworks and versions
+4. Existing AI/provider integration
+5. Database and migration approach
+6. Authentication/authorization approach
+7. Deployment and hosting constraints
+8. Recommended chess service architecture
+9. Recommended board UI and Stockfish integration
+10. Proposed API routes and data model
+11. Dependencies and license considerations
+12. Phase-by-phase implementation plan
+13. Main risks and mitigations
+14. Testing strategy
+15. Questions that must be resolved before implementation
+
+Do not make major changes during the audit. Once the audit is complete, wait for approval before starting Phase 1.
+
+Build incrementally, preserve working Oculus features, and prioritize correctness over speed.
+
+END OF MASTER IMPLEMENTATION PLAN
